@@ -1,0 +1,666 @@
+ratprint: false;
+simpsum: false;   /* Must disable simpsum*/
+load("opsubst");
+load('fourier_elim);
+
+/* Somehow maxima doesn't recognize sum, "sum" or 'sum
+    as the op of sum. This takes care of the problem. */
+sum_op_list:[op(sum(occupied_var_sum_op_list^i,i,0,inf))];
+diff_op_list:[op(diff(occupied_f_list(occupied_var_diff),occupied_var_diff))];
+
+/* Utility function */
+is_zero(x):=1-unit_step(x)-unit_step(-x);
+
+/* Matches for rules */
+matchdeclare(any_a, true);
+matchdeclare(any_b, true);
+matchdeclare(int_a, lambda ([e], featurep(e, integer)));
+matchdeclare(int_b, lambda ([e], featurep(e, integer)));
+matchdeclare(non_zero_a, lambda ([e], e#0));
+matchdeclare(non_zero_b, lambda ([e], e#0));
+
+/* Used to remove extra conditions (such as is_seq). NOTE: you need to declare integers beforehand. */
+remove_extra_conditions(expr):= (
+    defrule(int_rule, is_integer(int_a), 1),
+    defrule(is_seq_inf_rule, is_seq(any_a, inf), 'err_frac),
+    apply2(expr, int_rule, is_seq_inf_rule)
+);
+
+subst_conditional_funcs(expr):= (
+    /* The following "constant condition operators" are mainly defined for
+        extracting an symbolic order term (e.g., eps^n) and then directly evaluating in
+        maxima. To evaluate export and evaluate in compiled languages, please remove these
+        definition and redefine them in said compiled language. */
+
+    /* Returns 1 if expr evaluates to an integer.
+        Not evaluated if expr contains undetermined symbols.
+        Returns 0 if expr evaluates to a fraction.
+
+        Used in power matching to get rid of non-integer powers
+        (it's hard to see if an unknown equation would have integer
+        solutions, but it's easy to set non-integer powers to 0)*/
+        /* 1 if a number is even or odd. Assume integer. */
+    defrule(is_integer_rule, is_integer(any_a), 1+floor(any_a)-ceiling(any_a)),
+
+    /* Gives 0 if a>b, 1 if a<=b. Used to remove illegal sums with upper bound < lower bound. */
+    defrule(is_seq_rule, is_seq(any_a, any_b), 1-unit_step(any_a-any_b)),
+
+    /* Gives 1 if a and b are both even or odd. Used in Fourier-asymptotic series. */
+    defrule(is_both_even_odd_rule, is_both_even_odd(any_a, any_b), is_zero(mod(any_a,2) - mod(any_b,2))),
+    apply2(expr, is_integer_rule, is_seq_rule, is_both_even_odd_rule)
+);
+
+
+
+
+
+/* Get power using hipow. hipow sometimes output max(const,expr). This method
+   fixes it by choosing expr over const */
+get_pow(expr, eps):=
+block([hipow_result:hipow(expr, eps)],
+    if atom(hipow_result) then hipow_result /* atomic results are returned */
+    else if op(hipow_result)=max then(  /* is op is max, */
+        if not freeof(0, hipow_result) then( /* power is an unknown symbolic expression */
+            if constantp(first(hipow_result))
+                then last(hipow_result)  /* output the non-zero one */
+                else first(hipow_result)
+        )else(
+            disp("get_pow: max detected in power due to reasons other than unknown symbolic power:"),
+            disp(hipow_result),
+            break(1)
+        )
+    )else hipow_result /* other non-atomic results are okay*/
+);
+
+
+/*  This method extracts upper and lower bounds of [inf_index] from
+    ineq_slns, which are LINEAR ineq solutions of inf_indices containing 2
+    ineqs directly giving the bound for inf_index. The input
+    would look like:
+
+
+    all_indices:[i2, i3]
+    inf_indices:[i3]
+    ineq_slns:[0 < i2, i2 < 2 - i3, 1 < i3, i3 < 2]
+
+    ISSUE: sometimes inf index can be dependent on a later index:
+    i3<3-i2. In this case, we just remove i2 and call it a day?
+    Questionable.
+
+*/
+extract_bound(inf_indices, all_indices, ineq_from_unpeel, verbose):=
+block([
+        eqs,
+        ineq_slns,
+        eq_slns, /* For emptyset */
+        ineq_slns_args, /* For emptyset */
+        secondary_indices: delete(inf_indices[1], all_indices),
+        bounds:[-1, -1],
+        lhs,
+        rhs
+    ],
+    for arg in all_indices do assume(arg>0),
+    ineq_slns:fourier_elim(ineq_from_unpeel,all_indices),
+    /* Too many inf_indices */
+    if length(inf_indices)#1 then (
+        disp("unpeel_sums_sub: Error! More than 1 inf index. "),
+        disp(expr),
+        disp("is not properly simplified."),
+        ev(1/0)
+    ),
+
+    /* When n=0, inequation system of < and > would not have solutions. Solve as equations instead */
+    if ineq_slns=emptyset then(
+        ineq_slns:opsubst(">=", ">", ineq_from_unpeel),
+        ineq_slns:opsubst("<=", "<", ineq_slns),
+        eq_slns:opsubst("=", ">", ineq_from_unpeel),
+        eq_slns:opsubst("=", "<", eq_slns),
+        ineq_slns_args:fourier_elim(ineq_slns, all_indices),
+        eq_slns:solve(eq_slns, all_indices),
+        if verbose then(
+            disp("Ineq system have no solutions. solving with equalities"),
+            disp(ineq_slns_args)
+        ),
+        if length(eq_slns)=0 then return(["no solution","no solution"]),
+        if length(eq_slns)>1 then (
+            disp("extract_bound: error, ineq system has no solution, eq system has too many solutions."),
+            disp(eq_slns),
+            break(1)
+        ),
+        if verbose then(
+            disp("extract_bound: ineq system has no solution. Using eq system solutions."),
+            disp(eq_slns)
+        ),
+        ineq_slns: last(eq_slns)
+        /* Solve would return a list of solutions. We assume a single sln and take the last one*/
+        /*return(["no solution","no solution"])*/
+    ),
+
+
+    /* Loop over ineq slns*/
+    for ineq in ineq_slns do(
+        /* Only pick ones that has inf_indices and has no secondary indices */
+        if (not lfreeof(inf_indices, ineq)) and lfreeof(secondary_indices, ineq) then(
+            lhs: float(first(ineq)),
+            rhs: float(last(ineq)),
+
+            if verbose then(
+                disp("candidate bound"),
+                disp(ineq)
+            ),
+
+            /* < */
+            if op(ineq)="<" then(
+                /* num < i */
+                if lfreeof(inf_indices, lhs) then bounds[1]:lhs
+                /* i < num */
+                else bounds[2]:rhs
+
+            /* = */
+            )else if op(ineq)="=" then(
+                /* num = i */
+                if lfreeof(inf_indices, lhs) then(
+                    bounds[1]:lhs,
+                    bounds[2]:lhs,
+                    return() /* Recall return() is akin to break in other languages */
+                )else( /* i = num */
+                    bounds[1]:rhs,
+                    bounds[2]:rhs,
+                    return()
+                )
+
+            /* > */
+            )else(
+                /* num > i */
+                if lfreeof(inf_indices, lhs) then bounds[2]:lhs
+                /* i > num */
+                else bounds[1]:rhs
+            )
+        )
+    ),
+    if verbose then(
+        disp("finished bound"),
+        disp(bounds)
+    ),
+    bounds:[ceiling(bounds[1]), floor(bounds[2])],
+    bounds
+);
+
+separate_sums(expr):=block([out],
+    declare (nounify (sum), linear),
+    out: ev (expr),
+    remove (nounify (sum), linear),
+    out
+);
+
+/* Simplifies an expression, so that expression becomes a + of multiplicative terms,
+   each with only 1 eps term. For extract_power_coeff. */
+
+simplify_expr_for_extract(expr,eps) := block([out],
+    intosum_expand_eps(expr):=intosum(expandwrt(expr, eps)),
+    out: scanmap(
+        intosum_expand_eps,
+        ev(
+            expr,
+            cauchysum: true,
+            sumexpand: true,
+            simpsum: false
+        )
+    ),
+    kill(intosum_expand_eps),
+    return(out)
+);
+
+/* Extract the nth order term from a expression that only contains a power series of eps
+    and multiplications. It should contain NO constant component. No eps+const ensured by
+    unpeel_sums_sub. No sum(eps^i+eps^2i) ensured by always expanding sums wrt eps,
+    not executing sumcontract, and defining vars as sums containing one single multiplicative term.
+    Their product, as a result, should contain only 1 eps terms after facsum.)
+    Expr is the expression to recursively unpeel
+
+    eps is the name of the variable of interest
+    */
+unpeel_sums_sub_recursion(expr, n_target, eps, verbose, skip_ineq):=
+block(
+    [
+        /* Sometimes power contains two terms that cancels out, and that causes the
+            method to choose the wrong innermost sum*/
+        arg,
+        pow,
+        output, /* pre-allocated for output from daughter calls */
+        sub, /* pre-allocated for substitution */
+        bound, /* bound for inequality */
+        log_denom, /* pre-allocated for log when encountering a/f(eps) */
+        index_to_remove, /* pre-allocated var for the index, if expr is a sum */
+        upper_bound, /* pre-allocated var for the upper bound, if expr is a sum */
+        lower_bound, /* pre-allocated var for the lower bound, if expr is a sum */
+        index_new_val,
+        for_val:0
+    ],
+    /* Cases where expr has no sub-expression to evaluate and replace*/
+    /* May be slow*/
+    /* expr doesn't contain eps. Since any term evaluated by this method is a multiplicative term
+        proportional to a power series of eps, we do not replace non-eps terms */
+    if freeof(eps, expr) then return("no replacement"),
+    /* "constant" terms are always preserved. Since actual constants are removed
+        in extract_power_coeff for n>0, there's no concern for constant terms remaining here*/
+
+
+    /* expr is eps-containing atom.
+        It's not supposed to show up in a sum */
+    if atom(expr) then(
+        if n_target=1 then return(1) else return(0)
+    ),
+
+    /* This is necessary to read out during recursion since
+        args() and part() sometimes copies expressions. */
+    pow: ratsimp(get_pow(expr, eps)), /* Problem now: hipow doesn't know what is the highest pow?? */
+
+    if operatorp(expr, "^")and first(expr)=eps then(
+        if constantp(pow) then(
+            if pow=n_target then return(1) /* This is necessary to remove free-floating constant powers of eps */
+            else return(0)
+        ) else return("replacement needed") /*power of eps is found*/
+    ),
+
+    if operatorp(expr, "/") and not freeof(eps, last(expr)) then( /* a/f(eps) */
+        log_denom: log(last(expr)),
+        if freeof(log(eps), log_denom) then(
+            disp("unpeel_sums_search: Error, input:"),
+            disp(expr),
+            disp("contains fraction wrt complex expression of eps"),
+            break(1)
+        )else(
+            if log_denom/log(eps) = -n_target then return(first(expr))
+            else return(0)
+        )
+    ),
+
+
+    /* Cases where expr has sub-expression to evaluate and replace*/
+
+    /* Expression is sum. Run for its first argument. ------------------------------------
+        It is possible that a sum contains eps*/
+    if operatorp(expr, sum_dummy) then(
+    /* if operatorp(expr, nounify(sum)) then( */
+
+        /* Add index's lower and upper bound to a system of inequalities*/
+        /* If upper bound is inf, do not add it to ineq system, but add it
+            to the list of indices so that the inf would be removed */
+        index_to_remove:second(expr),
+        lower_bound:third(expr),
+        upper_bound:fourth(expr),
+/*
+
+        if verbose then(
+            disp("expr"),
+            disp(expr),
+            disp("index_to_remove:"),
+            disp(index_to_remove),
+            break(1)
+        ), */
+
+        /* The below section is upper/lower bound management. */
+        if not skip_ineq then(
+            /* If Cauchy product is done correctly, there should be only one infinite index at the outmost sum. */
+            /* If an index is contained in power, add the outmost index regardless or add any other indices that has inf upper bound */
+            if (inf_indices=[] or upper_bound=inf) and (not freeof(index_to_remove, pow)) then(
+                inf_indices:cons(index_to_remove, inf_indices)
+            ), /* If an index is not inf or outmost, add upper bound to ineq system regardless */
+
+
+
+            if upper_bound#inf then( /* if said index is not infinite, then we need to worry about upper bound */
+                ineq_from_unpeel:cons(index_to_remove<upper_bound, ineq_from_unpeel)
+            ),
+
+            ineq_from_unpeel:cons(index_to_remove>lower_bound, ineq_from_unpeel),
+            all_indices:cons(index_to_remove, all_indices)
+        )else if upper_bound=inf then(
+            disp("unpeel_sums_sub_recursion: error, skip_ineq should not be enabled"),
+            disp("for expressions containing infinite sums. "),
+            break(1)
+        ),
+
+        if verbose then(
+            disp("first(expr)"),
+            disp(first(expr))
+        ), /* REMOVE LATER */
+
+        /* The section below is recursion and replacement. */
+        output:unpeel_sums_sub_recursion(first(expr), n_target, eps, verbose, skip_ineq),
+        /* Sum doesn't contain inner sums/eps terms. Remove in parent call.*/
+        if output="no replacement" then return("no replacement"),
+
+        if output="replacement needed" then(
+            if verbose then(
+                    disp("unpeel_sums_sub_recursion: output=replacement needed")
+                ),
+            /* We remove the innermost sum with index deciding eps' power,
+                since innermost powers always contain bounds decided by outer sums'
+                indies. */
+
+            /* If sum index isn't in eps' power, pass decision to the parent sum */
+            if freeof(index_to_remove, pow) then return("replacement needed")
+
+            /* If sum index is in eps' power, remove the sum and change eps' power */
+            else(
+
+                /* Output for new index value */
+                if verbose then(
+                    disp("unpeel_sums_sub_recursion: editing innermost sum"),
+                    disp("Solving:"),
+                    disp(pow=n_target),
+                    disp("replacing sum:"),
+                    disp(expr)
+                ),
+
+                /* Solving power = n wrt the innermost index that appears in eps' power.
+                    This equation is guaranteed linear.
+                    Might produce a constant or expression. */
+                index_new_val: ratsimp(last(solve(pow=n_target, index_to_remove)[1])),
+                /* Remove sum. */
+                sub: first(expr),
+                /* If upper or lower bound not a constant or known index, add a function to make sure the
+                    new index is within the innermost sum's upper and lower bound.
+                    */
+                if upper_bound#inf then sub: sub*is_seq(index_new_val, upper_bound),
+                sub: sub*is_seq(lower_bound, index_new_val),
+
+                /* Subst index for new vals and removing eps term */
+                sub: subst(index_new_val, index_to_remove, sub),
+                sub: subst(1, eps, sub),
+                /* Now the remaining sums' upper and lower limit will be trimmed to
+                    have index_new_val within the upper and lower limit
+                    of the innermost sum. Because we now have 2 additional constraints, we
+                    can modify the upper bound of the outmost sum (the only sum that
+                    can have infinite upper bound) to a finite value. */
+                /* Plug index_new_val into an inequation system.*/
+                if not skip_ineq then(
+                    ineq_from_unpeel: subst(index_new_val, index_to_remove, ineq_from_unpeel),
+                    all_indices: delete(index_to_remove, all_indices)
+                ),
+
+                /* add in integer check for power, and then ev to simplify */
+                sub:ev(sub*is_integer(index_new_val)),
+                if verbose then(
+                    disp("with non-sum expression:"),
+                    disp(sub)
+                ),
+                return(sub)
+            )
+        )else( /* output is only non-numeric if substitution has been applied */
+            /* In this case, only replace argument of sum and check for the outmost, inf sum. */
+            /* intosum ensures that expr is still a sum,
+            not a * of a factor and the sum*/
+            sub: substpart(output, expr, 1),
+
+
+            /* The outmost sum would always be the one containing inf_index
+                Therefore, replacement of summation bound must happen here.
+                The index is only changed if it appears in eps' exponent.
+                Otherwise, it's a constant infinite series and not touched. */
+            if (not freeof(index_to_remove, inf_indices)) and (not skip_ineq) then(
+                if verbose then(
+                    disp("unpeel_sums_sub_recursion: solving for inf index"),
+                    disp(inf_indices),
+                    disp("ineq system and sln:"),
+                    disp(ineq_from_unpeel),
+                    disp(fourier_elim(ineq_from_unpeel,all_indices)),
+                    disp("subparting on"),
+                    disp(sub),
+                    disp(args(sub))
+                ),
+                bound: extract_bound(inf_indices, all_indices, ineq_from_unpeel, verbose),
+                /* Summation is empty. This happens when no valid summation range can be found by solving ineq sys.*/
+                if bound[1]="no solution" then(
+                    if verbose then(
+                        disp("summation range"),
+                        disp(bound),
+                        disp("is empty, removing term:"),
+                        disp(sub)
+                    ),
+                    return(0)
+                ),
+
+                sub: substpart(bound[1], intosum(sub), 3),
+                sub: substpart(bound[2], intosum(sub), 4)
+            ),
+            return(sub)
+        )
+    )else( /* *** Expression is not sum. Run for all of its argument ----------------------------- */
+        for_val: for i: 1 thru length(expr) do(
+            arg: part(expr,i),
+            /* Any unusal results are reported instead of overridden */
+            output:unpeel_sums_sub_recursion(arg, n_target, eps, verbose, skip_ineq),
+            /* If a sum is called for, immediately pass unmodified expr */
+            if output="replacement needed" then(
+                return("replacement needed")
+
+            )else(
+
+                /* If a term has been modified, replace the term with its
+                new expression, and then end loop and return the modified sub.
+                Normally replacing terms during loop would cause the expr's
+                length to change, but here only one eps term is present, and
+                the loop is aborted after replacement, so it's not an issue. */
+                if output#"no replacement" then(
+                    sub: substpart(output, expr, i),
+                    /* Since each sum only contain 1 eps term, only 1 substitution would occur. end loop.*/
+                    if verbose then(
+                        disp("unpeel_sums_sub_recursion: substitution occured for expr:"),
+                        disp(expr),
+                        disp(sub)
+                    ),
+                    return(sub)
+                )
+            ) /* keep looping if no 1 or expression is passed */
+
+        ),
+        /* When nothing is changed, the for loop would finish without
+        breaking */
+        if for_val=done then return("no replacement")
+        else return(for_val)
+    )
+
+
+);
+
+sumcontract_intosum(expr):=sumcontract(intosum(expr));
+/* Used for n>0th order matching. Simplifies and removes all terms without eps dependence.
+    We assume simplification has already expanded all terms of form (eps+k)^n.
+    terms such as 1/(k+eps) doesn't have constant components and will be left unmodified.
+
+    Doesn't work. Maxima doesn't recognize equality between large nested sums with different inner indices.
+    */
+simplify_and_separate_const(expr_in, eps):=
+block(
+    [
+        expr: separate_sums(simplify_expr_for_extract(expr_in, eps)),
+        const,
+        out
+    ],
+    const:remove_dep(expr,eps),
+
+    out: (expr-const),
+    break(1),
+    /* TODO: This dramatically slows down the code. However, it is nevessary,
+        since expr-const can have remaining terms that are supposed to cancel out
+        left in due to different nested sum structures, such as EEx+y-Ey. Maxima
+        also does not expand terms like sum(x^i+x^2i) when expand or expandwrt are
+        called. Technically, it's safest to run below line during simplify_expr_for_extract,
+        but that is called too often, and would cause very severe slow down. At
+        the same time, since all sums are defined by Cauchy products of variables,
+        which are degined as sums containing a single eps/sin/cos terms only,
+        skipping separate_sums does not cause issue in practice. */
+    /*out: separate_sums(out),*/
+    return(
+        [
+            simplify_expr_for_extract(out, eps),
+            const
+        ]
+    )
+);
+
+/* extract the constant component of a simplified expr.*/
+remove_dep(expr, eps):=
+block(
+    [
+        const
+    ],
+    defrule(eps_rule, eps, 0),
+    defrule(frac_eps_rule, 1/eps^any_a, 0),
+    defrule(frac_eps_error, 1/(non_zero_a+eps^any_a), 'err_frac),
+    /* First remove fractions of eps^n,
+        then throw error for 1/pol,
+        then replace eps with 0*/
+    const: apply2(expr, frac_eps_rule,frac_eps_error, eps_rule),
+    kill(eps_rule, frac_eps_rule, frac_eps_error),
+
+    if freeof(err_frac, const) then return(const)
+    else(
+        disp("remove_dep: error, fractions of polynomial of eps exists in"),
+        disp(expr),
+        break(1)
+    )
+);
+
+/* Used for testing. Fast for low orders. */
+extract_power_coeff_test(expr_in, n_target, eps):=
+block([out:0],
+
+    deftaylor(test_func(eps),expr_in),
+    if n_target=0 then return(first(taylor(test_func(eps),eps,0,500))),
+    out:last(taylor(test_func(eps), eps, 0, n_target)),
+    kill(test_func),
+    out/(eps^n_target)
+);
+
+
+/* Extract power coeff
+This method extracts the nth order coeff for a simplified polynomial
+sum with respect to eps. Expr should be a "+" of terms containing only
+one power of eps (one eps in a sum still counts as one)
+(it will NOT test if simplification is done!) eps dependence should be purely
+represented by power series, and NO function of eps should be present.
+
+expr is the sum expression
+eps is the name of the variable to match (given in 'noun form)
+skip_ineq does not replace the upper bound of the outmost sum. This is needed since
+sometimes the summation range in inner sums are complicated, and the inequation
+system they represent can be under-determined.
+
+*/
+
+extract_power_coeff(expr_in, n_target, eps, verbose, taylor, skip_ineq):=
+block([
+        expr,
+        coeff:0,
+        inner_sum,
+        temp_expr
+    ],
+    /* Constants are included in coeff when n=0 */
+    if freeof(eps, expr_in) then(
+        if n_target=0 then return(expr_in)
+        else return(0)
+    ),
+
+
+    /* eps is the only possible atomic expression containing eps */
+    if atom(expr_in)
+        then if n_target=1
+            then return(expr_in)
+            else return(0),
+
+    /* A sum of terms that either is constant or contains 1 eps */
+    expr:separate_sums(simplify_expr_for_extract(expr_in, eps)),
+
+    if verbose then(
+        disp("***** extract_power_coeff: launch, eps-dependent expression is *****"),
+        disp(expr_in),
+        disp("constant terms are"),
+        disp(expr_and_const[2]),
+        disp("constant terms removed:"),
+        disp(expr_and_const[1]),
+        disp("eps"),
+        disp(eps)
+    ),
+
+    /* expr is not a "+", then there's presumably only one sum */
+    if not operatorp(expr, "+") then(
+        if verbose then(
+            disp("**--- evaluating expression: ---**"),
+            disp(expr)
+        ),
+        return(unpeel_sums_sub(expr, n_target, eps,verbose, taylor, skip_ineq))
+    ),
+
+    /* expr is a "+", run for each sum (for a correctly simplified expr,
+        each sum would only contain one eps term) */
+    for arg in args(expr) do(
+        if verbose then(
+            disp("**--- evaluating subexpression of +: ---**"),
+            disp(arg)
+        ),
+        coeff:coeff+unpeel_sums_sub(arg, n_target, eps,verbose, taylor, skip_ineq)
+    ),
+
+    if verbose then(
+        disp("**--- Finished. coeff: ---**"),
+        disp(coeff)
+    ),
+
+    return(coeff)
+);
+
+/* Recursion wrapper. At this point constants have been removed. */
+unpeel_sums_sub(expr_in, n_target, eps, verbose, taylor, skip_ineq):= /* recursion wrapper. */
+block(
+    [
+        /* To prevent evaluation (due to sum_expand)
+            and creation of new indices (automatic) */
+        expr: opsubst("sum_dummy", nounify(sum), expr_in),
+        ineq_from_unpeel:[], /* Shared inequality list throughout a recursion to store */
+        inf_indices:[], /* used in recursion */
+        all_indices:[], /* used in recursion */
+        out
+    ],
+
+
+    if freeof(eps, expr_in) then(
+        if n_target=0 then return(expr)
+        else return(0)
+    ),
+
+    if taylor then return(extract_power_coeff_test(expr_in, n_target, eps)),
+
+    if verbose then(
+        disp("##### unpeel_sums_sub: expression: #####"),
+        disp(expr),
+        disp("order: "),
+        disp(n_target)
+    ),
+
+    out: unpeel_sums_sub_recursion(expr, n_target, eps, verbose, skip_ineq),
+
+
+    if verbose then(
+        disp("##--- Recursion out ---##"),
+        disp(out)
+    ),
+
+    if out="no replacement" then return(expr_in)
+    else if out="replacement needed" then(
+
+        disp("unpeel_sums_sub: Error, input:"),
+        disp(expr),
+        disp("needs replacement but no viable sum found!"),
+        break(1)
+    ),
+
+    out: opsubst(nounify(sum), "sum_dummy", out),
+    out
+);
+
+/* Package a series of parsed commands into a method */
+package(string, name):=sconcat("def ",name,"():~%", sindent(string), "~%    return(out)");

@@ -1,0 +1,216 @@
+ratprint: false;
+cauchysum: true;  /* Enable Cauchy sum */
+sumexpand: true;  /* Always expand sums during product */
+simpsum: false;   /* Must disable simpsum*/
+load("opsubst");
+load("power_matching.mac");
+
+matchdeclare(any_a, true);
+matchdeclare(any_b, true);
+
+trigreduce_intosum_expand(expr):=trigreduce(intosum(expand(expr)));
+
+/* Extract non-fourier terms
+This methods extracts terms in an expression that are not sin/cos Fourier terms
+of chi.
+*/
+extract_non_fourier_coeff(expr, chi):=
+block([out],
+    defrule(sin_rule, sin(non_zero_a * chi + any_b), 0),
+    defrule(cos_rule, cos(non_zero_a * chi + any_b), 0),
+    out: apply2(expr, sin_rule, cos_rule),
+    kill(sin_rule, cos_rule),
+    return(out)
+);
+
+/* Extract Fourier coeff
+This method extracts the nth sin/cos mode coeff for a simplified polynomial
+sum with respect to eps.
+
+Unlike regular sum, simplification of trig expression is very tricky. Threfore,
+simplification and formatting (such as trigreduce) should be done before running
+this method.
+
+expr is the Fourier expression.
+    Note: starting index MUST BE 1!
+    Note: sin, cos terms must be in 2 separate sums! Recall, no "+" in sums.
+    Note: must not have other type of dependence (power, other types) on chi!
+chi is the name of the variable to match (given in 'noun form).
+
+trig should be "sin" or "cos"
+index should be the total number of sin/cos terms
+skip_ineq SHOULD BE TRUE FOR FINITE SERIES. does not replace the upper bound
+of the outmost sum. This is needed since sometimes the summation range in inner
+sums are complicated, and the inequation system they represent can be under-determined.
+*/
+
+extract_fourier_coeff(expr_in, n_target, chi, trig, verbose, taylor, skip_ineq):=
+block([
+        convert,
+        tot_index,
+        expr_temp,
+        coeff:0,
+        base: if trig="sin" then 'sin_base  /* Whether it's sin_base deps on trig*/
+            else if trig="cos" then 'cos_base
+                else ev(1/0),
+        result /* temporary result */
+
+    ],
+
+
+    if n_target=0 then(
+        if verbose then disp("0th order mode"),
+
+        matchdeclare (not_chi, freeof(chi)),
+        defrule(sin_zero, sin(not_chi*chi), 0),
+        defrule(cos_zero, cos(not_chi*chi), 1),
+        coeff: apply1(expr_in, sin_zero, cos_zero),
+        kill(sin_zero, cos_zero),
+        return(coeff)
+    ),
+
+    convert: trig_fourier_to_power(expr_in, chi, trig),
+    expr: convert[1],
+    tot_index: convert[2],
+
+    if verbose then(
+        disp("============================================================"),
+        disp("Conducting matching for:"),
+        disp(expr_in, chi),
+        disp("will do power matching for:"),
+        disp(expr),
+        disp("mode number:"),
+        disp(n_target),
+        disp("trig:"),
+        disp(trig),
+        disp("total number of trig terms:"),
+        disp(tot_index),
+        disp("------------------------------------------------------------")
+    ),
+
+
+
+    if freeof(chi, expr) then return(0), /* expr doesn't contain chi */
+
+    /* Since sin/cos terms are replaced with individual variables,
+        we need to run extract coefficient for every sin_base[i,chi]/cos_base[i,chi] and
+        add up the result.
+        When matching one sin/cos term, other sin/cos terms
+        would appear as constants when running unpeel for one sin/cos.
+        This is fine when running for higher orders, but will be an issue when
+        running 0th order. See above.*/
+    for i thru tot_index do(
+        expr_temp:expr,
+        /* Modes should be independent. This removes all other modes to reduce
+        workload for the order matcher's very slow constant removing method. */
+        for j thru tot_index do
+            if j#i then
+                expr_temp: subst(0,base[j,chi],expr_temp),
+
+        result:extract_power_coeff(expr_temp, n_target, base[i,chi], verbose, taylor, skip_ineq),
+        if verbose then(
+            disp("Calling:"),
+            disp('extract_power_coeff(expr, n_target, base[i,chi], verbose, taylor, skip_ineq))
+        ),
+        coeff:coeff+result
+    ),
+
+    if verbose then(
+        disp("############# Final result: ################"),
+        disp(coeff),
+        disp(power_to_trig_fourier(coeff, chi))
+    ),
+
+    return(power_to_trig_fourier(coeff, chi))
+);
+
+
+/* Replaces sin(mode#*chi)/cos() in a Fourier series into a "power series" of
+    dummy variables sin_base[index, chi]^mode# for use with the order matching
+    method. Outputs the new expression and total number of different sin/cos terms.
+    This method automatically removes non-linear trig dependence.
+    Note that every trig terms are individually labeled with index i
+    to prevent erroneous factoring. When executing order matching, the result
+    should be the sum of coefficients from matching order of all sin_base[i].
+
+    expr: expr.
+    chi: independent variable of the Fourier series
+    trig: must be "sin" or "cos"
+
+    NOTE: TRIGREDUCE NOT INCLUDED, and DIRECTLY FEEDING A PRODUCT OF FOURIER SERIES CAUSES ERRORS!
+    Since trigreduce(), the method that convert powers of trig into trig with different
+    phases, can change the type of trigs in an expression, it must be run separately before order matching.
+    */
+trig_fourier_to_power2(expr, chi, trig):=
+block([
+        output,
+        i:0,
+        base: if trig="sin" then 'sin_base
+            else if trig="cos" then 'cos_base
+                else ev(1/0),
+        arg_list:[]
+    ],
+    prefix("exp_trig"),
+    "exp_trig" (a) := if freeof(chi, a) then( /* doesn't replace sin/cos wrt to constant*/
+        if trig="sin" then sin(a)
+        else if trig="cos" then cos(a)
+    )else(
+        i:i+1,
+        /* each sin and cos term is assigned a different variable name
+            to avoid facoring */
+        base[i,chi]^(ratsimp(a/chi))
+    ),
+    output:opsubst("exp_trig", trig, expr),
+    output:ev(output), /* The indexing commands in sin_exp and cos_exp are actually run here */
+    kill("exp_trig"), /* local operator is not a supported feature. We delete the operator instead*/
+    return([output, i])
+);
+
+trig_fourier_to_power(expr, chi, trig):=
+block([
+        output,
+        i:0,
+        base: if trig="sin" then 'sin_base
+            else if trig="cos" then 'cos_base
+                else ev(1/0),
+        arg_list:[]
+    ],
+    prefix("exp_trig"),
+    "exp_trig" (a) := if freeof(chi, a) then( /* doesn't replace sin/cos wrt to constant*/
+        if trig="sin" then sin(a)
+        else if trig="cos" then cos(a)
+    )else(
+        if freeof(a, arg_list) then(    /* If argument is not seen before*/
+            i:i+1,
+            arg_list:cons([a,i], arg_list),
+            /* each sin and cos term is assigned a different variable name
+                to avoid facoring. In this version, sin/cos with the same arg names
+                are allowed to be factored. */
+            base[i,chi]^(ratsimp(a/chi))
+        )else(
+            base[assoc(a, arg_list),chi]^(ratsimp(a/chi))
+        )
+    ),
+    output:opsubst("exp_trig", trig, expr),
+    output:ev(output), /* The indexing commands in sin_exp and cos_exp are actually run here */
+    kill("exp_trig"), /* local operator is not a supported feature. We delete the operator instead*/
+    [output, i]
+);
+
+
+power_to_trig_fourier(expr, chi):=
+block([output],
+    infix ("trig_exp"),
+    "trig_exp" (a, b) := if atom(a)
+                        then a^b
+                        else if op(a)='sin_base and last(a)=chi
+                            then sin(b*chi)
+                            else if op(a)='cos_base and last(a)=chi
+                                then cos(b*chi)
+                                else a^b,
+
+    output:opsubst("trig_exp", "^", expr),
+    output:ev(output), /* The indexing commands in sin_exp and cos_exp are actually run here */
+    kill("trig_exp"),
+    output
+);

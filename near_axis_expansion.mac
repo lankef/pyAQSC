@@ -1,0 +1,237 @@
+/* Operators*/
+prefix("dpsi");
+"dpsi"(a) := diff(a, eps)/(2*eps);
+
+/* Operators*/
+prefix("dphi");
+"dphi"(a) := diff(a, phi);
+
+/* Operators*/
+prefix("dchi");
+"dchi"(a) := diff(a, chi);
+
+prefix("dphi_iota_dchi");
+"dphi_iota_dchi"(a) := ((dphi a) + iota_e * (dchi a));
+
+
+trigreduce_intosum(expr):= trigreduce(intosum(expr));
+
+/* Generating a power series of form
+
+       inf
+      ====
+      \                   i
+        >   coeff_name eps
+      /               i
+      ====
+      i = 0
+
+    where j is even or odd indices depending on i.
+    Use 'fourier_series[i](coeff_sin_name, coeff_cos_name, chi) as coeff_name to
+    generate Fourier-asymptotic fourier_series
+
+*/
+power_series(coeff_name, eps):=sum(coeff_name[i]*eps^i, i, 0, inf);
+
+/* Generating a skip power series of form
+
+       inf
+      ====
+      \                   2i
+        >   coeff_name eps
+      /               i
+      ====
+      i = 0
+
+    where j is even or odd indices depending on i.
+    Use 'fourier_series[i](coeff_sin_name, coeff_cos_name, chi) as coeff_name to
+    generate Fourier-asymptotic fourier_series
+
+*/
+skip_power_series(coeff_name, eps):=sum(coeff_name[i]*eps^(2*i), i, 0, inf);
+
+/* Generating a fourier series with only even/odd modes of form
+        i
+      ====
+      \
+        >    coeff_sin_name[i,j] sin(i*chi) + coeff_cos_name[i,j] cos(i*chi)
+      /
+      ====
+      j = 0|1
+*/
+skip_fourier_series[i](coeff_sin_name, coeff_cos_name, chi):=
+    sum(is_both_even_odd(i,j)*(coeff_sin_name[i,j]*sin(j*chi) + coeff_cos_name[i,j]*cos(j*chi)), j, 0, i);
+
+/* Generating a series of form
+
+       inf            n
+      ====          ====
+      \         n   \
+        >    eps      >    coeff_sin_name[i,j] sin(i*chi) + coeff_cos_name[i,j] cos(i*chi)
+      /             /
+      ====          ====
+      i = 0        j = 0|1
+
+    where j is even or odd indices depending on i */
+
+fourier_asympt_series(coeff_sin_name, coeff_cos_name, eps, chi):=
+block([fourier],
+    return(
+        sum(
+            sum(
+                is_both_even_odd(i,j)*(coeff_sin_name[i,j]*sin(j*chi) + coeff_cos_name[i,j]*cos(j*chi))
+            , j, 0, i
+            )*eps^i, i, 0, inf
+        )
+    )
+);
+
+
+
+/* Naming convention
+   Each series will be named as:
+   <var>_<dependence>= <var>_coef[0] + <var>_coef[1] * eps + ...
+   in <dependence>, epsilon, chi, phi are written as e, c, p.
+   For example, X(epsilon, chi, phi) will be named X_ecp.
+   NOTE: <var>_coef must be an ARRAY. Matrix coef in maxima starts at 1.
+   It's super confusing and might cause errors. They also must be FUNCTIONS, since
+   differential won't work otherwise.
+   For now, partial derivative wrt phi and chi are done by defining new variables.*/
+   /* This portion defines variable used in epsilon order matching */
+
+/* Initial condition phi dependence */
+depends([dl_p,tau_p, kap_p], [phi]);
+
+p_perp_ecp: power_series(p_perp_coef_cp, eps);
+delta_ecp: power_series(delta_coef_cp, eps);
+
+A_alpha_ecp: dphi_iota_dchi B_theta_ecp;
+A_psi_ecp: (dpsi B_alpha_e) - (dphi_iota_dchi B_psi_ecp) - B_theta_ecp * dpsi iota_e;
+
+depends([
+    p_perp_coef_cp,
+    delta_coef_cp
+    ], [phi, chi]);
+
+
+/* Flux functions */
+B_alpha_e: sum(B_alpha_coef[i]*eps^(2*i), i, 0, inf);
+iota_e: sum(iota_coef[i]*eps^(2*i), i, 0, inf);
+
+/* Flux Chi functions */
+B_denom_ec: power_series(B_denom_coef_c, eps);
+depends([B_alpha_coef_c], [chi]);
+
+X_coef_cp[0]: 0;
+Y_coef_cp[0]: 0;
+Z_coef_cp[0]: 0;
+Z_coef_cp[1]: 0;
+B_theta_coef_cp[0]:0;
+B_theta_coef_cp[1]:0;
+
+/* Flux Chi functions with phi-dependent coefs */
+X_ecp: power_series(X_coef_cp, eps);
+Y_ecp: power_series(Y_coef_cp, eps);
+Z_ecp: power_series(Z_coef_cp, eps);
+B_psi_ecp: power_series(B_psi_coef_cp, eps);
+B_theta_ecp: power_series(B_theta_coef_cp, eps);
+
+depends([
+    X_coef_cp,
+    Y_coef_cp,
+    Z_coef_cp
+    ], [phi, chi]);
+
+depends([
+    B_psi_coef_cp,
+    B_theta_coef_cp
+    ], [phi]);
+
+J_ec: B_alpha_e * B_denom_ec;
+
+/* For evaluating the first few orders of near axis expansion equations. Can be modified */
+evaluate(expr, n_in):= block(
+    [out],
+    out:ev(
+        expr,
+        n: n_in,
+        simpsum: true,
+        /* 1 if a number is even or odd. Assume integer.
+         Will be left as is until evaluation*/
+        is_integer(expr) :=(
+            if integerp(expr) then 1
+            else 0
+        ),
+        is_seq(a,b) :=(
+            if a<=b then 1
+            else 0
+        ),
+        /*
+            Note: do not use the operator trick by replacing x_coef_cp as or introducing
+            X_coef_cp[n]:=(if n=n_in then X_coef_cp_N[n] else 0) ,
+            X_coef_cp_cond[n]:=(if n=n_in then X_coef_cp_N[n] else 0) ,
+            since:
+            1. opsubst doesn't work well with memoizing function(f[a])
+            2. memoizing function stores value and does not automatically
+            clear out those values even if the definition is changed.
+        */
+        nouns
+    ),
+    return(out)
+);
+
+find_var_n_offset_in_expr(expr, var, offset, max_order):=
+    find_var_n_offset_in_expr(expr, var, offset, 1, max_order);
+/* Inspecting the coefficient of n+offset-th order var in expr in order n
+    by evaluating from n=1 to n=max_order*/
+find_var_n_offset_in_expr(expr, var, offset, min_order, max_order):=block(
+    [
+        ev_result,
+        n_desired
+    ],
+    /* Finding Yn+1 in LHS */
+    for n_in:min_order thru max_order do(
+        n_desired: n_in+offset,
+        ev_result: evaluate(expr, n_in),
+        /* Removing lower orders of Y */
+        ev_result: expandwrt(ev_result, var[n_desired]),
+        disp(""),
+        disp(""),
+        disp(""),
+        disp(sconcat("========================== Order ", n_in, " coeff finding for =========================")),
+        disp(var[n_desired]),
+        /* By definition, Y_coef can only appear as itself, its phi or chi derivative */
+        disp(sconcat("@@@@@@@@@@@@@@@@@@@@@@@@@@ Coeff for      ", var[n_desired], " is:")),
+        disp(ratcoef(ev_result, var[n_desired])),
+        disp(sconcat("@@@@@@@@@@@@@@@@@@@@@@@@@@ Coeff for dchi ", var[n_desired], " is:" )),
+        disp(ratcoef(ev_result, 'diff(var[n_desired],chi,1))),
+        disp(sconcat("@@@@@@@@@@@@@@@@@@@@@@@@@@ Coeff for dphi ", var[n_desired], " is:")),
+        disp(ratcoef(ev_result, 'diff(var[n_desired],phi,1)))
+    )
+)$
+
+find_var_nm_offset_in_expr(expr, var, offset, min_order, max_order, m):=block(
+    [
+        ev_result,
+        n_desired
+    ],
+    /* Finding Yn+1 in LHS */
+    for n_in:min_order thru max_order do(
+        n_desired: n_in+offset,
+        ev_result: evaluate(expr, n_in),
+        /* Removing lower orders of Y */
+        ev_result: expandwrt(ev_result, var[n_desired,m]),
+        disp(""),
+        disp(""),
+        disp(""),
+        disp(sconcat("========================== Order ", n_in, " coeff finding for =========================")),
+        disp(var[n_desired,m]),
+        /* By definition, Y_coef can only appear as itself, its phi or chi derivative */
+        disp(sconcat("@@@@@@@@@@@@@@@@@@@@@@@@@@ Coeff for      ", var[n_desired,m], " is:")),
+        disp(ratcoef(ev_result, var[n_desired,m])),
+        disp(sconcat("@@@@@@@@@@@@@@@@@@@@@@@@@@ Coeff for dchi ", var[n_desired,m], " is:" )),
+        disp(ratcoef(ev_result, 'diff(var[n_desired,m],chi,1))),
+        disp(sconcat("@@@@@@@@@@@@@@@@@@@@@@@@@@ Coeff for dphi ", var[n_desired,m], " is:")),
+        disp(ratcoef(ev_result, 'diff(var[n_desired,m],phi,1)))
+    )
+)$

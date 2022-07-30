@@ -1,0 +1,207 @@
+/*
+    This .mac parses a summation equation into a python method.
+    To parse and save to .py file, run:
+    out_string: compile_py_sum(expression)$
+    out_string: edit_string_py(out_string)$
+    out_string: package(out_string, "name you want for the method")$
+    file_stream: openw(sconcat("expression.py"))$
+    printf(file_stream, out_string)$
+    close(file_stream)$
+
+    The script need to be fleshed out to provide values/implementations
+    for all variables/functions.
+    A python implementation of summation is required to run the resulting script:
+
+    import numba
+    @njit
+    def py_sum(expr, lower, upper):
+        out = 0
+        for i in prange(lower, upper+1):
+            out = out + expr(i)
+        return(out)
+*/
+
+simpsum: false$
+load("opsubst")$
+
+/* Indent every lines in string for printf*/
+indent(string_in):= sconcat("    ",ssubst("~%    ","~%",string_in))$
+
+/* Make commands generated from very long "+" and "*" expressions more readable */
+readable_string(expr):=block(
+    [expr_string: string(expr)],
+    if not atom(expr) then(
+        if length(expr) > 5 then(
+            if operatorp(expr, "+") or operatorp(expr, "*") then(
+                expr_string: "",
+                for arg in args(expr) do(
+                    expr_string: sconcat(expr_string, "\\~%    ", op(expr), "(", string(arg), ")")
+                ),
+                expr_string: striml("\\~%+* ", expr_string),
+                return(expr_string)
+            )
+        )
+    ),
+    return(string(expr))
+)$
+
+/* Indent every lines in string. For printf*/
+indent(string_in):= sconcat("    ", ssubst("~%    ","~%",string_in))$
+
+/* Make commands generated from very long "+" more readable */
+/*
+readable_string(expr):= block(
+    [expr_string: string(expr)],
+    if not atom(expr) then(
+        if length(expr) > 5 then(
+            if operatorp(expr, "+") then(
+                return(ssubst(" \\~%    +","+",expr_string))
+            ),
+
+            if operatorp(expr, "*") then(
+                return(ssubst(" \\~%    *","*",expr_string))
+            )
+        )
+    ),
+    return(string(expr))
+)$
+*/
+
+/* Generate python definition for a sum's argument
+    in the format recognized by printf
+*/
+generate_command(sum_arg, sum_counter, index):=(
+    sconcat(
+        "~%def sum_arg_", string(sum_counter), "(", string(index), "):~%",
+        /* Reserved space for inner sums' arguments*/
+        "    # Child args for sum_arg_",sum_counter,"~%",
+        "    return(",striml(" ", indent(readable_string(sum_arg))), ")~%"
+    )
+)$
+
+
+/* Generate python definition for a sum's argument
+    in the format recognized by printf
+*/
+/* generate_command(sum_arg, sum_counter, index):=(
+    sconcat(
+        "~%def sum_arg_", string(sum_counter), "(", string(index), "):~%",
+        /* Reserved space for inner sums' arguments*/
+        "# Child args for sum_arg_",sum_counter,
+        /* make lines fold back if they are long, indent, and
+            then remove the indent at the front to avoid return(    out)
+        */
+        "~%    return(",striml(" ", indent(readable_string(sum_arg))), ")")
+)$ */
+
+/* Parse and save nested sum expressions into a format compatible with python:
+    <result of a sum> = sumpy(sum_arg, lower, upper)
+    where sum_arg is a sum_arg_n(i) evaluating each term in the sum.
+    expr: nested sum expression
+
+    Outputs a string: "patched equation",
+    and saves a file with sum_arg definitions.
+    Note: this method DOES NOT support expressions treated by nice_indices.
+    Since it's complicated to parse the hiearchy of sums, all summation indices
+    will be unprotected variables defined outside sum_arg_n.
+*/
+compile_py_sum(expr):=
+block([
+        output:expr,
+        out_string: "",
+        expr_string,
+        out_string_list, /* list used in marking removal*/
+        sum_counter: 0,
+        temp_command,
+        unclaimed_sum_commands: []
+    ],
+
+    /* This uses the same hacky technique as trig_fourier_order_matching:
+        opsubst with an operator that includes file operation, and then ev the equation.
+        The ev would cause the file operations to run.*/
+    sum_subst(sum_arg, index, upper, lower) :=(
+        sum_counter: sum_counter+1,
+        temp_command: generate_command(sum_arg, sum_counter, index),
+        /* Innermore sums are always evaluated earlier.
+            So by the time we look at the outer sums of a nested sum,
+            the inner sums would have been recorded in unclaimed_sum_commands already,
+            and their operators are already replace with py_sum_marked[sum_counter].
+        */
+        /* Now we loop through unclaimed_sum_commands to see
+            if a current sum contains any inner sums.
+        */
+        for arg in unclaimed_sum_commands do(
+            /* This arg looks like [py_sum_marked[#], "python commands"] */
+            if not freeof(arg[1], sum_arg) then(
+                /* Insert definition for inner sum's argument within the current sum's argument */
+                temp_command: ssubst(
+                    sconcat("# Child args for sum_arg_",sum_counter, indent(arg[2])),
+                    sconcat("# Child args for sum_arg_",sum_counter),
+                    temp_command
+                ),
+                /* This sum is now claimed. Remove it from the list.
+                    This makes sure an inner sum's argument is only defined
+                    in the sum one level higher than it. This prevents undefined
+                    variable error.
+                */
+                unclaimed_sum_commands: delete(arg, unclaimed_sum_commands)
+            )
+        ),
+        /* Adding this sum's arg to the list*/
+        unclaimed_sum_commands: cons([py_sum_marked[sum_counter], temp_command], unclaimed_sum_commands),
+        py_sum_marked [sum_counter](parse_string(sconcat("sum_arg_", sum_counter)), upper, lower)
+    ),
+
+    /*Subbing and evaluating with above-defined operator*/
+    output: opsubst(sum_subst, sum, output),
+    output: ev(output),
+
+    /* Now all the items left in unclaimed_sum_commands
+        are outmost sums. We write them into the parsed file. */
+    for arg in unclaimed_sum_commands do(
+        out_string: sconcat(out_string, arg[2])
+    ),
+
+    expr_spring: readable_string(output),
+    out_string: sconcat(out_string, sconcat("~%~%out = ", expr_spring)),
+
+    /* Removing marking for py_sums */
+    out_string_list: split(out_string, "py_sum_marked["),
+    out_string: first(out_string_list),
+    for i: 2 thru length(out_string_list) do(
+        out_string: sconcat(out_string, "py_sum", substring(out_string_list[i], 1+sposition("]", out_string_list [i])))
+    ),
+
+    return(out_string)
+)$
+
+/* For near axis expansion, fixes some operations. */
+edit_string_py(in_string):= block(
+    [out_string:in_string],
+    out_string: ssubst("**","^",out_string),
+    out_string: ssubst("diff","'diff",out_string),
+    out_string: ssubst("ceil","ceiling",out_string),
+    out_string: ssubst(",\'chi\',",",chi,",out_string),
+    out_string: ssubst(",\'phi\',",",phi,",out_string)
+);
+
+/* Adds imports, for near axis expansion. */
+/* string: parsed python commands */
+/* name: names for the method */
+/* arguments: a string of arguments */
+package(string, name, arguments):=sconcat(
+    "from math import floor, ceil~%",
+    "from math_utilities import is_seq, py_sum, is_integer, diff~%",
+    "import chiphifunc~%",
+    pack_method(string, name, arguments)
+);
+
+
+/* Package a series of parsed commands into a method */
+pack_method(string, name, arguments):=(
+    sconcat(
+        "def ",name,"(",arguments,"):",
+        indent(string), "~%",
+        "    return(out)~%"
+    )
+);
