@@ -23,10 +23,8 @@ def py_sum(expr, lower, upper, n_jobs=2, backend='threading'):
     out = 0
     upper_floor = floor(upper)
     lower_ceil = ceil(lower)
-    # If lower==upper then return expr(lower)
     if upper_floor==lower_ceil:
         return(expr(lower_ceil))
-    # Warning for lower>upper
     if lower_ceil>upper_floor:
         warnings.warn('Warning: lower bound higher than upper bound in '+str(expr) \
         +'. Bound values: lower='+str(lower)+', upper='+str(upper), RuntimeWarning)
@@ -62,19 +60,16 @@ def is_integer(a):
     else:
         return(0)
 
-# Takes phi or chi derivative.
-# y: ChiPhiFunc or const
-# x_name: 'chi' or 'phi'
-# order: number of times to take derivative
-def diff(y, x_name, order):
-    if np.isscalar(y):
-        return(0)
-    out = y
+# dummy for testing parser
+def diff(y, x_name , order):
+    return(y)
 
-    if x_name=='phi':
-        out = out.dphi(order=order)
-
-    if x_name=='chi':
-        for i in range(order):
-            out = out.dchi()
-    return(out)
+def diff_ChiPhiFunc(y, x_name, order):
+    if order == 'chi':
+        diff_matrix = ChiPhiFunc.diff_chi_op(y.get_shape()[0])
+    elif order == 'phi':
+        diff_matrix = ChiPhiFunc.diff_phi_op(y.get_shape()[1])
+    else:
+        raise ValueError('x_name must be \'chi\' or \'phi\'')
+    operator = np.linalg.matrix_power(diff_matrix, order)
+    return(operator@y)
