@@ -59,7 +59,7 @@ class ChiPhiFunc:
     # Initializer. Fourier_mode==True converts sin, cos coeffs to exponential
     def __init__(self, content=np.nan, fourier_mode=False):
         if debug_mode:
-            debug_max_value.append(np.max(content))
+            debug_max_value.append(np.max(np.abs(content)))
 
         if len(content.shape)!=2:
             raise ValueError('ChiPhiFunc content must be 2d arrays.')
