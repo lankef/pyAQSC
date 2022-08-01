@@ -8,8 +8,11 @@ from matplotlib import pyplot as plt
 # with joblib.
 import scipy.integrate
 from joblib import Parallel, delayed
-# Phi integral evaluation mode
-fft_mode=True
+# Debugging variables.
+# When debig_mode is true, content of all new ChiPhiFunc's are tracked.
+# Enable and access by chiphifunc.debug_mode and chiphifunc.debug_max_value.
+debug_mode=False
+debug_max_value=[]
 # simpson_mode = True
 n_jobs = 4
 backend = 'threading' # scipy.integrate is based on a compiled
@@ -55,6 +58,9 @@ import deconvolution
 class ChiPhiFunc:
     # Initializer. Fourier_mode==True converts sin, cos coeffs to exponential
     def __init__(self, content=np.nan, fourier_mode=False):
+        if debug_mode:
+            debug_max_value.append(np.max(content))
+
         if len(content.shape)!=2:
             raise ValueError('ChiPhiFunc content must be 2d arrays.')
         # for definind special instances that are similar to nan, except yields 0 when *0.
@@ -138,9 +144,6 @@ class ChiPhiFunc:
             if not isinstance(other, type(self)):
                 raise TypeError('* can only be evaluated with another '\
                                 'ChiPhiFunc\'s of the same implementation.')
-
-            if (not np.any(self.content)) or (not np.any(other.content)):
-                return(0)
             return(self.multiply(other))
         else:
             if not np.isscalar(other):
@@ -191,7 +194,6 @@ class ChiPhiFunc:
     def __matmul__(self, mat):
         raise TypeError('ChiPhiFunc is treated as a vector of chi coeffs in @. '\
                        'Therefore, ChiPhiFunc@B is not supported.')
-
 
     # self^n, based on self.pow().
     def __pow__(self, other):
