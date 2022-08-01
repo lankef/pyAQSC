@@ -1,13 +1,19 @@
 import numpy as np
 import timeit
 import scipy.signal
+import scipy.fftpack
 from matplotlib import pyplot as plt
 
 # Numba doesn't support scipy methods. Therefore, scipy integrals are sped up
 # with joblib.
 import scipy.integrate
 from joblib import Parallel, delayed
-simpson_mode = True
+# Debugging variables.
+# When debig_mode is true, content of all new ChiPhiFunc's are tracked.
+# Enable and access by chiphifunc.debug_mode and chiphifunc.debug_max_value.
+debug_mode=False
+debug_max_value=[]
+# simpson_mode = True
 n_jobs = 4
 backend = 'threading' # scipy.integrate is based on a compiled
 
@@ -52,6 +58,9 @@ import deconvolution
 class ChiPhiFunc:
     # Initializer. Fourier_mode==True converts sin, cos coeffs to exponential
     def __init__(self, content=np.nan, fourier_mode=False):
+        if debug_mode:
+            debug_max_value.append(np.max(np.abs(content)))
+
         if len(content.shape)!=2:
             raise ValueError('ChiPhiFunc content must be 2d arrays.')
         # for definind special instances that are similar to nan, except yields 0 when *0.
@@ -129,6 +138,8 @@ class ChiPhiFunc:
         # of the same implementation (fourier or grid)
         if isinstance(other, ChiPhiFunc):
             if isinstance(other, ChiPhiFuncNull):
+                if not np.any(self.content):
+                    return(0)
                 return(other)
             if not isinstance(other, type(self)):
                 raise TypeError('* can only be evaluated with another '\
@@ -184,7 +195,6 @@ class ChiPhiFunc:
         raise TypeError('ChiPhiFunc is treated as a vector of chi coeffs in @. '\
                        'Therefore, ChiPhiFunc@B is not supported.')
 
-
     # self^n, based on self.pow().
     def __pow__(self, other):
         if not np.isscalar(other):
@@ -207,8 +217,13 @@ class ChiPhiFunc:
     def dchi(self):
         return type(self)(ChiPhiFunc.dchi_op(self.get_shape()[0]) @ self.content)
 
-    def dphi(self):
-        return(ChiPhiFuncGrid(np.gradient(self.content, axis=1, edge_order=2)/(np.pi*2/self.get_shape()[1])))
+    def dphi(self, order=1):
+        derivative = lambda i_chi : scipy.fftpack.diff(self.content[i_chi], order=order)
+        out_list = Parallel(n_jobs=n_jobs, backend=backend)(
+            delayed(derivative)(i_chi) for i_chi in range(len(self.content))
+        )
+        return(ChiPhiFuncGrid(np.array(out_list)))
+        #return(ChiPhiFuncGrid(np.gradient(self.content, axis=1, edge_order=2)/(np.pi*2/self.get_shape()[1])))
         #return type(self)(self.content @ type(self).dphi_op(self.get_shape()[1]).T)
 
     # Compares if self and other both have even or odd chi series.
@@ -356,6 +371,9 @@ class ChiPhiFuncNull(ChiPhiFunc):
     def __mul__(self, other):
         if other == 0:
             return(0)
+        if isinstance(other, ChiPhiFunc):
+            if not np.any(other.content):
+                return(0)
         return(self)
 
     def __rmul__(self, other):
@@ -377,7 +395,7 @@ class ChiPhiFuncNull(ChiPhiFunc):
     def dchi(self):
         return(self)
 
-    def dphi(self):
+    def dphi(self, order):
         return(self)
 
 # two representations for phi dependence are implemented: Fourier and grid.
@@ -420,8 +438,8 @@ class ChiPhiFuncGrid(ChiPhiFunc):
 
     # Used in operator *. First stretch the phi axis to match grid locations,
     # Then do pointwise product.
-    # -- Input: self and another ChiPhiFuncFourier
-    # -- Output: a new ChiPhiFuncFourier
+    # -- Input: self and another ChiPhiFuncGrid
+    # -- Output: a new ChiPhiFuncGrid
     def multiply(self, other, div = False):
         a, b = self.stretch_phi_to_match(other)
         if div:
@@ -432,7 +450,7 @@ class ChiPhiFuncGrid(ChiPhiFunc):
 
     # Wrapper for mul_grid_jit. Handles int power.
     # -- Input: self and an int
-    # -- Output: a new ChiPhiFuncFourier
+    # -- Output: a new ChiPhiFuncGrid
     def pow(self, int_pow):
         new_content = self.content.copy()
         for i in range(int_pow-1):
@@ -456,8 +474,8 @@ class ChiPhiFuncGrid(ChiPhiFunc):
 
     # Addition of 2 ChiPhiFuncGrid's.
     # Wrapper for numba method.
-    # -- Input: self and another ChiPhiFuncFourier
-    # -- Output: a new ChiPhiFuncFourier
+    # -- Input: self and another ChiPhiFuncGrid
+    # -- Output: a new ChiPhiFuncGrid
     def add_ChiPhiFunc(self, other, sign=1):
         a,b = self.stretch_phi_to_match(other)
         # Now that grid points are matched by stretch_phi, we can invoke add_jit()
@@ -467,6 +485,9 @@ class ChiPhiFuncGrid(ChiPhiFunc):
     # Used in operators, wrapper for stretch_phi. Match self's shape to another ChiPhiFuncGrid.
     # returns 2 contents.
     def stretch_phi_to_match(self, other):
+        if self.get_shape()[1] == other.get_shape()[1]:
+            return(self.content, other.content)
+        warnings.warn('Warning: phi grid stretching has occured.')
         max_phi_len = max(self.get_shape()[1], other.get_shape()[1])
         return(
             ChiPhiFuncGrid.stretch_phi(self.content, max_phi_len),
@@ -497,11 +518,17 @@ class ChiPhiFuncGrid(ChiPhiFunc):
     # Math ---------------------------------------------------------------
     # Used for solvability condition. phi-integrate a ChiPhiFuncGrid over 0 to
     # 2pi or 0 to a given phi.
+    # -- Input: self and integral settings:
     # periodic=False evaluates integral from 0 to phi FOR EACH GRID POINT and
     # creates a ChiPhiFuncGrid with phi dependence.
     # periodic=True evaluates integral from 0 to 2pi and creates a ChiPhiFuncGrid
     # with NO phi dependence.
-    def integrate_phi(self, periodic):
+    # mode='simpson' is reasonably accurate and applicable to funcs with integral!=0
+    # over a period
+    # mode='fft' is not accurate, and only supports functions that integrates to 0
+    # over a period. For reference only.
+    # -- Output: a new ChiPhiFuncGrid
+    def integrate_phi(self, periodic, mode = 'simpson'):
         # number of phi grids
         len_chi = self.get_shape()[0]
         len_phi = self.get_shape()[1]
@@ -516,7 +543,8 @@ class ChiPhiFuncGrid(ChiPhiFunc):
             # does not wrap.
             new_content = scipy.integrate.simpson(wrap_grid_content_jit(self.content), dx=2*np.pi/len_phi, axis=1)
 
-            # if the result of the integral is a constant, return that constant.
+            # if the result of the integral is a constant (only 1 chi cmponent),
+            # return that constant.
             if len(new_content)==1:
                 return(new_content[0])
 
@@ -525,7 +553,10 @@ class ChiPhiFuncGrid(ChiPhiFunc):
             else:
                 return(ChiPhiFuncGrid(np.array([new_content]).T))
         else:
-            if simpson_mode:
+            if mode == 'fft':
+                return(self.dphi(order=-1))
+
+            if mode == 'simpson':
                 integrate = lambda i_phi : scipy.integrate.simpson(self.content[:,:i_phi+1], dx=2*np.pi/len_phi)
                 out_list = Parallel(n_jobs=n_jobs, backend=backend)(
                     delayed(integrate)(i_phi) for i_phi in range(len_phi)

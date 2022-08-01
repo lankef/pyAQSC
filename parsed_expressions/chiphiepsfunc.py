@@ -36,9 +36,6 @@ class ChiPhiEpsFunc:
     def mask(self, n):
         return(ChiPhiEpsFunc(self.chiphifunc_list[:n+1]))
 
-    def __list__(self):
-        return(self.chiphifunc_list)
-
 
     def __len__(self):
         return(len(self.chiphifunc_list))
