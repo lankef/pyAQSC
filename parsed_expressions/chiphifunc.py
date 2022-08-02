@@ -263,8 +263,8 @@ class ChiPhiFunc:
     def display(self, complex = False):
         # This would trigger an error for most complex,
         # static methods used for evaluation.
-        chi = np.linspace(-np.pi,np.pi,100)
-        phi = np.linspace(-np.pi,np.pi,100)
+        chi = np.linspace(0,2*np.pi,100)
+        phi = np.linspace(0,2*np.pi,100)
         f = self.get_lambda()
         plt.pcolormesh(chi, phi, np.real(f(chi, phi.reshape(-1,1))))
         plt.title('ChiPhiFunc, real component')

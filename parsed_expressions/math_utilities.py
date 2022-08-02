@@ -3,19 +3,9 @@ from math import floor, ceil
 from joblib import Parallel, delayed
 from numba import jit, njit, prange
 from numba import int32, bool_, float32
+import scipy.fftpack
 import chiphifunc
 import warnings
-# import sys
-# import traceback
-#
-# # Implementation of warning with traceback to diagnose where index out of bound occurs.
-# def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
-#
-#     log = file if hasattr(file,'write') else sys.stderr
-#     traceback.print_stack(file=log)
-#     log.write(warnings.formatwarning(message, category, filename, lineno, line))
-#
-# warnings.showwarning = warn_with_traceback
 
 # Sum: implemented as a function taking in a single-argument func and the lower/upper bounds
 # Can run in parallel.
@@ -71,10 +61,26 @@ def diff(y, x_name, order):
         return(0)
     out = y
 
-    if x_name=='phi':
-        out = out.dphi(order=order)
+    if not isinstance(y, chiphifunc.ChiPhiFunc):
+        warnings.warn('Warning: diff is being evaluated on: '+str(type(y))+\
+        '. This should not happen unless you are testing.')
 
-    if x_name=='chi':
-        for i in range(order):
-            out = out.dchi()
+        if x_name=='phi':
+            dphi = lambda i_chi : scipy.fftpack.diff(y[i_chi], order=order)
+            out = np.array(Parallel(n_jobs=8, backend='threading')(
+                delayed(dphi)(i_chi) for i_chi in range(len(y))
+            ))
+
+        if x_name=='chi':
+            dchi = lambda i_phi : scipy.fftpack.diff(y[i_phi], order=order)
+            out = np.array(Parallel(n_jobs=8, backend='threading')(
+                delayed(dchi)(i_phi) for i_phi in range(len(y.T))
+            ))
+    else:
+        if x_name=='phi':
+            out = out.dphi(order=order)
+
+        if x_name=='chi':
+            for i in range(order):
+                out = out.dchi()
     return(out)
