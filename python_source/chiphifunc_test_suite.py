@@ -14,7 +14,7 @@ from math_utilities import is_seq,py_sum,is_integer,diff
 n_grid_phi = 1000
 n_grid_chi = 500
 points = np.linspace(0, 2*np.pi*(1-1/n_grid_phi), n_grid_phi)
-chi = np.linspace(0, 2*np.pi, n_grid_chi)
+chi = np.linspace(0, 2*np.pi*(1-1/n_grid_chi), n_grid_chi)
 phi = points
 
 # Evaluate a callable on 'points' (defined above)
@@ -29,10 +29,12 @@ def evaluate_ChiPhiFunc(chiphifunc_in):
 # a ChiPhiEpsFunc where all elements are np arrays storing evaluation results
 # on 'points'.
 def evaluate_ChiPhiEpsFunc(chiphepsfunc_in):
+    if not isinstance(chiphepsfunc_in, ChiPhiEpsFunc):
+        raise TypeError('Input must be a ChiPhiEpsFunc')
     new_list = []
     for item in chiphepsfunc_in.chiphifunc_list:
         if isinstance(item, ChiPhiFunc):
-            new_list.append(evaluate_ChiPhiFunc(items))
+            new_list.append(evaluate_ChiPhiFunc(item))
         else:
             new_list.append(item)
     return(ChiPhiEpsFunc(new_list))

@@ -72,10 +72,10 @@ def diff(y, x_name, order):
             ))
 
         if x_name=='chi':
-            dchi = lambda i_phi : scipy.fftpack.diff(y[i_phi], order=order)
+            dchi = lambda i_phi : scipy.fftpack.diff(y.T[i_phi], order=order)
             out = np.array(Parallel(n_jobs=8, backend='threading')(
                 delayed(dchi)(i_phi) for i_phi in range(len(y.T))
-            ))
+            )).T
     else:
         if x_name=='phi':
             out = out.dphi(order=order)

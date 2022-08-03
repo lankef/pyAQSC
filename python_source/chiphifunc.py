@@ -9,10 +9,26 @@ from matplotlib import pyplot as plt
 import scipy.integrate
 from joblib import Parallel, delayed
 # Debugging variables.
-# When debig_mode is true, content of all new ChiPhiFunc's are tracked.
+# When debug_mode is true, content of all new ChiPhiFunc's are tracked.
 # Enable and access by chiphifunc.debug_mode and chiphifunc.debug_max_value.
-debug_mode=False
-debug_max_value=[]
+debug_mode = False
+
+# Tracks the max and avg values of intermediate results. Compare with output to
+# identify rounding errors.
+debug_max_value = []
+debug_avg_value = []
+
+# Tracks the difference between the power of 10 of the 2 arguments in a '+' operation
+# to identify rounding errors.
+debug_pow_diff_add = []
+
+# # Tracks the difference between the power of 10 of the 2 arguments in a '+' operation
+# # to identify identify where small quantities can become significant
+# # again by multiplying a large quantity. Would cause issue if it happens
+# # right after a small quantity is added to a large quantity.
+# debug_max_pow_diff_mul = []
+# debug_avg_pow_diff_mul = []
+
 # simpson_mode = True
 n_jobs = 4
 backend = 'threading' # scipy.integrate is based on a compiled
@@ -60,6 +76,7 @@ class ChiPhiFunc:
     def __init__(self, content=np.nan, fourier_mode=False):
         if debug_mode:
             debug_max_value.append(np.max(np.abs(content)))
+            debug_avg_value.append(np.max(np.average(content)))
 
         if len(content.shape)!=2:
             raise ValueError('ChiPhiFunc content must be 2d arrays.')
@@ -263,8 +280,8 @@ class ChiPhiFunc:
     def display(self, complex = False):
         # This would trigger an error for most complex,
         # static methods used for evaluation.
-        chi = np.linspace(0,2*np.pi,100)
-        phi = np.linspace(0,2*np.pi,100)
+        chi = np.linspace(0,2*np.pi*0.99,100)
+        phi = np.linspace(0,2*np.pi*0.99,100)
         f = self.get_lambda()
         plt.pcolormesh(chi, phi, np.real(f(chi, phi.reshape(-1,1))))
         plt.title('ChiPhiFunc, real component')
@@ -321,9 +338,46 @@ class ChiPhiFunc:
     # (such as (3,2), (13,6))
     # Copies arguments
     # -- Input: 2 2d arrays.
-    # -- Output: 2d array.
-    @njit(complex128[:,:](complex128[:,:], complex128[:,:], int64))
+    # -- Output: 2d array
+    # Switches between a compiled and a non-compiled implementation
+    # depending on debug_mode (because print and appending global)
+    # doesn't work in compiled methods.
     def add_jit(a, b, sign):
+        if debug_mode:
+            return(ChiPhiFunc.add_jit_debug(a, b, sign))
+        else:
+            return(ChiPhiFunc.add_jit_compiled(a, b, sign))
+
+    def add_jit_debug(a, b, sign):
+        shape = (max(a.shape[0], b.shape[0]),max(a.shape[1],b.shape[1]))
+        out = np.zeros(shape, dtype=np.complex128)
+        a_pad_row = (shape[0] - a.shape[0])//2
+        a_pad_col = (shape[1] - a.shape[1])//2
+        b_pad_row = (shape[0] - b.shape[0])//2
+        b_pad_col = (shape[1] - b.shape[1])//2
+        out[a_pad_row:shape[0]-a_pad_row,a_pad_col:shape[1]-a_pad_col] += a
+        out[b_pad_row:shape[0]-b_pad_row,b_pad_col:shape[1]-b_pad_col] += b*sign
+
+        # Debug. Compares the orders of magnitude of inputs.
+        a_padded = np.empty(shape, dtype=np.complex128)
+        a_padded[:] = np.nan
+        b_padded = np.empty(shape, dtype=np.complex128)
+        b_padded[:] = np.nan
+        a_padded[a_pad_row:shape[0]-a_pad_row,a_pad_col:shape[1]-a_pad_col]\
+            = np.log10(np.abs(a))
+        b_padded[b_pad_row:shape[0]-b_pad_row,b_pad_col:shape[1]-b_pad_col]\
+            = np.log10(np.abs(b))
+        pow_diff = np.abs(a_padded - b_padded)
+
+        # inf values shows up because often a and/or b is 0. Ignore them.
+        pow_diff[pow_diff == np.inf] = np.nan
+        debug_pow_diff_add.append(pow_diff.flatten())
+
+        return(out)
+
+    # The original add_jit
+    @njit(complex128[:,:](complex128[:,:], complex128[:,:], int64))
+    def add_jit_compiled(a, b, sign):
         shape = (max(a.shape[0], b.shape[0]),max(a.shape[1],b.shape[1]))
         out = np.zeros(shape, dtype=np.complex128)
         a_pad_row = (shape[0] - a.shape[0])//2
@@ -333,6 +387,8 @@ class ChiPhiFunc:
         out[a_pad_row:shape[0]-a_pad_row,a_pad_col:shape[1]-a_pad_col] += a
         out[b_pad_row:shape[0]-b_pad_row,b_pad_col:shape[1]-b_pad_col] += b*sign
         return(out)
+
+
 
 # A singleton subclass. The instance behaves like
 # nan, except during multiplication with zero, where it becomes 0.
@@ -480,6 +536,7 @@ class ChiPhiFuncGrid(ChiPhiFunc):
         a,b = self.stretch_phi_to_match(other)
         # Now that grid points are matched by stretch_phi, we can invoke add_jit()
         # To add matching rows(chi coeffs) and grid points.
+
         return ChiPhiFuncGrid(ChiPhiFunc.add_jit(a,b,sign))
 
     # Used in operators, wrapper for stretch_phi. Match self's shape to another ChiPhiFuncGrid.
