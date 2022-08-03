@@ -1,4 +1,4 @@
-# APES (Anisptropic Pressure Expansion for Stellarators)
+# APES (Anisotropic Pressure Expansion for Stellarators)
 This code constructs globally quasi-symmetric stellarator equilibria with
 anisotropic pressure to any order. [1 - 3]
 
