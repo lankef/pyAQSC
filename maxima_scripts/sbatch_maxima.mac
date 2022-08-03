@@ -1,0 +1,170 @@
+/*
+--- The Maxima sbatch tool ---------------
+This library contains methods that generates maxima_sbatch_temp_<number>.mac files
+running a certain operation, f, on every element in a list using sbatch.
+
+
+These .mac files can then be run using this command:
+
+
+and jobscript:
+--- separation line -------------
+
+#!/bin/bash
+
+#$BATCH -n 1
+#SBATCH -p general
+#SBATCH --mem=5000
+#SBATCH -t 40:00:00
+#SBATCH --export=ALL
+#SBATCH -J maxima_test
+#SBATCH --output=maxima_sbatch.%A_%a.out
+#SBATCH --error=maxima_sbatch.%A_%a.err
+#SBATCH --mail-type=FAIL
+
+srun <path to compiled Maxima binary> -l sbcl -b "maxima_sbatch_temp_${SLURM_ARRAY_TASK_ID}.mac" -X '--dynamic-space-size 5000'
+
+--- separation line -------------
+*/
+
+load(operatingsystem);
+
+/* Internal method used to generate a jobscript according to template.
+   maxima_command is the shell command that launches your maxima installation.
+   It should also include memory and other attributes, if needed.
+
+   such as:
+   "some_path/maxima-5.45.1/src/maxima -l sbcl -X '--dynamic-space-size 5000'" */
+jobscript_template(maxima_command):=block(
+    [linel_temp:linel], /* Prevents auto line switch by temporarily extending linel.*/
+    linel:10000,
+    print("#!/bin/bash"),
+    print("#SBATCH -n 1"),
+    print("#SBATCH -p general"),
+    print("#SBATCH --mem=5000"),
+    print("#SBATCH -t 40:00:00"),
+    print("#SBATCH --export=ALL"),
+    print("#SBATCH -J maxima_test"),
+    print("#SBATCH --output=maxima_sbatch.%A_%a.out"),
+    print("#SBATCH --error=maxima_sbatch.%A_%a.err"),
+    print("#SBATCH --mail-type=FAIL"),
+    print(concat("srun ",maxima_command, " -b \"maxima_sbatch_temp_${SLURM_ARRAY_TASK_ID}.mac\"" )),
+    linel:linel_temp
+);
+
+/* Internal method generating command for launching a job */
+job_command(list_in, path):= block(
+    [linel_temp:linel],
+    linel:10000,
+    print(
+        sconcat(
+            "cd ",
+            last(split(path, "/"))
+        )
+    ),
+    print(sconcat("sbatch --array=1-", length(list_in)," maxima_sbatch_jobscript")),
+    print("cd .."),
+    linel:linel_temp
+);
+
+
+/* Interna method used to print and save instructions for a temp folder */
+instructions_for_path(list_in, path):= block(
+    [linel_temp:linel],
+    linel:10000,
+    print(sconcat("Completed. Saved ", length(list_in), " files.")),
+    print(sconcat("To run, execute ",sconcat(path,"_launch_sbatch.sh"))),
+    print("The jobscript inside the folder is generated from template. It might need modification."),
+    linel:linel_temp
+);
+
+/* Internal method generating temporary .mac files evaluating f_to_run on list_in's i-th element*/
+mac_template(f_to_run, import_loc, import_list, i):= block(
+    [linel_temp:linel],
+    linel:10000,
+    /* Add library folder */
+    print(concat("file_search_maxima: append(file_search_maxima,", string(import_loc), ");")),
+    /* Loading libraries*/
+    for arg_str in import_list do(
+        print(concat("load(\"", arg_str, "\")\;"))
+    ),
+    print("load(\"maxima_sbatch_list_in.lisp\")\;"),
+    print(concat("result:", f_to_run, "(list_in[", i, "])\;")),
+    print(concat("save(\"maxima_sbatch_result_",i,".lisp\", result);")),
+    linel:linel_temp
+);
+
+/* Generate .macs running f over list_in using template_jobscript.
+    list_in: list to batch process
+    import_loc: list of import paths
+    f: a single argument function to run for every element in list_in
+    path: temporary paths for sbatching
+*/
+
+generate_run_sbatch_list(list_in, f_to_run, path, import_loc, import_list, maxima_command):=
+block(
+    [
+        arg,
+        arg_mac_file_name
+    ],
+    set_display('none), /* wxmaxima overrides print to print xml. This prevents it. */
+    /* Testing type of inputs */
+    if (not listp(list_in)) or (not listp(import_list)) or (not listp(import_loc)) then(
+        disp("generate_run_sbatch_list: Error, list_in, import_loc or import_list is not a list"),
+        disp("list_in"),
+        disp(list_in),
+        disp("import_list"),
+        disp(import_list),
+        disp("import_loc"),
+        disp(import_loc),
+        break(1)
+    ),
+    if (not stringp(path)) then(
+        disp("generate_run_sbatch_list: Error, path is not a string"),
+        disp("path"),
+        disp(path),
+        break(1)
+    ),
+    /* not sure how file_search works */
+    /* if file_search("jobscript", [path])=false then(
+        disp("generate_run_sbatch_list: caution, jobscript may not be present in path. Breaking."),
+        break(1)
+    ), */
+
+    /* Generating importing part of the code */
+
+    mkdir(path),
+    /* Saving list to iterate over as .lisp file for individual jobs */
+    save(concat(path, "/maxima_sbatch_list_in.lisp"), list_in),
+    /* Generating jobscript */
+    with_stdout(concat(path, "/maxima_sbatch_jobscript"), jobscript_template(maxima_command)),
+    /* Generating .mac files*/
+    for i: 1 thru length(list_in) do(
+        arg: list_in[i],
+        arg_mac_file_name: sconcat(path, "/maxima_sbatch_temp_", i, ".mac"),
+        with_stdout(arg_mac_file_name, mac_template(f_to_run, import_loc, import_list, i))
+    ),
+    instructions_for_path(list_in, path),
+    with_stdout(sconcat(path,"_launch_sbatch.sh"), job_command(list_in, path))
+);
+
+
+/* Extract results from a series of sbatch list runs into a list */
+extract_run_sbatch_list(path):=
+block(
+    [len_list, out:[]],
+    /* Read length of original list */
+    load(concat(path, "/maxima_sbatch_list_in.lisp")),
+    len_list: length(list_in),
+    kill(list_in),
+
+    /* Load results from all individual runs, and concatenating them back
+        into the list in correct order. */
+    for i: 1 thru len_list do(
+        load(sconcat(path, "/maxima_sbatch_result_", i, ".lisp")),
+        out:endcons(result, out),
+        kill(result)
+    ),
+    disp(sconcat("Extraction complete. Recovered list of ", len_list, " items.")),
+    return(out)
+);

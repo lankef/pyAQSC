@@ -3,19 +3,9 @@ from math import floor, ceil
 from joblib import Parallel, delayed
 from numba import jit, njit, prange
 from numba import int32, bool_, float32
+import scipy.fftpack
 import chiphifunc
 import warnings
-# import sys
-# import traceback
-#
-# # Implementation of warning with traceback to diagnose where index out of bound occurs.
-# def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
-#
-#     log = file if hasattr(file,'write') else sys.stderr
-#     traceback.print_stack(file=log)
-#     log.write(warnings.formatwarning(message, category, filename, lineno, line))
-#
-# warnings.showwarning = warn_with_traceback
 
 # Sum: implemented as a function taking in a single-argument func and the lower/upper bounds
 # Can run in parallel.
@@ -23,8 +13,10 @@ def py_sum(expr, lower, upper, n_jobs=2, backend='threading'):
     out = 0
     upper_floor = floor(upper)
     lower_ceil = ceil(lower)
+    # If lower==upper then return expr(lower)
     if upper_floor==lower_ceil:
         return(expr(lower_ceil))
+    # Warning for lower>upper
     if lower_ceil>upper_floor:
         warnings.warn('Warning: lower bound higher than upper bound in '+str(expr) \
         +'. Bound values: lower='+str(lower)+', upper='+str(upper), RuntimeWarning)
@@ -60,16 +52,35 @@ def is_integer(a):
     else:
         return(0)
 
-# dummy for testing parser
-def diff(y, x_name , order):
-    return(y)
+# Takes phi or chi derivative.
+# y: ChiPhiFunc or const
+# x_name: 'chi' or 'phi'
+# order: number of times to take derivative
+def diff(y, x_name, order):
+    if np.isscalar(y):
+        return(0)
+    out = y
 
-def diff_ChiPhiFunc(y, x_name, order):
-    if order == 'chi':
-        diff_matrix = ChiPhiFunc.diff_chi_op(y.get_shape()[0])
-    elif order == 'phi':
-        diff_matrix = ChiPhiFunc.diff_phi_op(y.get_shape()[1])
+    if not isinstance(y, chiphifunc.ChiPhiFunc):
+        warnings.warn('Warning: diff is being evaluated on: '+str(type(y))+\
+        '. This should not happen unless you are testing.')
+
+        if x_name=='phi':
+            dphi = lambda i_chi : scipy.fftpack.diff(y[i_chi], order=order)
+            out = np.array(Parallel(n_jobs=8, backend='threading')(
+                delayed(dphi)(i_chi) for i_chi in range(len(y))
+            ))
+
+        if x_name=='chi':
+            dchi = lambda i_phi : scipy.fftpack.diff(y.T[i_phi], order=order)
+            out = np.array(Parallel(n_jobs=8, backend='threading')(
+                delayed(dchi)(i_phi) for i_phi in range(len(y.T))
+            )).T
     else:
-        raise ValueError('x_name must be \'chi\' or \'phi\'')
-    operator = np.linalg.matrix_power(diff_matrix, order)
-    return(operator@y)
+        if x_name=='phi':
+            out = out.dphi(order=order)
+
+        if x_name=='chi':
+            for i in range(order):
+                out = out.dchi()
+    return(out)

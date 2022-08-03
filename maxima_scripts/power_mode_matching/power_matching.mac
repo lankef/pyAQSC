@@ -525,15 +525,12 @@ block(
     )
 );
 
-/* Used for testing. Fast for low orders. */
+/* Used for testing. For low orders only.*/
 extract_power_coeff_test(expr_in, n_target, eps):=
 block([out:0],
-
-    deftaylor(test_func(eps),expr_in),
-    if n_target=0 then return(first(taylor(test_func(eps),eps,0,500))),
-    out:last(taylor(test_func(eps), eps, 0, n_target)),
-    kill(test_func),
-    out/(eps^n_target)
+    disp("Expanding to order",n_target^3*2),
+    out:taylor(expr_in, eps, 0, n_target^3*2),
+    return(coeff(scanmap(expand, out),eps,n_target))
 );
 
 
@@ -576,8 +573,8 @@ block([
     expr:separate_sums(simplify_expr_for_extract(expr_in, eps)),
 
     if verbose then(
-        disp("***** extract_power_coeff: launch, eps-dependent expression is *****"),
-        disp(expr_in),
+        disp("***** extract_power_coeff: launch, eps-dependent expression is simplified: *****"),
+        disp(expr),
         disp("constant terms are"),
         disp(expr_and_const[2]),
         disp("constant terms removed:"),
@@ -628,7 +625,7 @@ block(
 
 
     if freeof(eps, expr_in) then(
-        if n_target=0 then return(expr)
+        if n_target=0 then return(expr_in)
         else return(0)
     ),
 
@@ -661,6 +658,3 @@ block(
     out: opsubst(nounify(sum), "sum_dummy", out),
     out
 );
-
-/* Package a series of parsed commands into a method */
-package(string, name):=sconcat("def ",name,"():~%", sindent(string), "~%    return(out)");
