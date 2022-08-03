@@ -3,7 +3,15 @@ cauchysum: true;  /* Enable Cauchy sum */
 sumexpand: true;  /* Always expand sums during product */
 simpsum: false;   /* Must disable simpsum*/
 load("opsubst");
-load("power_matching.mac");
+/* Loading relative to the library's location */
+load(
+    sconcat(
+        sremove("trig_fourier_order_matching.mac",load_pathname),
+        "power_matching.mac"
+    )
+);
+
+
 
 matchdeclare(any_a, true);
 matchdeclare(any_b, true);
