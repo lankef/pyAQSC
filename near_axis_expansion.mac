@@ -235,3 +235,48 @@ find_var_nm_offset_in_expr(expr, var, offset, min_order, max_order, m):=block(
         disp(ratcoef(ev_result, 'diff(var[n_desired,m],phi,1)))
     )
 )$
+
+
+/* Defining LHS */
+jacobian_lhs_ec:ratsimp( B_alpha_e^2 * B_denom_ec)$
+/* Defining RHS */
+jacobian_rhs_ecp:
+      ratsimp((iota_e*dchi X_ecp + dphi (X_ecp) +tau_p*Y_ecp*dl_p + kap_p*Z_ecp*dl_p)^2
+       +(iota_e*dchi (Y_ecp) + dphi (Y_ecp) -tau_p*X_ecp*dl_p)^2
+       +(iota_e*dchi (Z_ecp) + dphi (Z_ecp) -kap_p*X_ecp*dl_p + dl_p)^2)$
+
+/* Co/contravariant equations */
+b0_lhs_ecp: ratsimp(-(B_alpha_e - iota_e*B_theta_ecp)*((dchi X_ecp)*(dpsi Y_ecp) - (dpsi X_ecp)*(dchi Y_ecp))
+            -B_psi_ecp*(
+                (dchi Y_ecp)*((dphi X_ecp) + tau_p*Y_ecp*dl_p + Z_ecp*kap_p*dl_p)
+                -(dchi X_ecp)*((dphi Y_ecp) - X_ecp*tau_p*dl_p)
+            )
+            +B_theta_ecp*(
+                (dpsi Y_ecp)*((dphi X_ecp) + tau_p*Y_ecp*dl_p + Z_ecp*kap_p*dl_p)
+                -(dpsi X_ecp)*((dphi Y_ecp) - X_ecp*tau_p*dl_p)
+            ))$
+b0_rhs_ecp: ratsimp((dphi Z_ecp) - X_ecp*kap_p*dl_p + dl_p + iota_e*(dchi Z_ecp))$
+
+/* ------------------------------------------------------------------------------------------------------ */
+k0_lhs_ecp: ratsimp(-(B_alpha_e - iota_e*B_theta_ecp)*((dchi Y_ecp)*(dpsi Z_ecp) - (dpsi Y_ecp)*(dchi Z_ecp))
+            -B_psi_ecp*(
+                (dchi Z_ecp)*((dphi Y_ecp) - tau_p*X_ecp*dl_p)
+                -(dchi Y_ecp)*((dphi Z_ecp) - X_ecp*kap_p*dl_p + dl_p)
+            )
+            +B_theta_ecp*(
+                (dpsi Z_ecp)*((dphi Y_ecp) - tau_p*X_ecp*dl_p)
+                -(dpsi Y_ecp)*((dphi Z_ecp) - X_ecp*kap_p*dl_p + dl_p)
+            ))$
+k0_rhs_ecp: ratsimp((dphi X_ecp) + tau_p*Y_ecp*dl_p + Z_ecp*kap_p*dl_p + iota_e*(dchi X_ecp))$
+
+/* ------------------------------------------------------------------------------------------------------ */
+t0_lhs_ecp: ratsimp(-(B_alpha_e - iota_e*B_theta_ecp)*((dchi Z_ecp)*(dpsi X_ecp) - (dpsi Z_ecp)*(dchi X_ecp))
+            -B_psi_ecp*(
+                (dchi X_ecp)*((dphi Z_ecp) - X_ecp*kap_p*dl_p + dl_p)
+                -(dchi Z_ecp)*((dphi X_ecp) + tau_p*Y_ecp*dl_p + Z_ecp*kap_p*dl_p)
+            )
+            +B_theta_ecp*(
+                (dpsi X_ecp)*((dphi Z_ecp) - X_ecp*kap_p*dl_p + dl_p)
+                -(dpsi Z_ecp)*((dphi X_ecp) + tau_p*Y_ecp*dl_p + Z_ecp*kap_p*dl_p)
+            ))$
+t0_rhs_ecp: ratsimp((dphi Y_ecp) - tau_p*X_ecp*dl_p + iota_e*(dchi Y_ecp))$
