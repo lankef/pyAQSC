@@ -2,7 +2,7 @@
 This code constructs globally quasi-symmetric stellarator equilibria with
 anisotropic pressure to any order. [1 - 3]
 
----
+
 ## Dependencies
 The python codes requires Numpy, Scipy, Matplotlib, Numba and Joblib. In addition,
 [pqQSC](https://github.com/landreman/pyQSC) [4] us used for axis shape evaluation
@@ -11,7 +11,7 @@ and some plotting features.
 The Maxima notebooks requires wxMaxima to view. The notebooks are not required for
 running the main code.
 
----
+
 ## Directory structure and files
 ```
 ├── README.MD
