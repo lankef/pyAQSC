@@ -6,13 +6,14 @@ import warnings
 # error in Maxima-translated codes. Produces a ChiPhiFuncNull when index is out of bound.
 # Initialization:
 # ChiPhiEpsFunc([X0, X1, X2, ... Xn])
+warn_index_out_of_bound = False # Index out of bound error can be disabled to increase speed
 class ChiPhiEpsFunc:
     def __init__(self, list):
         self.chiphifunc_list = list
 
     def __getitem__(self, index):
         # If array index out of bound then put in an null item first
-        if index>len(self.chiphifunc_list)-1 or index<0:
+        if (index>len(self.chiphifunc_list)-1 or index<0) and warn_index_out_of_bound:
             warnings.warn('Warning: handling array index out-of-bound. Index = '+str(index))
             return(chiphifunc.ChiPhiFuncNull())
         return(self.chiphifunc_list[index])

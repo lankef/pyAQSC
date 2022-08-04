@@ -570,7 +570,7 @@ class ChiPhiFuncGrid(ChiPhiFunc):
     # Properties ---------------------------------------------------------------
     # Returns the value when phi=0. Copies.
     def get_phi_zero(self):
-        return ChiPhiFuncGrid(self.content[:,0])
+        return ChiPhiFuncGrid(np.array([self.content[:,0]]).T)
 
     # Math ---------------------------------------------------------------
     # Used for solvability condition. phi-integrate a ChiPhiFuncGrid over 0 to
@@ -783,7 +783,7 @@ class ChiPhiFuncGrid(ChiPhiFunc):
     # we add an all-1 column to it to constrain average and make it invertible.
     # -- Input: a phi grid number int
     # -- Output: a 2d matrix
-    @lru_cache(maxsize=None)
+    @lru_cache(maxsize=100)
     def dphi_op(len_phi, invert = False):
         vec = np.zeros(len_phi, dtype=np.complex128)
         # circulant circulates column, not row.
