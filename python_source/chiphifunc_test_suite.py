@@ -79,7 +79,7 @@ def compare_chiphifunc(guess, ans):
     (ans-guess).display()
 
     print('fractional errors b/w data and general formula')
-    print_fractional_error(guess.content, ans.content)
+    print_fractional_error(evaluate_ChiPhiFunc(guess), evaluate_ChiPhiFunc(ans))
 
 
 # Compare 2 arrays and print out absolute and fractional error.
@@ -293,7 +293,7 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False):
     # half of the 2-part paper
     B_denom_coef_c = ChiPhiEpsFunc([1, -X1*2*1*kap_p, B2, B3])
 
-    iota_coef = ChiPhiEpsFunc(np.loadtxt(path+'outputs.dat'))
+    iota_coef = ChiPhiEpsFunc(list(np.loadtxt(path+'outputs.dat')))
 
     # Not an actual representation in pyQSC.
     # only for calculating axis length.

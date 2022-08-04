@@ -270,7 +270,6 @@ class ChiPhiFunc:
         # static methods used for evaluation.
         return (self.get_shape()[0]%2==0)
 
-
     # Plotting -----------------------------------------------------------------------------
     # Get a 2-argument lambda function for plotting this term
     def get_lambda(self):
@@ -544,7 +543,8 @@ class ChiPhiFuncGrid(ChiPhiFunc):
     def stretch_phi_to_match(self, other):
         if self.get_shape()[1] == other.get_shape()[1]:
             return(self.content, other.content)
-        warnings.warn('Warning: phi grid stretching has occured.')
+        warnings.warn('Warning: phi grid stretching has occured. Shapes are:'\
+            'self:'+str(self.get_shape())+'; other:'+str(other.get_shape()))
         max_phi_len = max(self.get_shape()[1], other.get_shape()[1])
         return(
             ChiPhiFuncGrid.stretch_phi(self.content, max_phi_len),
@@ -570,7 +570,10 @@ class ChiPhiFuncGrid(ChiPhiFunc):
     # Properties ---------------------------------------------------------------
     # Returns the value when phi=0. Copies.
     def get_phi_zero(self):
-        return ChiPhiFuncGrid(np.array([self.content[:,0]]).T)
+        new_content = np.array([self.content[:,0]]).T
+        if len(new_content) == 1:
+            return(new_content[0][0])
+        return(ChiPhiFuncGrid(np.array([self.content[:,0]]).T))
 
     # Math ---------------------------------------------------------------
     # Used for solvability condition. phi-integrate a ChiPhiFuncGrid over 0 to

@@ -13,8 +13,9 @@ class ChiPhiEpsFunc:
 
     def __getitem__(self, index):
         # If array index out of bound then put in an null item first
-        if (index>len(self.chiphifunc_list)-1 or index<0) and warn_index_out_of_bound:
-            warnings.warn('Warning: handling array index out-of-bound. Index = '+str(index))
+        if (index>len(self.chiphifunc_list)-1 or index<0):
+            if warn_index_out_of_bound:
+                warnings.warn('Warning: handling array index out-of-bound. Index = '+str(index))
             return(chiphifunc.ChiPhiFuncNull())
         return(self.chiphifunc_list[index])
 
