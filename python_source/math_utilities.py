@@ -56,7 +56,7 @@ def is_integer(a):
 # y: ChiPhiFunc or const
 # x_name: 'chi' or 'phi'
 # order: number of times to take derivative
-def diff(y, x_name, order):
+def diff_backend(y, x_name, order):
     if np.isscalar(y):
         return(0)
     out = y
@@ -83,4 +83,11 @@ def diff(y, x_name, order):
         if x_name=='chi':
             for i in range(order):
                 out = out.dchi()
+    return(out)
+
+# Maxima sometimes merges a few diff's together.
+def diff(y, x_name1, order1, x_name2=None, order2=None):
+    out = diff_backend(y, x_name1, order1)
+    if x_name2 is not None:
+        out = diff_backend(out, x_name2, order2)
     return(out)

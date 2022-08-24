@@ -19,11 +19,15 @@ class ChiPhiEpsFunc:
             return(chiphifunc.ChiPhiFuncNull())
         return(self.chiphifunc_list[index])
 
+    def __setitem__(self, key, newvalue):
+        raise NotImplementedError('ChiPhiEpsFunc should only be edited with'\
+        ' ChiPhiEpsFunc.append() to prevent changes to known terms.')
+
     # Implementation of list append
     def append(self, item):
         self.chiphifunc_list.append(item)
-
-    # Append one or more zeros to the end of the list. Copies.
+        
+    # Append one or more zeros to the end of the list.
     # For evaluating higher order terms with recursion relation. Sometimes
     # expressions used to evaluate a higher order term includes the term itself,
     # and requires ChiPhiEpsFunc to provide zero (rather than ChiPhiFuncNull
@@ -36,7 +40,20 @@ class ChiPhiEpsFunc:
 
     # For testing recursion. Produces a sub-list up to the nth element (order).
     def mask(self, n):
+        if n>len(self.chiphifunc_list)-1:
+            warnings.warn('Mask size is larger than the list\'s size')
         return(ChiPhiEpsFunc(self.chiphifunc_list[:n+1]))
+
+
+    # Copy and replacing an item for comparing
+    def replace(self, n, new_elem):
+        new_list = self.chiphifunc_list.copy()
+        new_list[n] = new_elem
+        return(ChiPhiEpsFunc(new_list))
+
+    # Copies a ChiPhiEpsFunc. Does not copy the constituents of self.chiphifunc_list.
+    def copy(self):
+        return(ChiPhiEpsFunc(self.chiphifunc_list.copy()))
 
     def __list__(self):
         return(self.chiphifunc_list)

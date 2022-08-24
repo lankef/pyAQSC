@@ -50,36 +50,17 @@ def display(array, complex=True):
         plt.show()
 
 # Plots the content of two chiphifuncs and compare.
-def compare_chiphifunc(guess, ans):
-    print('Guess')
-    ax1 = plt.subplot(121)
-    ax1.plot(np.real(guess.content).T)
-    ax1.set_title('Real')
-    ax2 = plt.subplot(122)
-    ax2.plot(np.imag(guess.content).T)
-    ax2.set_title('Imaginary')
-    plt.show()
-    print('Answer')
-    ax1 = plt.subplot(121)
-    ax1.plot(np.real(ans.content).T)
-    ax1.set_title('Real')
-    ax2 = plt.subplot(122)
-    ax2.plot(np.imag(ans.content).T)
-    ax2.set_title('Imaginary')
-    plt.show()
+def compare_chiphifunc(A, B):
+    print('A')
+    A.display_content()
+    print('B')
+    B.display_content()
 
-    print('Error')
-    ax1 = plt.subplot(121)
-    ax1.plot(np.real((ans-guess).content).T)
-    ax1.set_title('Real')
-    ax2 = plt.subplot(122)
-    ax2.plot(np.imag((ans-guess).content).T)
-    ax2.set_title('Imaginary')
-    plt.show()
-    (ans-guess).display()
+    print('Difference')
+    (A-B).display_content()
 
     print('fractional errors b/w data and general formula')
-    print_fractional_error(evaluate_ChiPhiFunc(guess), evaluate_ChiPhiFunc(ans))
+    print_fractional_error(A.content, B.content)
 
 
 # Compare 2 arrays and print out absolute and fractional error.
