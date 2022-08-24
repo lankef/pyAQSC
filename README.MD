@@ -38,9 +38,8 @@ running the main code.
     ├── chiphiepsfunc.py                    -> A list-like data structure for power coeffs.
     ├── chiphifunc.py                       -> A data structure representing f(chi,phi)
     │                                          as chi Fourier coeffs on phi grids and its
-    │                                          associated numerical operations
+    │                                          associated numerical operations.
     ├── chiphifunc_test_suite.py            -> A test suite for chiphifunc
-    ├── deconvolution.py
     ├── math_utilities.py                   -> More numerical operations needed to run
     │                                          python methods in python_source/parsed/
     └-- parsed/                             -> Parsed expressions for the recursion relations
