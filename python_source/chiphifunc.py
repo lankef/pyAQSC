@@ -1,5 +1,6 @@
 import numpy as np
 import timeit
+import warnings
 import scipy.signal
 import scipy.fftpack
 from matplotlib import pyplot as plt
@@ -8,9 +9,14 @@ from matplotlib import pyplot as plt
 # with joblib.
 import scipy.integrate
 from joblib import Parallel, delayed
+
+# Default diff and integration modes can be modified.
+diff_mode = 'fft'
+integral_mode = 'fft'
+
 # Debugging variables.
 # When debug_mode is true, content of all new ChiPhiFunc's are tracked.
-# Enable and access by chiphifunc.debug_mode and chiphifunc.debug_max_value.
+# Enable and access by debug_mode and debug_max_value.
 debug_mode = False
 
 # Tracks the max and avg values of intermediate results. Compare with output to
@@ -35,16 +41,14 @@ backend = 'threading' # scipy.integrate is based on a compiled
 
 from numba import jit, njit, prange
 # import jit value types. Bizzarely using int32 causes typing issues
-# in deconvolution.solve_underdet_degen with njit(parallel=True) because
+# in solve_underdet_degen with njit(parallel=True) because
 # it seem to insist prange(...shape[0]) is int64, even when int64 is not imported.
-from numba import complex128, int64, float64
+from numba import complex128, int64, float64, boolean
 
-from functools import lru_cache # import functools for caching
-import warnings
 
-import deconvolution
 
-""" Representing functions of chi and phi (ChiPhiFunc subclasses) """
+
+''' Representing functions of chi and phi (ChiPhiFunc subclasses) '''
 # Represents a function of chi and phi.
 # Manages an complex128[m, n] 2d array called content.
 # Axis 0 represents "m". Its length is n+1 for a nth-order term:
@@ -69,7 +73,8 @@ import deconvolution
 # At the moment the grid representation is preferred, since no regularity constraint
 # may exist for phi fourier coefficients.
 
-""" I. Abstract superclass and singleton """
+
+''' I. Abstract superclass and a null-like singleton '''
 # ChiPhiFunc is an abstract superclass.
 class ChiPhiFunc:
     # Initializer. Fourier_mode==True converts sin, cos coeffs to exponential
@@ -230,18 +235,17 @@ class ChiPhiFunc:
         raise NotImplementedError()
 
     # Math methods -----------------------------------------------------------------------------
-    # derivatives. Implemented through dchi_op and dphi_op
-    def dchi(self):
-        return type(self)(ChiPhiFunc.dchi_op(self.get_shape()[0]) @ self.content)
+    # derivatives. Implemented through dchi_op
+    def dchi(self, order=1):
+        out = self.content
+        if order<0:
+            raise AttributeError('dchi order must be positive')
+        for i in range(order):
+            out = dchi_op(self.get_shape()[0], False) @ out
+        return(type(self)(out))
 
-    def dphi(self, order=1):
-        derivative = lambda i_chi : scipy.fftpack.diff(self.content[i_chi], order=order)
-        out_list = Parallel(n_jobs=n_jobs, backend=backend)(
-            delayed(derivative)(i_chi) for i_chi in range(len(self.content))
-        )
-        return(ChiPhiFuncGrid(np.array(out_list)))
-        #return(ChiPhiFuncGrid(np.gradient(self.content, axis=1, edge_order=2)/(np.pi*2/self.get_shape()[1])))
-        #return type(self)(self.content @ type(self).dphi_op(self.get_shape()[1]).T)
+    def dphi(self, order=1, mode='default'):
+        raise NotImplementedError()
 
     # Compares if self and other both have even or odd chi series.
     def both_even_odd(self,other):
@@ -270,6 +274,20 @@ class ChiPhiFunc:
         # static methods used for evaluation.
         return (self.get_shape()[0]%2==0)
 
+    # Returns the first sin and cos components of a ChiPhiFunc
+    # as a ChiPhiFunc of the same type with no chi dependence
+    # (only one row in its content.)
+    def get_Yn1s_Yn1c(self):
+        n_col = self.get_shape()[0]
+        if n_col%2!=0:
+            raise ValueError('Yn1 can only be obtained from an odd n(order).')
+        Yn1_pos = self.content[n_col//2]
+        Yn1_neg = self.content[n_col//2-1]
+
+        Yn1_s = np.array([(Yn1_pos-Yn1_neg)*1j])
+        Yn1_c = np.array([Yn1_pos+Yn1_neg])
+
+        return(type(self)(Yn1_s), type(self)(Yn1_c))
 
     # Plotting -----------------------------------------------------------------------------
     # Get a 2-argument lambda function for plotting this term
@@ -280,8 +298,8 @@ class ChiPhiFunc:
     def display(self, complex = False):
         # This would trigger an error for most complex,
         # static methods used for evaluation.
-        chi = np.linspace(0,2*np.pi*0.99,100)
-        phi = np.linspace(0,2*np.pi*0.99,100)
+        chi = np.linspace(0, 2*np.pi*0.99, 100)
+        phi = np.linspace(0, 2*np.pi*0.99, 100)
         f = self.get_lambda()
         plt.pcolormesh(chi, phi, np.real(f(chi, phi.reshape(-1,1))))
         plt.title('ChiPhiFunc, real component')
@@ -297,42 +315,7 @@ class ChiPhiFunc:
             plt.colorbar()
             plt.show()
 
-    # Utility -----------------------------------------------------------------------------
-    # Generates a matrix for converting a n-dim trig-fourier-representation vector (can be full or skip)
-    # into exponential-fourier-representation.
-    def fourier_to_exp_op(n_dim):
-        if n_dim%2==0:
-            n_mode = n_dim//2
-            I_n = np.identity(n_mode)
-            I_anti_n = np.fliplr(I_n)
-            util_matrix = np.block([
-                [ 0.5j*I_n            , 0.5*I_anti_n         ],
-                [-0.5j*I_anti_n       , 0.5*I_n              ]
-            ])
-        else:
-            n_mode = (n_dim-1)//2
-            I_n = np.identity(n_mode)
-            I_anti_n = np.fliplr(I_n)
-            util_matrix = np.block([
-                [ 0.5j*I_n            , np.zeros((n_mode, 1)), 0.5*I_anti_n         ],
-                [np.zeros((1, n_mode)), 1                    , np.zeros((1, n_mode))],
-                [-0.5j*I_anti_n       , np.zeros((n_mode, 1)), 0.5*I_n              ]
-            ])
-        return util_matrix
-
-    # Generate chi differential operator diff_matrix. diff_matrix@f.content = dchi(f).content
-    # invert = True generates anti-derivative operator. Cached for each new Chi length.
-    # -- Input: len_chi: length of Chi series.
-    # -- Output: 2d matrix.
-    @lru_cache(maxsize=100)
-    @njit
-    def dchi_op(len_chi, invert = False):
-        ind_chi = len_chi-1
-        mode_chi = np.linspace(-ind_chi, ind_chi, len_chi)
-        if invert:
-            return(np.diag(-1j/mode_chi))
-        return np.diag(1j*mode_chi)
-
+    # JIT -----------------------------------------------------------------------------
     # An accelerated sum that aligns the center-point of 2-d arrays and zero-broadcasts the edges.
     # Input arrays must both have even/odd cols/rows
     # (such as (3,2), (13,6))
@@ -387,8 +370,6 @@ class ChiPhiFunc:
         out[a_pad_row:shape[0]-a_pad_row,a_pad_col:shape[1]-a_pad_col] += a
         out[b_pad_row:shape[0]-b_pad_row,b_pad_col:shape[1]-b_pad_col] += b*sign
         return(out)
-
-
 
 # A singleton subclass. The instance behaves like
 # nan, except during multiplication with zero, where it becomes 0.
@@ -448,17 +429,64 @@ class ChiPhiFuncNull(ChiPhiFunc):
         raise ValueError('@ (a matrix representation of an operator, not generated by Maxima) should not '\
                              'encounter a null term')
 
-    def dchi(self):
+    def dchi(self, order=1):
         return(self)
 
-    def dphi(self, order):
+    def dphi(self, order=1):
         return(self)
+
+''' I.1 Utilities '''
+# Generate chi differential operator diff_matrix. diff_matrix@f.content = dchi(f).content
+# invert = True generates anti-derivative operator. Cached for each new Chi length.
+# -- Input:
+# len_chi: length of Chi series.
+# invert_mode=True only used for int_chi(). Should be False by default,
+# but numba doesn't support default parameters.
+# -- Output: 2d matrix.
+@njit(complex128[:,:](int64, boolean))
+def dchi_op(len_chi, invert=False):
+    ind_chi = len_chi-1
+    mode_chi = np.linspace(-ind_chi, ind_chi, len_chi)
+    if invert and len_chi%2==1:
+        # dchi operator for odd order n should not be invertible,
+        # because the constant element integrates to a non-periodic component.
+        # However, zero-checking the constant element is also impossible
+        # because of numerical noise.
+        # The only way to deal with this right now is setting the constant
+        # component of the integral oeprator to 0, and add a magnitude check
+        # in int_chi().
+        mode_chi[len_chi//2] = np.inf
+        return(np.diag(-1j/mode_chi))
+    return np.diag(1j*mode_chi)
+
+# Generates a matrix for converting a n-dim trig-fourier-representation vector (can be full or skip)
+# into exponential-fourier-representation.
+def fourier_to_exp_op(n_dim):
+    if n_dim%2==0:
+        n_mode = n_dim//2
+        I_n = np.identity(n_mode)
+        I_anti_n = np.fliplr(I_n)
+        util_matrix = np.block([
+            [ 0.5j*I_n            , 0.5*I_anti_n         ],
+            [-0.5j*I_anti_n       , 0.5*I_n              ]
+        ])
+    else:
+        n_mode = (n_dim-1)//2
+        I_n = np.identity(n_mode)
+        I_anti_n = np.fliplr(I_n)
+        util_matrix = np.block([
+            [ 0.5j*I_n            , np.zeros((n_mode, 1)), 0.5*I_anti_n         ],
+            [np.zeros((1, n_mode)), 1                    , np.zeros((1, n_mode))],
+            [-0.5j*I_anti_n       , np.zeros((n_mode, 1)), 0.5*I_n              ]
+        ])
+    return util_matrix
 
 # two representations for phi dependence are implemented: Fourier and grid.
-""" II. Grid representation for phi dependence """
 
+''' II. Grid representation for phi dependence '''
 # Used for wrapping grid content. Defined outside the ChiPhiFuncGrid class so that
-# it can be used in @njit compiled methods.
+# it can be used in @njit compiled methods. Defined in front of the class because
+# numba seem to care about the order
 @njit(complex128[:,:](complex128[:,:]))
 def wrap_grid_content_jit(content):
     len_chi = content.shape[0]
@@ -491,6 +519,33 @@ class ChiPhiFuncGrid(ChiPhiFunc):
 
     # Operator handlers -------------------------------------------------------
     # NOTE: will not be passed items awaiting for conditions.
+
+    def dphi(self, order=1, mode='default'):
+
+        if order<0:
+            raise AttributeError('dphi order must be positive.')
+
+        if mode=='default':
+            mode = diff_mode
+
+        if mode=='fft':
+            derivative = lambda i_chi : scipy.fftpack.diff(self.content[i_chi], order=order)
+            out_list = Parallel(n_jobs=n_jobs, backend=backend)(
+                delayed(derivative)(i_chi) for i_chi in range(len(self.content))
+            )
+            return(ChiPhiFuncGrid(np.array(out_list)))
+
+        if mode=='pseudo_spectral':
+            out = self.content
+            for i in range(order):
+                out = (dphi_op_pseudospectral(self.get_shape()[1]) @ out.T).T
+            return(ChiPhiFuncGrid(out))
+
+        if mode=='finite_difference':
+            return(ChiPhiFuncGrid(np.gradient(self.content, axis=1, edge_order=2)/(np.pi*2/self.get_shape()[1])))
+
+        else:
+            raise AttributeError('dphi mode not recognized.')
 
     # Used in operator *. First stretch the phi axis to match grid locations,
     # Then do pointwise product.
@@ -540,11 +595,12 @@ class ChiPhiFuncGrid(ChiPhiFunc):
         return ChiPhiFuncGrid(ChiPhiFunc.add_jit(a,b,sign))
 
     # Used in operators, wrapper for stretch_phi. Match self's shape to another ChiPhiFuncGrid.
-    # returns 2 contents.
+    # returns 2 CONTENTS.
     def stretch_phi_to_match(self, other):
         if self.get_shape()[1] == other.get_shape()[1]:
             return(self.content, other.content)
-        warnings.warn('Warning: phi grid stretching has occured.')
+        warnings.warn('Warning: phi grid stretching has occured. Shapes are:'\
+            'self:'+str(self.get_shape())+'; other:'+str(other.get_shape()))
         max_phi_len = max(self.get_shape()[1], other.get_shape()[1])
         return(
             ChiPhiFuncGrid.stretch_phi(self.content, max_phi_len),
@@ -570,11 +626,14 @@ class ChiPhiFuncGrid(ChiPhiFunc):
     # Properties ---------------------------------------------------------------
     # Returns the value when phi=0. Copies.
     def get_phi_zero(self):
-        return ChiPhiFuncGrid(self.content[:,0])
+        new_content = np.array([self.content[:,0]]).T
+        if len(new_content) == 1:
+            return(new_content[0][0])
+        return(ChiPhiFuncGrid(np.array([self.content[:,0]]).T))
 
     # Math ---------------------------------------------------------------
     # Used for solvability condition. phi-integrate a ChiPhiFuncGrid over 0 to
-    # 2pi or 0 to a given phi.
+    # 2pi or 0 to a given phi. The boundary condition output(phi=0) = 0 is enforced.
     # -- Input: self and integral settings:
     # periodic=False evaluates integral from 0 to phi FOR EACH GRID POINT and
     # creates a ChiPhiFuncGrid with phi dependence.
@@ -582,43 +641,44 @@ class ChiPhiFuncGrid(ChiPhiFunc):
     # with NO phi dependence.
     # mode='simpson' is reasonably accurate and applicable to funcs with integral!=0
     # over a period
-    # mode='fft' is not accurate, and only supports functions that integrates to 0
-    # over a period. For reference only.
+    # mode='fft' uses FFT.
     # -- Output: a new ChiPhiFuncGrid
-    def integrate_phi(self, periodic, mode = 'simpson'):
+    def integrate_phi(self, periodic, mode = 'default'):
+
+        if mode == 'default':
+            mode = integral_mode
+
         # number of phi grids
         len_chi = self.get_shape()[0]
         len_phi = self.get_shape()[1]
-        phis = np.linspace(0,2*np.pi*(1-1/len_phi), len_phi, dtype=np.complex128)
+        phis = np.linspace(0, 2*np.pi*(1-1/len_phi), len_phi, dtype=np.complex128)
         if periodic:
             # Integrate self.content along axis 1 (rows, phi axis)
             # with spacing (dx) of 2pi/#grid
-
-            # The result of the integral is an 1d array of chi coeffs.
-            # This integrates the full period, and needs to be wrapped.
-            # the periodic=False option does not integrate the full period and
-            # does not wrap.
-            new_content = scipy.integrate.simpson(wrap_grid_content_jit(self.content), dx=2*np.pi/len_phi, axis=1)
+            new_content = integrate_phi_simpson(self.content, periodic)
 
             # if the result of the integral is a constant (only 1 chi cmponent),
             # return that constant.
-            if len(new_content)==1:
-                return(new_content[0])
+            if new_content.shape[0]==1:
+                return(new_content[0,0])
 
             # Otherwise, add an axis, transpose and return a ChiPhiFuncGrid with
             # no chi dependence
             else:
-                return(ChiPhiFuncGrid(np.array([new_content]).T))
+                return(ChiPhiFuncGrid(new_content))
         else:
             if mode == 'fft':
-                return(self.dphi(order=-1))
+                def integral(i_chi):
+                    out = scipy.fftpack.diff(self.content[i_chi], order=-1)
+                    out = out - out[0] # Enforces zero at phi=0 boundary condition.
+                    return(out)
+                out_list = Parallel(n_jobs=n_jobs, backend=backend)(
+                    delayed(integral)(i_chi) for i_chi in range(len(self.content))
+                )
+                return(ChiPhiFuncGrid(np.array(out_list)))
 
             if mode == 'simpson':
-                integrate = lambda i_phi : scipy.integrate.simpson(self.content[:,:i_phi+1], dx=2*np.pi/len_phi)
-                out_list = Parallel(n_jobs=n_jobs, backend=backend)(
-                    delayed(integrate)(i_phi) for i_phi in range(len_phi)
-                )
-                return(ChiPhiFuncGrid(np.array(out_list).T))
+                return(ChiPhiFuncGrid(integrate_phi_simpson(self.content, periodic)))
 
             else:
                 @jit(complex128[:,:](complex128[:], complex128[:,:], int64, int64), parallel = True)
@@ -640,67 +700,68 @@ class ChiPhiFuncGrid(ChiPhiFunc):
 
     # Solve under-determined degenerate system equivalent
     # v_source_A(chi, phi) * va_{n+1}(chi, phi) = v_rhs{n}(chi, phi).
+    # When Y_mode=True, solves
     # wrapper for jit-enabled method batch_underdetermined_degen_jit.
     # -- Input --
     # v_source_A, v_rhs: ChiPhiFuncGrid,
     # rank_rhs: int, 'n' in the equation above
     # i_free: int, index of free var in va,
     # vai: ChiPhiFuncGrid with a single row, value of free component.
-    def solve_underdet_degen(v_source_A, v_rhs, rank_rhs, i_free, vai):
-
-        if isinstance(v_source_A, ChiPhiFuncNull) \
-        or isinstance(v_rhs, ChiPhiFuncNull) \
-        or isinstance(vai, ChiPhiFuncNull):
-            raise ValueError('One or more input is awaiting cond: '+\
-                            'v_source_A: ' + str(type(v_source_A)) +\
-                            '; v_rhs: ' + str(type(v_rhs)) +\
-                            '; vai: ' + str(type(vai)))
-
-        v_source_A_content = v_source_A.content
-        v_rhs_content = v_rhs.content
-        vai_content = vai.content
-
-        # checking input types
+    def solve_underdet_degen(v_source_A, v_rhs, rank_rhs, i_free, vai, Y_mode = False, v_source_B = None):
+        # Checking input validity
         if type(v_source_A) is not ChiPhiFuncGrid\
             or type(v_rhs) is not ChiPhiFuncGrid\
             or type(vai) is not ChiPhiFuncGrid:
             raise TypeError('ChiPhiFuncGrid.solve_underdetermined: '\
                             'v_source_A, v_rhs, vai should all be ChiPhiFuncGrid.')
 
+        v_source_A_content = v_source_A.content
+        v_source_B_content = v_source_B.content
+        v_rhs_content = v_rhs.content
+        vai_content = vai.content
+
+        # Center-pad v_rhs if it's too short
         if v_source_A.get_shape()[0] + rank_rhs != v_rhs.get_shape()[0]:
             print("v_source_A shape:", v_source_A.get_shape())
             print("v_rhs shape:", v_rhs.get_shape())
             print("rank_rhs:", rank_rhs)
             warnings.warn('Warning: A, v_rhs and rank_rhs doesn\'t satisfy mode'
                           ' number requirements. Zero-padding rhs chi components.')
-            # This creates a padded content for v_rhs in case some components are zero. However, we still need to put in check for
-            # LHS and RHS's even and oddness.
-            v_rhs_content = ChiPhiFunc.add_jit(
-                v_rhs_content,
-                np.zeros((v_source_A.get_shape()[0]+rank_rhs, v_rhs.get_shape()[1]), dtype=np.complex128)
+             # This creates a padded content for v_rhs in case some components are zero. However, we still need to put in check for
+             # LHS and RHS's even and oddness.
+            v_rhs_content = ChiPhiFunc.add_jit(\
+                v_rhs_content,\
+                np.zeros((v_source_A.get_shape()[0]+rank_rhs, v_rhs.get_shape()[1]), dtype=np.complex128),\
+                1 # Sign is 1
             )
 
-        va_content = deconvolution.batch_underdetermined_degen_jit(
-            v_source_A_content,
-            v_rhs_content,
-            rank_rhs,
-            i_free,
-            vai_content
-        )
+
+
+        if Y_mode:
+            va_content = batch_ynp1_jit(
+                v_source_A_content,
+                v_source_B_content,
+                v_rhs_content,
+                rank_rhs,
+                i_free,
+                vai_content
+            )
+        else:
+            va_content = batch_underdetermined_degen_jit(
+                v_source_A_content,
+                v_rhs_content,
+                rank_rhs,
+                i_free,
+                vai_content
+            )
+
         return(ChiPhiFuncGrid(va_content))
 
-    # Solve exactly determined degenerate system equivalent
+    # Solve exactly determined degenerate system equivalent to
     # v_source_A(chi, phi) * va_{n}(chi, phi) = v_rhs{n}(chi, phi).
-    # wrapper for jit-enabled method deconvolution.batch_degen_jit.
+    # You can also think of this as "/" with chi-dependent "other" argument.
+    # wrapper for jit-enabled method batch_degen_jit.
     def solve_degen(v_source_A, v_rhs, rank_rhs):
-
-        if isinstance(v_source_A, ChiPhiFuncNull) or isinstance(v_rhs, ChiPhiFuncNull):
-            raise ValueError('One or more input is awaiting cond: '+\
-                            'v_source_A: ' + str(type(v_source_A)) +\
-                            '; v_rhs: ' + str(type(v_rhs)))
-
-        v_source_A_content = v_source_A.content
-        v_rhs_content = v_rhs.content
 
         # checking input types
         if type(v_source_A) is not ChiPhiFuncGrid\
@@ -720,9 +781,10 @@ class ChiPhiFuncGrid(ChiPhiFunc):
                 v_rhs_content,
                 np.zeros((v_source_A.get_shape()[0]+rank_rhs-1, v_rhs.get_shape()[1]), dtype=np.complex128)
             )
+        v_source_A_content = v_source_A.content
+        v_rhs_content = v_rhs.content
 
-
-        va_content = deconvolution.batch_degen_jit(
+        va_content = batch_degen_jit(
             v_source_A.content,
             v_rhs.content,
             rank_rhs
@@ -752,6 +814,25 @@ class ChiPhiFuncGrid(ChiPhiFunc):
             )
         ))
 
+    def display_content(self, fourier_mode = True):
+        len_phi = self.get_shape()[1]
+        phis = np.linspace(0,2*np.pi*(1-1/len_phi), len_phi)
+        if fourier_mode:
+            fourier = self.export_trig()
+            ax1 = plt.subplot(121)
+            ax1.plot(phis,np.real(fourier.content)[len(fourier.content)//2:].T)
+            ax1.set_title('cos and constant')
+            ax2 = plt.subplot(122)
+            ax2.plot(phis,np.real(fourier.content)[:len(fourier.content)//2].T)
+            ax2.set_title('sin')
+        else:
+            ax1 = plt.subplot(121)
+            ax1.plot(phis,np.real(self.content).T)
+            ax1.set_title('Real')
+            ax2 = plt.subplot(122)
+            ax2.plot(phis,np.imag(self.content).T)
+            ax2.set_title('Imaginary')
+        plt.show()
 
     # Utilities --------------------------------------------------------
     # Stretching each row individually by interpolation.
@@ -777,25 +858,6 @@ class ChiPhiFuncGrid(ChiPhiFunc):
             stretched[i] = np.interp(stretched_x, unstreched_x, content_looped[i])
         return(stretched[:,:-1])
 
-    # Generate phi differential operator diff_matrixT. content @ diff_matrixT.T = dchi(f).
-    # (.T actually not needed since this the operator is diagonal)
-    # the simplestcentral difference operator is not invertible.
-    # we add an all-1 column to it to constrain average and make it invertible.
-    # -- Input: a phi grid number int
-    # -- Output: a 2d matrix
-    @lru_cache(maxsize=None)
-    def dphi_op(len_phi, invert = False):
-        vec = np.zeros(len_phi, dtype=np.complex128)
-        # circulant circulates column, not row.
-        vec[len_phi-1] = 1
-        vec[1] = -1
-        # A matrix with all 1's on the first row and 0 on the rest of the rows
-        all_ones = np.block([[np.ones((1,len_phi), dtype=np.complex128)], [np.zeros((len_phi-1, len_phi), dtype=np.complex128)]])
-        diff_matrix = scipy.linalg.circulant(vec)*len_phi/4/np.pi
-        if invert:
-            return(np.linalg.inv(all_ones + diff_matrix)@(np.identity(len_phi, dtype=np.complex128) + all_ones))
-        return(np.linalg.inv(all_ones + np.identity(len_phi, dtype=np.complex128))
-            @(all_ones + diff_matrix))
 
     # Converts a single-argument function to values on len_phi grid points located
     # at 0, 1*2pi/len_phi, 2*2pi/len_phi, ......, 2pi(1-1/len_phi)
@@ -809,14 +871,59 @@ class ChiPhiFuncGrid(ChiPhiFunc):
     # ChiPhiFunc's internal representation. Only used during super().__init__
     # Does not copy.
     def trig_to_exp(self):
-        util_matrix_chi = ChiPhiFunc.fourier_to_exp_op(self.get_shape()[0])
+        util_matrix_chi = fourier_to_exp_op(self.get_shape()[0])
         # Apply the conversion matrix on chi axis
         self.content = util_matrix_chi @ self.content
 
 
+    # Converting fourier coefficients into exponential coeffs used in
+    # ChiPhiFunc's internal representation. Only used during super().__init__
+    # Does not copy.
+    def export_trig(self):
+        util_matrix_chi = np.linalg.inv(fourier_to_exp_op(self.get_shape()[0]))
+        # Apply the conversion matrix on chi axis
+        return(type(self)(util_matrix_chi @ self.content))
 
+''' II.1 Grid utilities '''
 
-""" III. Fourier representation for phi dependence """
+# Implementation of integrate_phi using Parallel.
+# dx overrides the original grid spacing, which is calculated from
+# content.shape[1] assumeing that the phi grid points are located
+# at phi=0, ..., (len_phi-1)*2pi/len_phi
+def integrate_phi_simpson(content, periodic, dx=None):
+    len_chi = content.shape[0]
+    len_phi = content.shape[1]
+    if not dx:
+        dx = 2*np.pi/len_phi
+    if periodic:
+        # The result of the integral is an 1d array of chi coeffs.
+        # This integrates the full period, and needs to be wrapped.
+        # the periodic=False option does not integrate the full period and
+        # does not wrap.
+        new_content = scipy.integrate.simpson(\
+            wrap_grid_content_jit(content),\
+            dx=dx,\
+            axis=1\
+            )
+        return(np.array([new_content]).T)
+    else:
+        # Integrate up to each element's grid
+        integrate = lambda i_phi : scipy.integrate.simpson(content[:,:i_phi+1], dx=dx)
+        out_list = Parallel(n_jobs=n_jobs, backend=backend)(
+            delayed(integrate)(i_phi) for i_phi in range(len_phi)
+        )
+        return(np.array(out_list).T)
+
+# Generate phi differential operator diff_matrix. diff_matrix@f.content = dchi(f).content
+# invert = True generates anti-derivative operator. Cached for each new Chi length.
+# -- Input: len_chi: length of Chi series.
+# -- Output: 2d matrix.
+def dphi_op_pseudospectral(n_phi):
+    from qsc import spectral_diff_matrix
+    out = spectral_diff_matrix(n_phi, xmin=0, xmax=2*np.pi)
+    return(out)
+''' III. Fourier representation for phi dependence - DEPRECIATED '''
+
 # Implementation of ChiPhiFunc using FULL, exponential Fourier series to represent
 # free functions of phi.
 # When fourier_mode is enabled during initialization, content would be treated
@@ -829,88 +936,425 @@ class ChiPhiFuncGrid(ChiPhiFunc):
 #      ...
 #      c_chi_n = [s_k, ..., s_2, s_1, const, c_1, c_2, ..., c_k],
 # ]
-# class ChiPhiFuncFourier(ChiPhiFunc):
-#     def __init__(self, content, fourier_mode = False):
-#         super().__init__(content, fourier_mode)
-#         if content.shape[1]%2 == 0:
-#             raise ValueError('Phi coefficients should be a full fourier series. Even phi_dim detected.')
-#     # Operator handlers -------------------------------------------------
-#     # NOTE: will not be passed items awaiting for conditions.
+class ChiPhiFuncFourier(ChiPhiFunc):
+    def __init__(self, content, fourier_mode = False):
+        super().__init__(content, fourier_mode)
+        if content.shape[1]%2 == 0:
+            raise ValueError('Phi coefficients should be a full fourier series. Even phi_dim detected.')
+    # Operator handlers -------------------------------------------------
+    # NOTE: will not be passed items awaiting for conditions.
+
+    # Addition of 2 ChiPhiFuncFourier's.
+    # Wrapper for numba method.
+    # -- Input: self and another ChiPhiFuncFourier
+    # -- Output: a new ChiPhiFuncFourier
+    def add_ChiPhiFunc(self, other):
+        return ChiPhiFuncFourier(ChiPhiFunc.add_jit(self.content, other.content))
+
+    # Addition of a constant with a ChiPhiFuncFourier.
+    # Wrapper for numba method.
+    def add_const(self, other):
+        return ChiPhiFuncFourier(ChiPhiFunc.add_jit(self.content, np.complex128([[other]])))
+
+    # Handles pointwise multiplication (* operator)
+    # Convolve2d is already compiled. No need to jit.
+    # -- Input: self and other
+    # -- Output: a new ChiPhiFuncFourier
+    def multiply(self, other, div=False):
+        if div:
+            raise NotImplementedError()
+        return(ChiPhiFuncFourier(scipy.signal.convolve2d(self.content, other.content)))
+
+    # Calculates an integer power of a ChiPhiFuncFourier
+    # Convolve2d is already compiled. No need to jit.
+    # Also here we assume all powers are to fairly low orders (2)
+    # -- Input: self and power (int)
+    # -- Output: self and other
+    def pow(self, int_pow):
+        new_content = self.content.copy()
+        for n in range(int_pow-1):
+            new_content = scipy.signal.convolve2d(new_content, new_content)
+        return(ChiPhiFuncFourier(new_content))
+
+    # Get a 2-argument lamnda function for plotting this term
+    def get_lambda(self):
+        len_chi = self.get_shape()[0]
+        len_phi = self.get_shape()[1]
+
+        if len_phi%2!=1:
+            raise ValueError('coeffs_chi must have an odd number of components on phi axis')
+
+        ind_phi = int((len_phi-1)/2)
+        mode_phi = np.linspace(-ind_phi, ind_phi, len_phi)
+
+        ind_chi = len_chi-1
+        mode_chi = np.linspace(-ind_chi, ind_chi, len_chi).reshape(-1,1)
+        # The outer dot product is summing along axis 0.
+        # The inner @ (equivalent to dot product) is summing along axis 1.
+        return(np.vectorize(lambda chi, phi : np.dot(self.content@(np.e**(1j*phi*mode_phi)), (np.e**(1j*(-chi)*mode_chi)))))
+
+
+    # Utilities ---------------------------------------------------
+
+    # Converting fourier coefficients into exponential coeffs used in
+    # ChiPhiFunc's internal representation. Only used during super().__init__
+    # Does not copy.
+    def trig_to_exp(self):
+        util_matrix_chi = fourier_to_exp_op(self.get_shape()[0])
+        util_matrix_phi = fourier_to_exp_op(self.get_shape()[1])
+        # Apply the conversion matrix on phi axis
+        # (two T's because np.matmul can't choose axis)
+#         self.content = (util_matrix_phi @ self.content.T).T
+        self.content = self.content @ util_matrix_phi.T
+        # Apply the conversion matrix on chi axis
+        self.content = util_matrix_chi @ self.content
+
+    # DEPRECIATED
+    # Generate phi central difference operator diff_matrixT. content @ diff_matrixT.T = dchi(f).
+    # (.T actually not needed since this the operator is diagonal)
+    # -- Input: len_phi: length of phi series.
+    # -- Output: 2d matrix.
+    @njit
+    def dphi_op(len_phi, invert = False):
+        ind_phi = int((len_phi-1)/2)
+        mode_phi = np.linspace(-ind_phi, ind_phi, len_phi)
+        if invert:
+            return(np.diag(-1j/mode_phi))
+        return(np.diag(1j*mode_phi))
+
+
+''' IV. Grid 1D deconvolution '''
+# This part solves the pointwise product function problem A*va = B*vb woth unknown va.
+# by chi mode matching. It treats both pointwise products as matrix
+# products of vectors (components are chi mode coeffs, which are rows in ChiPhiFunc.content)
+# with convolution matrices A@va = B@vb,
+# Where A, B are (m, n+1) (m, n) or (m, n) (m, n) matrices
+#    of rank     (n+1)    (n)    or (n)    (n)
+#    va, vb are  (n+1)    (n)    or (n)    (n)   -d vectors
 #
-#     # Addition of 2 ChiPhiFuncFourier's.
-#     # Wrapper for numba method.
-#     # -- Input: self and another ChiPhiFuncFourier
-#     # -- Output: a new ChiPhiFuncFourier
-#     def add_ChiPhiFunc(self, other):
-#         return ChiPhiFuncFourier(ChiPhiFunc.add_jit(self.content, other.content))
+# These type of equations underlies power-matched recursion relations:
+# a(chi, phi) * va(chi, phi) = b(chi, phi) * vb(chi, phi)
+# in grid realization.
+# where a, b has the same number of chi modes (let's say o), as pointwise product
+# with a, b are convolutions, which are (o+(n+1)-1, n+1) or (o+n-1, n) degenerate
+# matrices.
+# Codes written in this part are specifically for 1D deconvolution used for ChiPhiFuncGrid.
+
+''' IV.1 va, vb with the same number of dimensions '''
+# Invert an (n,n) submatrix of a (m>n,n) rectangular matrix by taking the first
+# n rows. "Taking the first n rows" is motivated by the RHS being rank n.
 #
-#     # Addition of a constant with a ChiPhiFuncFourier.
-#     # Wrapper for numba method.
-#     def add_const(self, other):
-#         return ChiPhiFuncFourier(ChiPhiFunc.add_jit(self.content, np.complex128([[other]])))
+# -- Input --
+# (m,n) matrix A
 #
-#     # Handles pointwise multiplication (* operator)
-#     # Convolve2d is already compiled. No need to jit.
-#     # -- Input: self and other
-#     # -- Output: a new ChiPhiFuncFourier
-#     def multiply(self, other, div=False):
-#         if div:
-#             raise NotImplementedError()
-#         return(ChiPhiFuncFourier(scipy.signal.convolve2d(self.content, other.content)))
+# -- Return --
+# (m,m) matrix A_inv
+@njit(complex128[:,:](complex128[:,:]))
+def inv_square_jit(in_matrix):
+    if in_matrix.ndim != 2:
+        raise ValueError("Input should be 2d array")
+
+    n_row = in_matrix.shape[0]
+    n_col = in_matrix.shape[1]
+    if n_row<=n_col:
+        raise ValueError("Input should have more rows than cols")
+
+    # Remove specfied column (slightly faster than delete)
+    # and remove extra rows
+    sqinv = np.linalg.inv(in_matrix[:n_col, :])
+
+    padded = np.zeros((n_row, n_row), dtype = np.complex128)
+    padded[:len(sqinv), :len(sqinv)] = sqinv
+    return(padded)
+
+# Solve degenerate underdetermined equation system A@va = B@vb, where A, B
+# are (m,n+1) (m,n) matrices (m>n+1) of rank n, vb is a n-dim vector, and
+# va is an n+1-dim vector with a free element vai at i.
 #
-#     # Calculates an integer power of a ChiPhiFuncFourier
-#     # Convolve2d is already compiled. No need to jit.
-#     # Also here we assume all powers are to fairly low orders (2)
-#     # -- Input: self and power (int)
-#     # -- Output: self and other
-#     def pow(self, int_pow):
-#         new_content = self.content.copy()
-#         for n in range(int_pow-1):
-#             new_content = scipy.signal.convolve2d(new_content, new_content)
-#         return(ChiPhiFuncFourier(new_content))
+# -- Input --
+# (m,n+1), (m,n), rank-n 2d np arrays A, B
+# n-dim np array-like vb
+# or
+# (m,n+1), rank n+1 A,
+# m-dim np array-like v_rhs
 #
-#     # Get a 2-argument lamnda function for plotting this term
-#     def get_lambda(self):
-#         len_chi = self.get_shape()[0]
-#         len_phi = self.get_shape()[1]
+# vb can be any array-like item, and is not necessarily 1d.
+# Implemented with ChiPhiFunc in mind.
 #
-#         if len_phi%2!=1:
-#             raise ValueError('coeffs_chi must have an odd number of components on phi axis')
+# -- Return --
+# n+1 np array-like va
 #
-#         ind_phi = int((len_phi-1)/2)
-#         mode_phi = np.linspace(-ind_phi, ind_phi, len_phi)
+# -- Note --
+# For recursion relations with ChiPhiFunc's, A and B should come from
+# convolution matrices. That still needs implementation.
+@njit(complex128[:](complex128[:,:], complex128[:]))
+def solve_degenerate_jit(A, v_rhs):
+    n_dim = A.shape[1]
+    if A.shape[0] != v_rhs.shape[0]:
+        raise ValueError("solve_underdetermined: A, v_rhs must have the same number of rows")
+    A_inv = np.ascontiguousarray(inv_square_jit(A))
+    # This vector is actually m-dim, with m-n blank elems at the end.
+    va = (A_inv@np.ascontiguousarray(v_rhs))[:n_dim]
+    return(va)
+
+# @njit(complex128[:](complex128[:,:], complex128[:,:], complex128[:]))
+# def solve_degenerate_jit(A, B, vb):
+#     B_cont = np.ascontiguousarray(B)
+#     vb_cont = np.ascontiguousarray(vb)
+#     return(solve_degenerate_jit(A, B_cont@vb_cont))
+
+''' IV.2 va has 1 more component than vb '''
+# Invert an (n,n) submatrix of a (m>n+1,n+1) rectangular matrix by taking the first
+# n-1 rows and excluding the ind_col'th column. "Taking the first n rows" is motivated
+# by the RHS being rank n-1
 #
-#         ind_chi = len_chi-1
-#         mode_chi = np.linspace(-ind_chi, ind_chi, len_chi).reshape(-1,1)
-#         # The outer dot product is summing along axis 0.
-#         # The inner @ (equivalent to dot product) is summing along axis 1.
-#         return(np.vectorize(lambda chi, phi : np.dot(self.content@(np.e**(1j*phi*mode_phi)), (np.e**(1j*(-chi)*mode_chi)))))
+# -- Input --
+# (m,n+1) matrix A
+# ind_col < n+1
 #
+# -- Return --
+# (m,m) matrix A_inv
+@njit(complex128[:,:](complex128[:,:], int64))
+def inv_square_excluding_col_jit(in_matrix, ind_col):
+    if (in_matrix.shape[0] - in_matrix.shape[1])%2!=1:
+        raise AttributeError('This method takes rows from the middle. The array'\
+        'shape must have an even difference between row and col numbers.')
+    if in_matrix.ndim != 2:
+        raise ValueError("Input should be 2d array")
+
+    n_row = in_matrix.shape[0]
+    n_col = in_matrix.shape[1]
+    if n_row<=n_col:
+        raise ValueError("Input should have more rows than cols")
+
+    if ind_col>=n_col:
+        raise ValueError('ind_col should be smaller than column number')
+
+    # Remove specfied column (slightly faster than delete)
+    # and remove extra rows (take n_col-1 rows from the center)
+    rows_to_remove = (n_row-(n_col-1))//2
+    sub = in_matrix[:,np.arange(in_matrix.shape[1])!=ind_col][rows_to_remove:-rows_to_remove, :]
+    sqinv = np.linalg.inv(sub)
+    padded = np.zeros((n_row, n_row), dtype = np.complex128)
+    padded[rows_to_remove:-rows_to_remove, rows_to_remove:-rows_to_remove] = sqinv
+    return(padded)
+
+# Solve degenerate underdetermined equation system A@va = B@vb, where A, B
+# are (m,n+1) (m,n) matrices (m>n+1) of rank n, vb is a n-dim vector, and
+# va is an n+1-dim vector with a free element vai at i.
 #
-#     # Utilities ---------------------------------------------------
+# -- Input --
+# (m,n+1), (m,n), rank-n 2d np arrays A, B
+# n-dim np array-like vb
+# or
+# (m,n+1), rank n+1 A,
+# m-dim np array-like v_rhs
 #
-#     # Converting fourier coefficients into exponential coeffs used in
-#     # ChiPhiFunc's internal representation. Only used during super().__init__
-#     # Does not copy.
-#     def trig_to_exp(self):
-#         util_matrix_chi = ChiPhiFunc.fourier_to_exp_op(self.get_shape()[0])
-#         util_matrix_phi = ChiPhiFunc.fourier_to_exp_op(self.get_shape()[1])
-#         # Apply the conversion matrix on phi axis
-#         # (two T's because np.matmul can't choose axis)
-# #         self.content = (util_matrix_phi @ self.content.T).T
-#         self.content = self.content @ util_matrix_phi.T
-#         # Apply the conversion matrix on chi axis
-#         self.content = util_matrix_chi @ self.content
+# vb can be any array-like item, and is not necessarily 1d.
+# Implemented with ChiPhiFunc in mind.
 #
-#     # Generate phi differential operator diff_matrixT. content @ diff_matrixT.T = dchi(f).
-#     # (.T actually not needed since this the operator is diagonal)
-#     # -- Input: len_phi: length of phi series.
-#     # -- Output: 2d matrix.
-#     @lru_cache(maxsize=None)
-#     @njit
-#     def dphi_op(len_phi, invert = False):
-#         ind_phi = int((len_phi-1)/2)
-#         mode_phi = np.linspace(-ind_phi, ind_phi, len_phi)
-#         if invert:
-#             return(np.diag(-1j/mode_phi))
-#         return(np.diag(1j*mode_phi))
+# -- Return --
+# n+1 np array-like va
+#
+# -- Note --
+# For recursion relations with ChiPhiFunc's, A and B should come from
+# convolution matrices. That still needs implementation.
+# When Y_mode=True, vai is the sum between the center two elements.
+# (A must have an even number of rows)
+# (Yn1p + Yn1n = Yn1c = Y11s * sigma_twiddle_n)
+@njit(complex128[:](complex128[:,:], complex128[:], int64, complex128, boolean))
+def solve_degenerate_underdetermined_jit(A, v_rhs, i_free, vai, Y_mode=False):
+    n_dim = A.shape[1]-1 # #dim of vb, which is #dim_va-1. vb is v_rhs before the convolution
+    if Y_mode:
+        # if A.shape[1]%2!=0:
+        #     warnings.warn('Warning: Y_mode=True on even order. vai should be Yn0')
+        i_1p = A.shape[1]//2   # Index of Yn1p (or if n is even, Yn0)
+        i_1n = A.shape[1]//2-1 # Index of Yn1n (or if n is even, Yn2_n)
+        i_free = i_1p # set Yn1p as free var
+    if A.shape[0] != v_rhs.shape[0]:
+        raise ValueError("solve_underdetermined: A, v_rhs must have the same number of rows")
+    A_einv = np.ascontiguousarray(inv_square_excluding_col_jit(A, i_free))
+    A_free_col = np.ascontiguousarray(A.T[i_free])
+    v_rhs = np.ascontiguousarray(v_rhs)
+    va_free_coef = (A_einv@A_free_col)
+    clip_n = (A.shape[0]-n_dim)//2 # How much is the transposed array larger than Yn
+    # This vector is actually m-dim, with m-n blank elems at the end.
+    if Y_mode and A.shape[1]%2==0: # Y_mode=True and on odd order (ODE exists)
+        # The rest of the procedure is carried out normally with
+        # i_free pointing at Yn1n. The resulting Yn should be
+        # Yn = (A_einv@np.ascontiguousarray(v_rhs) - Yn1n * va_free_coef)[:n_dim]
+        # where va_free_coef is a vector. This gives Yn1n = Yn1n and
+        #
+        # Yn1p = Yn[i_1p] = (A_einv@v_rhs - Yn1n * va_free_coef)[i_1p]
+        # = A_einv[i_1p]@v_rhs - Yn1n * va_free_coef[i_1p]
+        #
+        # Therefore,
+        # Yn1p+Yn1n=vai is equivalent to
+        # A_einv[i_1n]@v_rhs - Yn1p * va_free_coef[i_1n] + Yn1n = vai
+        # A_einv[i_1n]@v_rhs - Yn1p * (va_free_coef[i_1n]-1) = vai
+        # A_einv[i_1n]@v_rhs - vai = Yn1p * (va_free_coef[i_1n]-1)
+        # (A_einv[i_1n]@v_rhs - vai)/(va_free_coef[i_1n]-1) = Yn1p
+        # i_1n is shifted by the padding
+        vai = (A_einv[clip_n+i_1n]@v_rhs - vai)/(va_free_coef[clip_n+i_1n]-1)
+    Yn = (A_einv@v_rhs - vai * va_free_coef)
+    Yn = Yn[clip_n:-clip_n]
+    return(np.concatenate((Yn[:i_free], np.array([vai]) , Yn[i_free:])))
+
+# @njit(complex128[:](complex128[:,:], complex128[:,:], complex128[:], int64, complex128))
+# def solve_degenerate_underdetermined_jit(A, B, vb, i_free, vai):
+#     B_cont = np.ascontiguousarray(B)
+#     vb_cont = np.ascontiguousarray(vb)
+#     return(solve_degenerate_underdetermined_jit(A, B_cont@vb_cont, i_free, vai))
+
+''' IV.3 Convolution operator generator and ChiPhiFuncGrid.content numba wrapper '''
+# Generate convolution operator from a for an n_dim vector.
+# Can't be compiled for parallel beacuase vec and out_transposed's sizes dont match?
+@njit(complex128[:,:](complex128[:], int64))
+def conv_matrix(vec, n_dim):
+    out_transposed = np.zeros((n_dim,len(vec)+n_dim-1), dtype = np.complex128)
+    for i in prange(n_dim):
+        out_transposed[i, i:i+len(vec)] = vec
+    return(out_transposed.T)
+
+# For solving a*va = v_rhs, where va, vb have the same number of dimensions.
+# In the context below, "#dim" represents number of chi mode components.
+# Note: "vector" means a series of chi coefficients in this context.
+#
+# -- Input --
+# v_source_A: 2d matrix, content of ChiPhiFuncGrid, #dim = a
+# v_rhs: 2d matrix, content of ChiPhiFuncGrid. Should be #dim = m vector
+#     produced by convolution of a #dim = rank_rhs vector.
+# rank_rhs: int, rank of v_rhs.
+#     Think of the problem A@va = B@vb, where
+#     A and B are convolution matrices with the same row number.
+#     n_dim_rhs is the dimensionality of vb. In a recursion relation,
+#     this represents the highest mode number appearing in RHS.
+#     The following relation must be satisfied:
+#     a + #dim_va - 1 = m
+#     a + (rank_rhs+1) - 1 = m
+# i_free: int, the index of va's free element. Note that #dim_va = rank_rhs + 1.
+# vai:  2d matrix with a single row, content of ChiPhiFuncGrid
+#    represents a function of only phi given on grid.
+#
+# -- Output --
+# va: 2d matrix, content of ChiPhiFuncGrid. Has #dim = rank_rhs+1.
+@njit(complex128[:,:](complex128[:,:], complex128[:,:], int64, int64, complex128[:,:]), parallel=True)
+def batch_underdetermined_degen_jit(v_source_A, v_rhs, rank_rhs, i_free, vai):
+    A_slices = np.ascontiguousarray(v_source_A.T) # now the axis 0 is phi grid
+    v_rhs_slices = np.ascontiguousarray(v_rhs.T) # now the axis 0 is phi grid
+    # axis 0 is phi grid, axis 1 is chi mode
+    va_transposed = np.zeros((len(A_slices), rank_rhs+1), dtype = np.complex128)
+    if len(A_slices) != len(v_rhs_slices):
+        raise ValueError('batch_underdetermined_deconv: A, v_rhs must have the same number of phi grids.')
+    if len(v_source_A) + rank_rhs != len(v_rhs):
+        raise ValueError('batch_underdetermined_deconv: #dim_A + rank_rhs = #dim_v_rhs does not hold.')
+    for i in prange(A_slices.shape[0]):
+        A_conv_matrix_i = conv_matrix(A_slices[i], rank_rhs+1)
+        va_transposed[i, :] = solve_degenerate_underdetermined_jit(A_conv_matrix_i,\
+                                         v_rhs_slices[i], i_free, np.ravel(vai)[i], False)
+    return va_transposed.T
+
+# Modification of batch_underdetermined_degen_jit for solving (conv(a) + conv(b)@dchi)@Yn+1 = RHS - LHS(Yn+1 = 0) .
+@njit(complex128[:,:](complex128[:,:], complex128[:,:], complex128[:,:], int64, int64, complex128[:,:]), parallel=True)
+def batch_ynp1_jit(v_source_A, v_source_B, v_rhs, rank_rhs, i_free, vai):
+    A_slices = np.ascontiguousarray(v_source_A.T) # now the axis 0 is phi grid
+    B_slices = np.ascontiguousarray(v_source_B.T) # now the axis 0 is phi grid
+    v_rhs_slices = np.ascontiguousarray(v_rhs.T) # now the axis 0 is phi grid
+    # axis 0 is phi grid, axis 1 is chi mode
+    va_transposed = np.zeros((len(A_slices), rank_rhs+1), dtype = np.complex128)
+    if len(A_slices) != len(v_rhs_slices):
+        raise ValueError('batch_underdetermined_deconv: A, v_rhs must have the same number of phi grids.')
+    if len(v_source_A) + rank_rhs != len(v_rhs):
+        raise ValueError('batch_underdetermined_deconv: #dim_A + rank_rhs = #dim'\
+            '_v_rhs does not hold.')
+
+    # generate dchi operators
+    dchi_matrix = np.ascontiguousarray(dchi_op(rank_rhs+1, False))
+    for i in prange(A_slices.shape[0]): # Loop for each point in the phi grid
+        # For Yn1, these are (rank_rhs+1+1,rank_rhs+1) because a and b are (2,n_grid) matrices.
+        A_conv_matrix_i = conv_matrix(A_slices[i], rank_rhs+1)
+        B_conv_matrix_i = np.ascontiguousarray(conv_matrix(B_slices[i], rank_rhs+1))
+        total_matrix = A_conv_matrix_i + B_conv_matrix_i@dchi_matrix
+        va_transposed[i, :] = solve_degenerate_underdetermined_jit(total_matrix,\
+                                         v_rhs_slices[i], 0, np.ravel(vai)[i], True)
+    return va_transposed.T
+
+# For solving a*va = v_rhs, where va, vb have the same number of dimensions.
+# In the context below, "#dim" represents number of chi mode components.
+#
+# -- Input --
+# v_source_A: 2d matrix, content of ChiPhiFuncGrid, #dim = a
+# v_rhs: 2d matrix, content of ChiPhiFuncGrid, #dim = m
+# rank_rhs: int, rank of v_rhs.
+#     Think of the problem A@va = B@vb, where
+#     A and B are convolution matrices with the same row number.
+#     n_dim_rhs is the dimensionality of vb. In a recursion relation,
+#     this represents the highest mode number appearing in RHS.
+#     The following relation must be satisfied:
+#     a + rank_rhs - 1 = m
+# -- Output --
+# va: 2d matrix, content of ChiPhiFuncGrid. Has #dim = rank_rhs
+@njit(complex128[:,:](complex128[:,:], complex128[:,:], int64), parallel=True)
+def batch_degen_jit(v_source_A, v_rhs, rank_rhs):
+#     if type(v_source_A) is not ChiPhiFuncGrid or type(v_source_B) is not ChiPhiFuncGrid:
+#         raise TypeError('batch_underdetermined_deconv: input should be ChiPhiFuncGrid.')
+    A_slices = np.ascontiguousarray(v_source_A.T) # now the axis 0 is phi grid
+    v_rhs_slices = np.ascontiguousarray(v_rhs.T) # now the axis 0 is phi grid
+    # axis 0 is phi grid, axis 1 is chi mode
+    va_transposed = np.zeros((len(A_slices), rank_rhs), dtype = np.complex128)
+    if len(A_slices) != len(v_rhs_slices):
+        raise ValueError('batch_underdetermined_deconv: A, v_rhs must have the same number of phi grids.')
+    if len(v_source_A) + rank_rhs - 1 != len(v_rhs):
+        raise ValueError('batch_underdetermined_deconv: #dim_A + rank_rhs - 1 = #dim_v_rhs must hold.')
+    for i in prange(A_slices.shape[0]):
+        A_conv_matrix_i = conv_matrix(A_slices[i], rank_rhs)
+        va_transposed[i, :] = solve_degenerate_jit(A_conv_matrix_i,v_rhs_slices[i])
+    return va_transposed.T
+
+''' V. Solving linear PDE in phi grids '''
+''' V.1 Solving the periodic linear PDE (dphi+iota dchi) y = f(phi, chi) '''
+# For solving the periodic linear 1st order ODE (dphi+iota*dchi) y = f(phi, chi)
+# using integral factor. Not numba accelerated since scipy is not supported by numba.
+# -- Input --
+# iota is a constant and f is a ChiPhiFuncGrid.
+# Contant mode and offset are for evaluating the constant component equation
+# dphi y0 = f0.
+# -- Output --
+# y is a ChiPhiFuncGrid's content
+def solve_dphi_iota_dchi(iota, f, constant_mode='fft', constant_offset=0):
+    len_chi = f.get_shape()[0]
+    len_phi = f.get_shape()[1]
+    # Chi harmonics
+    ind_chi = len_chi-1
+    # Multiplies each row with its corresponding mode number.
+    mode_chi = 1j*np.linspace([-ind_chi], [ind_chi], len_chi, axis=0)
+
+    f_looped = wrap_grid_content_jit(f.content)
+
+    # The integrand of the integration factor
+    phis = np.linspace(0, 2*np.pi, len_phi+1, dtype=np.complex128)
+    exp_neg2pi = np.exp(-iota*mode_chi*2*np.pi)
+    exp_phi = np.exp(iota*mode_chi*phis)
+    exp_negphi = np.exp(-iota*mode_chi*phis)
+
+    # Special treatment for the constant component
+    if len_chi%2==1:
+        # Ignore the constant component when integrating
+        exp_phi[len_chi//2]=np.zeros(len_phi+1)
+        exp_negphi[len_chi//2]=np.zeros(len_phi+1)
+    integrand = f_looped*exp_phi
+    # Here integration_factor_2pi can no longer be evaluated by
+    # integrate_phi_simpson(periodic=True), because the integrand
+    # is not generally periodic.
+    integration_factor = integrate_phi_simpson(integrand, periodic=False, dx=2*np.pi/(len_phi))
+    integration_factor_2pi = np.array([integration_factor[:,-1]]).T
+    # The integration constant. Derived from the periodic boundary condition.
+    c1 = exp_neg2pi*integration_factor_2pi/(1-exp_neg2pi)
+    out = (c1+integration_factor)*exp_negphi
+    out = out[:,:-1]
+    if len_chi%2==1:
+        # Ignore the constant component when integrating.
+        out[len_chi//2]=ChiPhiFuncGrid(
+            np.array([f.content[len_chi//2]])
+        ).integrate_phi(mode=constant_mode, periodic=False).content[0]+constant_offset
+    return(ChiPhiFuncGrid(out))

@@ -15,6 +15,8 @@ running the main code.
 ## Directory structure and files
 ```
 ├── README.MD
+├── test_data_eduardo/                      -> Known leading order terms for some equilibria.
+├── examples/                               -> Jupyter notebooks with use cases for the code.
 ├── maxima_recursion_relations/             -> Maxima notebooks.
 │   ├── <Quantity name>.wxmx                -> Maxima notebooks for the recursion relations.
 │   └── general_formulae/                   -> Maxima notebooks directly expanding
@@ -38,9 +40,8 @@ running the main code.
     ├── chiphiepsfunc.py                    -> A list-like data structure for power coeffs.
     ├── chiphifunc.py                       -> A data structure representing f(chi,phi)
     │                                          as chi Fourier coeffs on phi grids and its
-    │                                          associated numerical operations
+    │                                          associated numerical operations.
     ├── chiphifunc_test_suite.py            -> A test suite for chiphifunc
-    ├── deconvolution.py
     ├── math_utilities.py                   -> More numerical operations needed to run
     │                                          python methods in python_source/parsed/
     └-- parsed/                             -> Parsed expressions for the recursion relations
