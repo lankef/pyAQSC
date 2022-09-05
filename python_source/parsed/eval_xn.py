@@ -8,9 +8,9 @@
 # kap_p, dl_p, tau_p, iota[0, ... ,  (n-3)/2 or (n-2)/2 ]
 # must be provided.
 #
-# X_coef_cp[n]=0 must be provided using ChPhiEpsFunc.zero_append().
+# Must provide X_coef_cp[n]=0 using ChPhiEpsFunc.zero_append().
 from math import floor, ceil
-from math_utilities import is_seq, py_sum, is_integer, diff
+from math_utilities import *
 import chiphifunc
 def eval_Xn_cp(n,
     X_coef_cp,
@@ -170,13 +170,13 @@ def eval_Xn_cp(n,
         
         return(is_seq(0,n-i31)*iota_coef[n-i31]*is_integer(n-i31)*py_sum(sum_arg_6,0,i31))
     
-    def sum_arg_5(i197):
+    def sum_arg_5(i251):
         # Child args for sum_arg_5    
-        def sum_arg_4(i198):
+        def sum_arg_4(i252):
             # Child args for sum_arg_4
-            return(diff(Z_coef_cp[i198],'phi',1)*diff(Z_coef_cp[(-n)-i198+2*i197],'chi',1)*is_seq(n-i197,i197-i198))
+            return(diff(Z_coef_cp[i252],'phi',1)*diff(Z_coef_cp[(-n)-i252+2*i251],'chi',1)*is_seq(n-i251,i251-i252))
         
-        return(is_seq(0,n-i197)*iota_coef[n-i197]*is_integer(n-i197)*py_sum(sum_arg_4,0,i197))
+        return(is_seq(0,n-i251)*iota_coef[n-i251]*is_integer(n-i251)*py_sum(sum_arg_4,0,i251))
     
     def sum_arg_3(i30):
         # Child args for sum_arg_3

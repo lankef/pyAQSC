@@ -1,6 +1,6 @@
 # Coefficient for Yn+1 - only X1 and Balpha0 needed
 from math import floor, ceil
-from math_utilities import is_seq, py_sum, is_integer, diff
+from math_utilities import *
 import chiphifunc
 def coef_a(n, B_alpha_coef, X_coef_cp):    
     
@@ -60,29 +60,29 @@ def rhs_minus_lhs(n,
         
         return(diff(Y_coef_cp[i66],'chi',1)*py_sum(sum_arg_24,0,n-i66))
     
-    def sum_arg_23(i204):
+    def sum_arg_23(i258):
         # Child args for sum_arg_23    
         def sum_arg_22(i96):
             # Child args for sum_arg_22
-            return(B_psi_coef_cp[i96]*diff(X_coef_cp[n-i96-i204],'phi',1))
+            return(B_psi_coef_cp[i96]*diff(X_coef_cp[n-i96-i258],'phi',1))
         
-        return(diff(Y_coef_cp[i204],'chi',1)*py_sum(sum_arg_22,0,n-i204))
+        return(diff(Y_coef_cp[i258],'chi',1)*py_sum(sum_arg_22,0,n-i258))
     
-    def sum_arg_21(i202):
+    def sum_arg_21(i256):
         # Child args for sum_arg_21    
         def sum_arg_20(i92):
             # Child args for sum_arg_20
-            return(B_psi_coef_cp[i92]*diff(X_coef_cp[n-i92-i202],'chi',1))
+            return(B_psi_coef_cp[i92]*diff(X_coef_cp[n-i92-i256],'chi',1))
         
-        return(diff(Y_coef_cp[i202],'phi',1)*py_sum(sum_arg_20,0,n-i202))
+        return(diff(Y_coef_cp[i256],'phi',1)*py_sum(sum_arg_20,0,n-i256))
     
-    def sum_arg_19(i198):
+    def sum_arg_19(i252):
         # Child args for sum_arg_19    
         def sum_arg_18(i94):
             # Child args for sum_arg_18
-            return(B_theta_coef_cp[i94]*(n-i94-i198+2)*X_coef_cp[n-i94-i198+2])
+            return(B_theta_coef_cp[i94]*(n-i94-i252+2)*X_coef_cp[n-i94-i252+2])
         
-        return(diff(Y_coef_cp[i198],'phi',1)*py_sum(sum_arg_18,0,n-i198+2))
+        return(diff(Y_coef_cp[i252],'phi',1)*py_sum(sum_arg_18,0,n-i252+2))
     
     def sum_arg_17(i86):
         # Child args for sum_arg_17    
@@ -100,13 +100,13 @@ def rhs_minus_lhs(n,
         
         return(diff(Y_coef_cp[i82],'chi',1)*py_sum(sum_arg_14,0,n-i82))
     
-    def sum_arg_13(i205):
+    def sum_arg_13(i259):
         # Child args for sum_arg_13    
-        def sum_arg_12(i206):
+        def sum_arg_12(i260):
             # Child args for sum_arg_12
-            return(diff(Y_coef_cp[i206],'chi',1)*X_coef_cp[(-n)-i206+2*i205-2]*((-n)-i206+2*i205-2)*is_seq(n-i205+2,i205-i206))
+            return(diff(Y_coef_cp[i260],'chi',1)*X_coef_cp[(-n)-i260+2*i259-2]*((-n)-i260+2*i259-2)*is_seq(n-i259+2,i259-i260))
         
-        return(is_seq(0,n-i205+2)*B_alpha_coef[n-i205+2]*is_integer(n-i205+2)*py_sum(sum_arg_12,0,i205))
+        return(is_seq(0,n-i259+2)*B_alpha_coef[n-i259+2]*is_integer(n-i259+2)*py_sum(sum_arg_12,0,i259))
     
     def sum_arg_11(i105):
         # Child args for sum_arg_11    
@@ -124,29 +124,29 @@ def rhs_minus_lhs(n,
         
         return(diff(X_coef_cp[i102],'phi',1)*py_sum(sum_arg_8,0,n-i102+2))
     
-    def sum_arg_7(i207):
+    def sum_arg_7(i261):
         # Child args for sum_arg_7    
-        def sum_arg_6(i208):
+        def sum_arg_6(i262):
             # Child args for sum_arg_6    
-            def sum_arg_5(i664):
+            def sum_arg_5(i718):
                 # Child args for sum_arg_5
-                return(diff(X_coef_cp[(-i664)-i208+i207],'chi',1)*i664*Y_coef_cp[i664])
+                return(diff(X_coef_cp[(-i718)-i262+i261],'chi',1)*i718*Y_coef_cp[i718])
             
-            return(is_seq(0,(-n)+i208+i207-2)*B_theta_coef_cp[(-n)+i208+i207-2]*is_integer((-n)+i208+i207-2)*is_seq((-n)+i208+i207-2,i208)*py_sum(sum_arg_5,0,i207-i208))
+            return(is_seq(0,(-n)+i262+i261-2)*B_theta_coef_cp[(-n)+i262+i261-2]*is_integer((-n)+i262+i261-2)*is_seq((-n)+i262+i261-2,i262)*py_sum(sum_arg_5,0,i261-i262))
         
-        return(iota_coef[n-i207+2]*py_sum(sum_arg_6,0,i207))
+        return(iota_coef[n-i261+2]*py_sum(sum_arg_6,0,i261))
     
-    def sum_arg_4(i199):
+    def sum_arg_4(i253):
         # Child args for sum_arg_4    
-        def sum_arg_3(i200):
+        def sum_arg_3(i254):
             # Child args for sum_arg_3    
-            def sum_arg_2(i648):
+            def sum_arg_2(i702):
                 # Child args for sum_arg_2
-                return(diff(Y_coef_cp[(-i648)-i200+i199],'chi',1)*i648*X_coef_cp[i648])
+                return(diff(Y_coef_cp[(-i702)-i254+i253],'chi',1)*i702*X_coef_cp[i702])
             
-            return(is_seq(0,(-n)+i200+i199-2)*B_theta_coef_cp[(-n)+i200+i199-2]*is_integer((-n)+i200+i199-2)*is_seq((-n)+i200+i199-2,i200)*py_sum(sum_arg_2,0,i199-i200))
+            return(is_seq(0,(-n)+i254+i253-2)*B_theta_coef_cp[(-n)+i254+i253-2]*is_integer((-n)+i254+i253-2)*is_seq((-n)+i254+i253-2,i254)*py_sum(sum_arg_2,0,i253-i254))
         
-        return(iota_coef[n-i199+2]*py_sum(sum_arg_3,0,i199))
+        return(iota_coef[n-i253+2]*py_sum(sum_arg_3,0,i253))
     
     def sum_arg_1(i107):
         # Child args for sum_arg_1
@@ -168,6 +168,8 @@ def rhs_minus_lhs(n,
         +(-py_sum(sum_arg_13,ceil(0.5*n)+1,floor(n)+2)/2)\
         +(py_sum(sum_arg_11,ceil(0.5*n)+1,floor(n)+2)/2)\
         +(py_sum(sum_arg_1,ceil(0.5*n),floor(n)))\
+        +((B_alpha_coef[0]*X_coef_cp[1]*diff(Y_coef_cp[n+1],'chi',1))/2)\
         +(is_seq(0,n)*is_integer(n)*diff(Z_coef_cp[n],'phi',1))\
+        +((B_alpha_coef[0]*diff(X_coef_cp[1],'chi',1)*((-n)-1)*Y_coef_cp[n+1])/2)\
         +(-is_seq(0,n)*dl_p*kap_p*X_coef_cp[n]*is_integer(n))
     return(out)
