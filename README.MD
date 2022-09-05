@@ -15,6 +15,8 @@ running the main code.
 ## Directory structure and files
 ```
 ├── README.MD
+├── test_data_eduardo/                      -> Known leading order terms for some equilibria.
+├── examples/                               -> Jupyter notebooks with use cases for the code.
 ├── maxima_recursion_relations/             -> Maxima notebooks.
 │   ├── <Quantity name>.wxmx                -> Maxima notebooks for the recursion relations.
 │   └── general_formulae/                   -> Maxima notebooks directly expanding
