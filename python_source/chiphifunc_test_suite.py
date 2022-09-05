@@ -49,18 +49,52 @@ def display(array, complex=True):
         plt.colorbar()
         plt.show()
 
-# Plots the content of two chiphifuncs and compare.
-def compare_chiphifunc(A, B):
+# Plots the content of two ChiPhiFuncGrid's and compare.
+def compare_chiphifunc(A, B, fourier_mode=True):
     print('A')
-    A.display_content()
+    A.display_content(fourier_mode=fourier_mode)
     print('B')
-    B.display_content()
+    B.display_content(fourier_mode=fourier_mode)
 
-    print('Difference')
-    (A-B).display_content()
+
+    diff_AB = A-B
+    # A or B has extra components, plot those components separately
+    if A.get_shape()[0]!=B.get_shape()[0]:
+        amount_to_trim = abs(A.get_shape()[0]-B.get_shape()[0])//2
+        center_content = diff_AB.content[amount_to_trim: -amount_to_trim].copy()
+        trimmed_content = diff_AB.content.copy()
+        trimmed_content[amount_to_trim: -amount_to_trim] = np.zeros_like(center_content)
+        diff_AB_center = ChiPhiFuncGrid(center_content)
+        diff_AB_trimmed = ChiPhiFuncGrid(trimmed_content)
+        print('A and B has different number of components.')
+        print('Difference')
+        diff_AB_center.display_content(fourier_mode=fourier_mode)
+        print('Extra components')
+        diff_AB_trimmed.display_content(fourier_mode=fourier_mode)
+    else:
+        print('Difference')
+        diff_AB.display_content(fourier_mode=fourier_mode)
 
     print('fractional errors b/w data and general formula')
-    print_fractional_error(A.content, B.content)
+
+    # Sometimes 2 ChiPhiFuncs being compared will have different row/col numbers.
+    if A.get_shape()[0]%2!=B.get_shape()[0]%2:
+        raise AttributeError('2 ChiPhiFuncGrid\'s being compared have different'\
+        'even/oddness.')
+    A_content, B_content = A.stretch_phi_to_match(B)
+    A = ChiPhiFuncGrid(A_content)
+    B = ChiPhiFuncGrid(B_content)
+    shape = (max(A.get_shape()[0], B.get_shape()[0]),max(A.get_shape()[1],B.get_shape()[1]))
+    A_content_padded = np.zeros(shape)
+    B_content_padded = np.zeros(shape)
+
+    a_pad_row = (shape[0] - A.get_shape()[0])//2
+    a_pad_col = (shape[1] - A.get_shape()[1])//2
+    b_pad_row = (shape[0] - B.get_shape()[0])//2
+    b_pad_col = (shape[1] - B.get_shape()[1])//2
+    A_content_padded[a_pad_row:shape[0]-a_pad_row,a_pad_col:shape[1]-a_pad_col] = A.content
+    B_content_padded[b_pad_row:shape[0]-b_pad_row,b_pad_col:shape[1]-b_pad_col] = B.content
+    print_fractional_error(A_content_padded, B_content_padded)
 
 
 # Compare 2 arrays and print out absolute and fractional error.
@@ -312,3 +346,19 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False):
         B_alpha_coef,
         kap_p, tau_p
     )
+
+def chiphifunc_debug_plot():
+    plt.pcolormesh(np.real(test_B_theta.content))
+    plt.colorbar()
+    plt.show()
+
+    plt.plot(chiphifunc.debug_max_value, label = 'max')
+    plt.plot(chiphifunc.debug_avg_value, label = 'avg')
+    plt.show()
+    plt.pcolormesh(chiphifunc.debug_pow_diff_add)
+    plt.colorbar()
+    plt.show()
+
+    chiphifunc.debug_pow_diff_add = []
+    chiphifunc.debug_max_value = []
+    chiphifunc.debug_avg_value = []

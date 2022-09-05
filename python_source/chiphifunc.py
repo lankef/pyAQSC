@@ -12,7 +12,7 @@ from joblib import Parallel, delayed
 
 # Default diff and integration modes can be modified.
 diff_mode = 'fft'
-integral_mode = 'simpson'
+integral_mode = 'fft'
 
 # Debugging variables.
 # When debug_mode is true, content of all new ChiPhiFunc's are tracked.
@@ -238,9 +238,10 @@ class ChiPhiFunc:
     # derivatives. Implemented through dchi_op
     def dchi(self, order=1):
         out = self.content
-        anti_mode = order<0 # anti-derivative mode
-        for i in range(abs(order)):
-            out = dchi_op(self.get_shape()[0], anti_mode) @ out
+        if order<0:
+            raise AttributeError('dchi order must be positive')
+        for i in range(order):
+            out = dchi_op(self.get_shape()[0], False) @ out
         return(type(self)(out))
 
     def dphi(self, order=1, mode='default'):
@@ -437,13 +438,24 @@ class ChiPhiFuncNull(ChiPhiFunc):
 ''' I.1 Utilities '''
 # Generate chi differential operator diff_matrix. diff_matrix@f.content = dchi(f).content
 # invert = True generates anti-derivative operator. Cached for each new Chi length.
-# -- Input: len_chi: length of Chi series.
+# -- Input:
+# len_chi: length of Chi series.
+# invert_mode=True only used for int_chi(). Should be False by default,
+# but numba doesn't support default parameters.
 # -- Output: 2d matrix.
 @njit(complex128[:,:](int64, boolean))
-def dchi_op(len_chi, invert = False):
+def dchi_op(len_chi, invert=False):
     ind_chi = len_chi-1
     mode_chi = np.linspace(-ind_chi, ind_chi, len_chi)
-    if invert:
+    if invert and len_chi%2==1:
+        # dchi operator for odd order n should not be invertible,
+        # because the constant element integrates to a non-periodic component.
+        # However, zero-checking the constant element is also impossible
+        # because of numerical noise.
+        # The only way to deal with this right now is setting the constant
+        # component of the integral oeprator to 0, and add a magnitude check
+        # in int_chi().
+        mode_chi[len_chi//2] = np.inf
         return(np.diag(-1j/mode_chi))
     return np.diag(1j*mode_chi)
 
@@ -510,6 +522,9 @@ class ChiPhiFuncGrid(ChiPhiFunc):
 
     def dphi(self, order=1, mode='default'):
 
+        if order<0:
+            raise AttributeError('dphi order must be positive.')
+
         if mode=='default':
             mode = diff_mode
 
@@ -521,15 +536,16 @@ class ChiPhiFuncGrid(ChiPhiFunc):
             return(ChiPhiFuncGrid(np.array(out_list)))
 
         if mode=='pseudo_spectral':
-            return(
-                ChiPhiFuncGrid(
-                    (dphi_op_pseudospectral(self.get_shape()[1]) @ self.content.T).T
-                )
-            )
+            out = self.content
+            for i in range(order):
+                out = (dphi_op_pseudospectral(self.get_shape()[1]) @ out.T).T
+            return(ChiPhiFuncGrid(out))
+
+        if mode=='finite_difference':
+            return(ChiPhiFuncGrid(np.gradient(self.content, axis=1, edge_order=2)/(np.pi*2/self.get_shape()[1])))
 
         else:
             raise AttributeError('dphi mode not recognized.')
-        #return(ChiPhiFuncGrid(np.gradient(self.content, axis=1, edge_order=2)/(np.pi*2/self.get_shape()[1])))
 
     # Used in operator *. First stretch the phi axis to match grid locations,
     # Then do pointwise product.
@@ -579,7 +595,7 @@ class ChiPhiFuncGrid(ChiPhiFunc):
         return ChiPhiFuncGrid(ChiPhiFunc.add_jit(a,b,sign))
 
     # Used in operators, wrapper for stretch_phi. Match self's shape to another ChiPhiFuncGrid.
-    # returns 2 contents.
+    # returns 2 CONTENTS.
     def stretch_phi_to_match(self, other):
         if self.get_shape()[1] == other.get_shape()[1]:
             return(self.content, other.content)
@@ -617,7 +633,7 @@ class ChiPhiFuncGrid(ChiPhiFunc):
 
     # Math ---------------------------------------------------------------
     # Used for solvability condition. phi-integrate a ChiPhiFuncGrid over 0 to
-    # 2pi or 0 to a given phi.
+    # 2pi or 0 to a given phi. The boundary condition output(phi=0) = 0 is enforced.
     # -- Input: self and integral settings:
     # periodic=False evaluates integral from 0 to phi FOR EACH GRID POINT and
     # creates a ChiPhiFuncGrid with phi dependence.
@@ -625,8 +641,7 @@ class ChiPhiFuncGrid(ChiPhiFunc):
     # with NO phi dependence.
     # mode='simpson' is reasonably accurate and applicable to funcs with integral!=0
     # over a period
-    # mode='fft' is not accurate, and only supports functions that integrates to 0
-    # over a period. For reference only.
+    # mode='fft' uses FFT.
     # -- Output: a new ChiPhiFuncGrid
     def integrate_phi(self, periodic, mode = 'default'):
 
@@ -653,7 +668,14 @@ class ChiPhiFuncGrid(ChiPhiFunc):
                 return(ChiPhiFuncGrid(new_content))
         else:
             if mode == 'fft':
-                return(self.dphi(order=-1))
+                def integral(i_chi):
+                    out = scipy.fftpack.diff(self.content[i_chi], order=-1)
+                    out = out - out[0] # Enforces zero at phi=0 boundary condition.
+                    return(out)
+                out_list = Parallel(n_jobs=n_jobs, backend=backend)(
+                    delayed(integral)(i_chi) for i_chi in range(len(self.content))
+                )
+                return(ChiPhiFuncGrid(np.array(out_list)))
 
             if mode == 'simpson':
                 return(ChiPhiFuncGrid(integrate_phi_simpson(self.content, periodic)))
@@ -792,13 +814,24 @@ class ChiPhiFuncGrid(ChiPhiFunc):
             )
         ))
 
-    def display_content(self):
-        ax1 = plt.subplot(121)
-        ax1.plot(np.real(self.content).T)
-        ax1.set_title('Real')
-        ax2 = plt.subplot(122)
-        ax2.plot(np.imag(self.content).T)
-        ax2.set_title('Imaginary')
+    def display_content(self, fourier_mode = True):
+        len_phi = self.get_shape()[1]
+        phis = np.linspace(0,2*np.pi*(1-1/len_phi), len_phi)
+        if fourier_mode:
+            fourier = self.export_trig()
+            ax1 = plt.subplot(121)
+            ax1.plot(phis,np.real(fourier.content)[len(fourier.content)//2:].T)
+            ax1.set_title('cos and constant')
+            ax2 = plt.subplot(122)
+            ax2.plot(phis,np.real(fourier.content)[:len(fourier.content)//2].T)
+            ax2.set_title('sin')
+        else:
+            ax1 = plt.subplot(121)
+            ax1.plot(phis,np.real(self.content).T)
+            ax1.set_title('Real')
+            ax2 = plt.subplot(122)
+            ax2.plot(phis,np.imag(self.content).T)
+            ax2.set_title('Imaginary')
         plt.show()
 
     # Utilities --------------------------------------------------------
@@ -841,6 +874,15 @@ class ChiPhiFuncGrid(ChiPhiFunc):
         util_matrix_chi = fourier_to_exp_op(self.get_shape()[0])
         # Apply the conversion matrix on chi axis
         self.content = util_matrix_chi @ self.content
+
+
+    # Converting fourier coefficients into exponential coeffs used in
+    # ChiPhiFunc's internal representation. Only used during super().__init__
+    # Does not copy.
+    def export_trig(self):
+        util_matrix_chi = np.linalg.inv(fourier_to_exp_op(self.get_shape()[0]))
+        # Apply the conversion matrix on chi axis
+        return(type(self)(util_matrix_chi @ self.content))
 
 ''' II.1 Grid utilities '''
 
