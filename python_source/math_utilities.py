@@ -7,16 +7,11 @@ import scipy.fftpack
 import chiphifunc
 import warnings
 
-# int_chi() should not be run on a ChiPhiFuncGrid with a chi-independent component,
-# because this produces a non-periodic function. However, zero-checking the
-# component is not feasible, because cancellation is often not exact in numerical
-# evaluations. Instead, we check if the maximum amplitude of the chi-independent
-# component is greater than this noise_level_int
-noise_level_int = 1e-5
+n_jobs = 1
 
 # Sum: implemented as a function taking in a single-argument func and the lower/upper bounds
-# Can run in parallel.
-def py_sum(expr, lower, upper, n_jobs=2, backend='threading'):
+# Can run in parallel, but runs serial by default.
+def py_sum(expr, lower, upper, n_jobs=1, backend='threading'):
     out = 0
     upper_floor = floor(upper)
     lower_ceil = ceil(lower)
@@ -25,8 +20,8 @@ def py_sum(expr, lower, upper, n_jobs=2, backend='threading'):
         return(expr(lower_ceil))
     # Warning for lower>upper
     if lower_ceil>upper_floor:
-        warnings.warn('Warning: lower bound higher than upper bound in '+str(expr) \
-        +'. Bound values: lower='+str(lower)+', upper='+str(upper), RuntimeWarning)
+        # warnings.warn('Warning: lower bound higher than upper bound in '+str(expr) \
+        # +'. Bound values: lower='+str(lower)+', upper='+str(upper), RuntimeWarning)
         return(chiphifunc.ChiPhiFuncNull())
     if n_jobs<1:
         raise ValueError('n_jobs must not be smaller than 1')
@@ -40,6 +35,9 @@ def py_sum(expr, lower, upper, n_jobs=2, backend='threading'):
         for a in out_list:
             out = out+a
     return(out)
+
+def py_sum_parallel(expr, lower, upper):
+    return(py_sum(expr, lower, upper, n_jobs=n_jobs))
 
 ## Condition operators
 
@@ -99,15 +97,10 @@ def diff(y, x_name1, order1, x_name2=None, order2=None):
         out = diff_backend(out, x_name2, order2)
     return(out)
 
-#
+# integrate over chi.
 def int_chi(y):
     if isinstance(y, chiphifunc.ChiPhiFuncGrid):
-        len_chi = y.get_shape()[0]
-        if len_chi%2==1\
-        and np.max(np.abs(y.content[len_chi//2]))>noise_level_int:
-            raise ValueError('Integrand has a significant chi-independent '\
-            'component!')
-        return(chiphifunc.ChiPhiFuncGrid(chiphifunc.dchi_op(len_chi, True) @ y.content))
+        return(y.integrate_chi())
     elif y == 0:
         return(0)
     else:

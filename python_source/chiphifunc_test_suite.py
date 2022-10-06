@@ -50,11 +50,12 @@ def display(array, complex=True):
         plt.show()
 
 # Plots the content of two ChiPhiFuncGrid's and compare.
-def compare_chiphifunc(A, B, fourier_mode=True):
-    print('A')
-    A.display_content(fourier_mode=fourier_mode)
-    print('B')
-    B.display_content(fourier_mode=fourier_mode)
+def compare_chiphifunc(A, B, fourier_mode=True, simple_mode = True):
+    if not simple_mode:
+        print('A')
+        A.display_content(fourier_mode=fourier_mode)
+        print('B')
+        B.display_content(fourier_mode=fourier_mode)
 
 
     diff_AB = A-B
@@ -182,6 +183,42 @@ def eduardo_to_matt(in_array, nfp):
 # X22s.dat		Y22c.dat	Ys1.dat		Z33s.dat
 def read_first_three_orders(path, R_array, Z_array, numerical_mode = False):
 
+    # The last elements in all data files repeat the first elements. the
+    # [:-1] removes it.
+
+    # Delta ---------------------------------------
+    d0 = np.loadtxt(path+'d0.dat')[:-1]
+    Delta_0 = ChiPhiFuncGrid(np.array([d0]))
+
+    d11c = np.loadtxt(path+'d11c.dat')[:-1]
+    d11s = np.loadtxt(path+'d11s.dat')[:-1]
+    Delta_1 = ChiPhiFuncGrid(np.array([
+        d11s,
+        d11c
+    ]), fourier_mode = True)
+
+    d20c = np.loadtxt(path+'d20c.dat')[:-1]
+    d22c = np.loadtxt(path+'d22c.dat')[:-1]
+    d22s = np.loadtxt(path+'d22s.dat')[:-1]
+    Delta_2 = ChiPhiFuncGrid(np.array([d22s, d20c, d22c]), fourier_mode = True)
+    Delta_coef_cp = ChiPhiEpsFunc([Delta_0, Delta_1, Delta_2])
+
+    # P_perp --------------------------------------
+    p0 = np.loadtxt(path+'p0.dat')[:-1]
+    p_perp_0 = ChiPhiFuncGrid(np.array([p0]))
+
+    pc1 = np.loadtxt(path+'pc1.dat')[:-1]
+    p_perp_1 = ChiPhiFuncGrid(np.array([
+        np.zeros_like(pc1),
+        pc1
+    ]), fourier_mode = True)
+
+    p20c = np.loadtxt(path+'p20c.dat')[:-1]
+    p22s = np.loadtxt(path+'p22s.dat')[:-1]
+    p22c = np.loadtxt(path+'p22c.dat')[:-1]
+    p_perp_2 = ChiPhiFuncGrid(np.array([p22s,p20c,p22c]), fourier_mode = True)
+    p_perp_coef_cp = ChiPhiEpsFunc([p_perp_0, p_perp_1, p_perp_2])
+
     # B psi ---------------------------------------
     Bp0 = np.loadtxt(path+'Bp0.dat')[:-1]
     B_psi_0 = ChiPhiFuncGrid(np.array([Bp0]))
@@ -288,7 +325,7 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False):
     nfp, Xi_0, eta, B20, B22c, B22s, B31c, B31s, B33c, B33s, Ba0, Ba1 = np.loadtxt(path+'inputs.dat')
     nfp=int(nfp)
 
-    B_alpha_coef = ChiPhiEpsFunc([Ba0, Ba1])
+    B_alpha_e = ChiPhiEpsFunc([Ba0, Ba1])
 
     kap_p = ChiPhiFuncGrid(np.array([np.loadtxt(path+'kappa.dat')[:-1]]))
     tau_p = ChiPhiFuncGrid(np.array([np.loadtxt(path+'tau.dat')[:-1]]))
@@ -308,7 +345,7 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False):
     # half of the 2-part paper
     B_denom_coef_c = ChiPhiEpsFunc([1, -X1*2*1*kap_p, B2, B3])
 
-    iota_coef = ChiPhiEpsFunc(list(np.loadtxt(path+'outputs.dat')))
+    iota_e = ChiPhiEpsFunc(list(np.loadtxt(path+'outputs.dat')))
 
     # Not an actual representation in pyQSC.
     # only for calculating axis length.
@@ -326,24 +363,25 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False):
         evaluate_ChiPhiEpsFunc(X_coef_cp),
         evaluate_ChiPhiEpsFunc(Y_coef_cp),
         evaluate_ChiPhiEpsFunc(Z_coef_cp),
-        evaluate_ChiPhiEpsFunc(iota_coef),
+        evaluate_ChiPhiEpsFunc(iota_e),
         dl_p,
         nfp,
         Xi_0,
         eta,
         evaluate_ChiPhiEpsFunc(B_denom_coef_c),
-        evaluate_ChiPhiEpsFunc(B_alpha_coef),
+        evaluate_ChiPhiEpsFunc(B_alpha_e),
         kap_p.content,
         tau_p.content
     )
 
     return(
         B_psi_coef_cp, B_theta_coef_cp,
+        Delta_coef_cp, p_perp_coef_cp,
         X_coef_cp, Y_coef_cp, Z_coef_cp,
-        iota_coef, dl_p,
+        iota_e, dl_p,
         nfp, Xi_0, eta,
         B_denom_coef_c,
-        B_alpha_coef,
+        B_alpha_e,
         kap_p, tau_p
     )
 

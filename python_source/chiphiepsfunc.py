@@ -26,7 +26,7 @@ class ChiPhiEpsFunc:
     # Implementation of list append
     def append(self, item):
         self.chiphifunc_list.append(item)
-        
+
     # Append one or more zeros to the end of the list.
     # For evaluating higher order terms with recursion relation. Sometimes
     # expressions used to evaluate a higher order term includes the term itself,
@@ -61,3 +61,17 @@ class ChiPhiEpsFunc:
 
     def __len__(self):
         return(len(self.chiphifunc_list))
+
+    def get_order(self):
+        return(len(self.chiphifunc_list)-1)
+
+    # Make a list with order+1 zero elements
+    def zeros_to_order(order):
+        new_list = []
+        for i in range(order+1):
+            new_list.append(0)
+        return(ChiPhiEpsFunc(new_list))
+
+    # Make a list with order+1 zero elements
+    def zeros_like(chiphiepsfunc_in):
+        return(ChiPhiEpsFunc.zeros_to_order(chiphiepsfunc_in.get_order()))
