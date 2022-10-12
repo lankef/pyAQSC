@@ -29,10 +29,13 @@ noise_order_solve = np.float64(7)
 # When I(phi) is periodic, any C1 can satisfy the periodic BC.
 noise_level_periodic = 1e-10
 
+# Default frequency for the low pass filtering
+low_pass_freq=50
+
 # Default diff and integration modes can be modified.
-diff_mode = 'fft' # Similar to fft but with bounded error
-integral_mode = 'fft'
-non_periodic_integral_mode = 'spline'
+diff_mode = 'fft' # available: pseudo_spectral, finite_difference, fft
+integral_mode = 'fft' # available: spline, simpson, fft
+non_periodic_integral_mode = 'spline' # available: spline, simpson, fft
 
 
 # Threshold for p amplitude to use asymptotic expansion for y'+py=f
@@ -777,11 +780,11 @@ class ChiPhiFuncGrid(ChiPhiFunc):
 
         # Center-pad v_rhs if it's too short
         if v_source_A.get_shape()[0] + rank_rhs != v_rhs.get_shape()[0]:
-            warnings.warn('Warning: A, v_rhs and rank_rhs doesn\'t satisfy mode'
-                          ' number requirements. Zero-padding rhs chi components.'+
-                          ' v_source_A shape=' + str(v_source_A.get_shape()) +
-                          ', _rhs shape=' + str(v_rhs.get_shape()) +
-                          ', rank_rhs=' + str(rank_rhs))
+            # warnings.warn('Warning: A, v_rhs and rank_rhs doesn\'t satisfy mode'
+            #               ' number requirements. Zero-padding rhs chi components.'+
+            #               ' v_source_A shape=' + str(v_source_A.get_shape()) +
+            #               ', _rhs shape=' + str(v_rhs.get_shape()) +
+            #               ', rank_rhs=' + str(rank_rhs))
              # This creates a padded content for v_rhs in case some components are zero. However, we still need to put in check for
              # LHS and RHS's even and oddness.
             v_rhs_content = ChiPhiFunc.add_jit(\
@@ -923,7 +926,7 @@ class ChiPhiFuncGrid(ChiPhiFunc):
     # Utilities --------------------------------------------------------
     # A simple filter calculating a 3-element rolling average:
     # [..., a, b, c, ...] = [..., 0.25a+0.5b+0.25c, ...]
-    def filter(self, mode='low_pass', arg=100):
+    def filter(self, mode='low_pass', arg=low_pass_freq):
         if mode == 'roll_avg':
             content = self.content
             a = np.roll(content, -1, axis=1)
@@ -934,7 +937,7 @@ class ChiPhiFuncGrid(ChiPhiFunc):
         else:
             raise AttributeError('ChiPhiFuncGrid.filter: mode not recognized.')
 
-    def noise_filter(self, mode='low_pass', arg=100):
+    def noise_filter(self, mode='low_pass', arg=low_pass_freq):
         return(self-self.filter(mode=mode, arg=arg))
 
 
@@ -1032,7 +1035,9 @@ def integrate_phi_simpson(content, dx = 'default', periodic = False):
         return(np.array(out_list).T)
 
 # Implementation of spline-based integrate_phi using Parallel.
-def integrate_phi_spline(content, dx = 'default', periodic=False):
+def integrate_phi_spline(content, dx = 'default', periodic=False,
+    diff=False, diff_order=None):
+
     len_chi = content.shape[0]
     len_phi = content.shape[1]
     if dx == 'include_2pi':
@@ -1045,6 +1050,8 @@ def integrate_phi_spline(content, dx = 'default', periodic=False):
 
     def generate_and_integrate_spline(i_chi):
         new_spline = scipy.interpolate.make_interp_spline(phi, content[i_chi])
+        if diff:
+            return(scipy.interpolate.splder(new_spline, n=diff_order))
         return(scipy.interpolate.splantider(new_spline))
 
     # A list of integrated splines
@@ -1082,7 +1089,7 @@ def dphi_op_pseudospectral(n_phi):
     return(out)
 
 # a low pass filter acting on  a content matrix
-def low_pass_direct(content, freq = 100):
+def low_pass_direct(content, freq):
     len_phi = content.shape[1]
     W = np.abs(np.fft.fftfreq(len_phi))
     f_signal = np.fft.fft(content, axis = 1)
@@ -1117,6 +1124,12 @@ def dphi_direct(content, order=1, mode='default'):
     if mode=='finite_difference':
         return(np.gradient(content, axis=1, edge_order=2)\
         /(np.pi*2/content.shape[1]))
+
+
+    if mode=='spline':
+        out = integrate_phi_spline(content, periodic=False,
+            diff=True, diff_order=order)
+        return(out)
 
     else:
         raise AttributeError('dphi mode not recognized.')

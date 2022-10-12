@@ -7,7 +7,7 @@ import scipy.fftpack
 import chiphifunc
 import warnings
 
-n_jobs = 1
+n_jobs = 8
 
 # Sum: implemented as a function taking in a single-argument func and the lower/upper bounds
 # Can run in parallel, but runs serial by default.

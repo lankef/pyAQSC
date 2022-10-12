@@ -470,7 +470,18 @@ def iterate_B_theta_nm1_cp(n_eval,
 # A container for all equilibrium quantities.
 # All coef inputs must be ChiPhiEpsFunc's.
 class Equilibrium:
-    def __init__(self,
+    def __init__(self, unknown, constant, noise):
+        self.noise=noise
+        self.unknown=unknown
+        self.constant=constant
+
+        # Check if every term is on the same order
+        self.check_order_consistency()
+
+        # Some coeffs are really long. We only calc them once.
+        self.prepare_constants()
+
+    def from_known(
         X_coef_cp,
         Y_coef_cp,
         Z_coef_cp,
@@ -487,52 +498,115 @@ class Equilibrium:
 
         # Variables being solved for are stored in dicts for
         # convenience of plotting and saving
-        self.noise=noise
-        self.unknown = {}
-        self.constant = {}
+        unknown = {}
+        constant = {}
 
-        self.unknown['X_coef_cp'] = X_coef_cp
-        self.unknown['Y_coef_cp'] = Y_coef_cp
-        self.unknown['Z_coef_cp'] = Z_coef_cp
-        self.unknown['B_psi_coef_cp'] = B_psi_coef_cp
-        self.unknown['B_theta_coef_cp'] = B_theta_coef_cp
-        self.unknown['iota_coef'] = iota_coef
-        self.unknown['p_perp_coef_cp'] = p_perp_coef_cp
-        self.unknown['Delta_coef_cp'] = Delta_coef_cp
+        unknown['X_coef_cp'] = X_coef_cp
+        unknown['Y_coef_cp'] = Y_coef_cp
+        unknown['Z_coef_cp'] = Z_coef_cp
+        unknown['B_psi_coef_cp'] = B_psi_coef_cp
+        unknown['B_theta_coef_cp'] = B_theta_coef_cp
+        unknown['iota_coef'] = iota_coef
+        unknown['p_perp_coef_cp'] = p_perp_coef_cp
+        unknown['Delta_coef_cp'] = Delta_coef_cp
 
-        self.constant['B_denom_coef_c'] = B_denom_coef_c
-        self.constant['B_alpha_coef'] = B_alpha_coef
-        self.constant['kap_p'] = kap_p
-        self.constant['dl_p'] = dl_p
-        self.constant['tau_p'] = tau_p
-        self.constant['eta'] = eta
+        constant['B_denom_coef_c'] = B_denom_coef_c
+        constant['B_alpha_coef'] = B_alpha_coef
+        constant['kap_p'] = kap_p
+        constant['dl_p'] = dl_p
+        constant['tau_p'] = tau_p
+        constant['eta'] = eta
 
         # Pressure can be trivial
         current_order = X_coef_cp.get_order()
-        if not self.unknown['p_perp_coef_cp']:
-            self.unknown['p_perp_coef_cp'] = ChiPhiEpsFunc.zeros_to_order(current_order)
-        if not self.unknown['Delta_coef_cp']:
-            self.unknown['Delta_coef_cp'] = ChiPhiEpsFunc.zeros_to_order(current_order)
+        if not unknown['p_perp_coef_cp']:
+            unknown['p_perp_coef_cp'] = ChiPhiEpsFunc.zeros_to_order(current_order)
+        if not unknown['Delta_coef_cp']:
+            unknown['Delta_coef_cp'] = ChiPhiEpsFunc.zeros_to_order(current_order)
 
         # Manages noises
         if not noise:
-            self.noise = {} # dict of dict managing types of noises
+            noise = {} # dict of dict managing types of noises
             # Tracks different types of noise
-            self.noise['filter'] = {}
-            for key in self.noise.keys():
-                self.noise[key]['X_coef_cp'] = ChiPhiEpsFunc.zeros_like(X_coef_cp)
-                self.noise[key]['Y_coef_cp'] = ChiPhiEpsFunc.zeros_like(Y_coef_cp)
-                self.noise[key]['Z_coef_cp'] = ChiPhiEpsFunc.zeros_like(Z_coef_cp)
-                self.noise[key]['B_psi_coef_cp'] = ChiPhiEpsFunc.zeros_like(B_psi_coef_cp)
-                self.noise[key]['B_theta_coef_cp'] = ChiPhiEpsFunc.zeros_like(B_theta_coef_cp)
-                self.noise[key]['p_perp_coef_cp'] = ChiPhiEpsFunc.zeros_like(self.unknown['p_perp_coef_cp'])
-                self.noise[key]['Delta_coef_cp'] = ChiPhiEpsFunc.zeros_like(self.unknown['Delta_coef_cp'])
+            noise['filter'] = {}
+            for key in noise.keys():
+                noise[key]['X_coef_cp'] = ChiPhiEpsFunc.zeros_like(X_coef_cp)
+                noise[key]['Y_coef_cp'] = ChiPhiEpsFunc.zeros_like(Y_coef_cp)
+                noise[key]['Z_coef_cp'] = ChiPhiEpsFunc.zeros_like(Z_coef_cp)
+                noise[key]['B_psi_coef_cp'] = ChiPhiEpsFunc.zeros_like(B_psi_coef_cp)
+                noise[key]['B_theta_coef_cp'] = ChiPhiEpsFunc.zeros_like(B_theta_coef_cp)
+                noise[key]['p_perp_coef_cp'] = ChiPhiEpsFunc.zeros_like(unknown['p_perp_coef_cp'])
+                noise[key]['Delta_coef_cp'] = ChiPhiEpsFunc.zeros_like(unknown['Delta_coef_cp'])
 
-        # Check if every term is on the same order
-        self.check_order_consistency()
+        return(Equilibrium(unknown, constant, noise))
 
-        # Some coeffs are really long. We only calc them once.
-        self.prepare_constants()
+    def save_self(self, file_name):
+
+        # Both unknown and noise are entirely made of ChiPhiFuncs.
+        unknown_to_content_list = {}
+        for key in self.unknown.keys():
+            unknown_to_content_list[key] = self.unknown[key].to_content_list()
+
+        noise_to_content_list = {}
+        for keya in self.noise.keys():
+            noise_to_content_list[keya]={}
+            for keyb in self.noise[keya].keys():
+                noise_to_content_list[keya][keyb] = self.noise[keya][keyb].to_content_list()
+
+        const_to_content_list={}
+        const_to_content_list['B_denom_coef_c']\
+            = self.constant['B_denom_coef_c'].to_content_list()
+        const_to_content_list['B_alpha_coef']\
+            = self.constant['B_alpha_coef'].to_content_list()
+        const_to_content_list['kap_p']\
+            = self.constant['kap_p'].content
+        const_to_content_list['dl_p']\
+            = self.constant['dl_p']
+        const_to_content_list['tau_p']\
+            = self.constant['tau_p'].content
+        const_to_content_list['eta']\
+            = self.constant['eta']
+
+        big_dict = {\
+            'unknown':unknown_to_content_list,\
+            'noise':noise_to_content_list,\
+            'constant':const_to_content_list,\
+        }
+        np.savez(file_name, big_dict)
+
+    def load(filename):
+        npzfile = np.load(filename, allow_pickle=True)
+        big_dict = npzfile['arr_0'].item()
+        raw_unknown = big_dict['unknown']
+        raw_constant = big_dict['constant']
+        raw_noise = big_dict['noise']
+
+        unknown = {}
+        for key in raw_unknown.keys():
+            unknown[key] = ChiPhiEpsFunc.from_content_list(raw_unknown[key])
+
+        noise = {}
+        for keya in raw_noise.keys():
+            noise[keya]={}
+            for keyb in raw_noise[keya].keys():
+                noise[keya][keyb] \
+                    = ChiPhiEpsFunc.from_content_list(raw_noise[keya][keyb])
+
+        constant={}
+        constant['B_denom_coef_c']\
+            = ChiPhiEpsFunc.from_content_list(raw_constant['B_denom_coef_c'])
+        constant['B_alpha_coef']\
+            = ChiPhiEpsFunc.from_content_list(raw_constant['B_alpha_coef'])
+        constant['kap_p']\
+            = ChiPhiFuncGrid(raw_constant['kap_p'])
+        constant['dl_p']\
+            = raw_constant['dl_p']
+        constant['tau_p']\
+            = ChiPhiFuncGrid(raw_constant['tau_p'])
+        constant['eta']\
+            = raw_constant['eta']
+
+        return(Equilibrium(unknown, constant, noise))
 
     # Replaced in function by get_Yn0_ODE_coeffs. Here for debug perpose only.
     # Fetches the coeff of B_psi[n-3,0] and Y[n-1,0] in the looped equation.
@@ -810,17 +884,24 @@ class Equilibrium:
         # d, e = ODE3_d, ODE3_e/n
         # a_b, b_b, c_b = ODE3_a, ODE3_b, ODE3_c*(n-1)/n
         # e_b = ODE3_d, ODE3_e/(n**2)
-        self.ODE3_c, self.ODE3_b, self.ODE3_a = \
-            coeff_Y_nm1_pre.content[1], \
-            coeff_dp_Y_nm1_pre.content[1], \
-            coeff_dpp_Y_nm1_pre.content[1]
-        self.ODE3_e, self.ODE3_d = \
-            coeff_B_psi_nm3_pre.content[1], \
-            coeff_dp_B_psi_nm3_pre.content[1]
-        self.ODE3_a_b = np.imag(self.ODE3_a*np.conj(self.ODE3_d))
-        self.ODE3_b_b = np.imag(self.ODE3_b*np.conj(self.ODE3_d))
-        self.ODE3_c_b = np.imag(self.ODE3_c*np.conj(self.ODE3_d))
-        self.ODE3_e_b = np.imag(self.ODE3_e*np.conj(self.ODE3_d))
+
+        ###################
+        # The looped equation is different from what I thought.
+        # Commenting these out for now
+        # If these are reused later, mind that the coeff_pre's
+        # MIGHT BE FLOATS.
+        ###################
+        # self.ODE3_c, self.ODE3_b, self.ODE3_a = \
+        #     coeff_Y_nm1_pre.content[1], \
+        #     coeff_dp_Y_nm1_pre.content[1], \
+        #     coeff_dpp_Y_nm1_pre.content[1]
+        # self.ODE3_e, self.ODE3_d = \
+        #     coeff_B_psi_nm3_pre.content[1], \
+        #     coeff_dp_B_psi_nm3_pre.content[1]
+        # self.ODE3_a_b = np.imag(self.ODE3_a*np.conj(self.ODE3_d))
+        # self.ODE3_b_b = np.imag(self.ODE3_b*np.conj(self.ODE3_d))
+        # self.ODE3_c_b = np.imag(self.ODE3_c*np.conj(self.ODE3_d))
+        # self.ODE3_e_b = np.imag(self.ODE3_e*np.conj(self.ODE3_d))
 
         # The differential equation is solved by elimating B_psi[n-3,0] to
         # produce
@@ -830,359 +911,40 @@ class Equilibrium:
         # Most of the calculations involved in the elimination is done here
         # only once, and the coeffs and f_eff can be generated with
         # self.get_Yn0_ODE_coeffs(n) and self.get_f_eff(f, n)
-        self.y_ppp_coef_pre = self.ODE3_a_b*self.ODE3_d
-        self.y_pp_coef_pre = (\
-            dphi_direct(\
-                np.array([self.ODE3_a_b])\
-            )[0]*self.ODE3_d\
-            + self.ODE3_b_b*self.ODE3_d\
-            + self.ODE3_a_b*self.ODE3_e\
-            + self.ODE3_a*self.ODE3_e_b)
-        self.y_p_coef_pre = (\
-            dphi_direct(\
-                np.array([self.ODE3_b_b])\
-            )[0]*self.ODE3_d\
-            + self.ODE3_c_b*self.ODE3_d\
-            + self.ODE3_b_b*self.ODE3_e\
-            + self.ODE3_b*self.ODE3_e_b)
-        self.y_coef_pre = (\
-            dphi_direct(\
-                np.array([self.ODE3_c_b])\
-            )[0]*self.ODE3_d\
-            + self.ODE3_c_b*self.ODE3_e\
-            + self.ODE3_c*self.ODE3_e_b)
 
-        self.y_ppp_coef_pre = low_pass_direct(np.array([self.y_ppp_coef_pre]))[0]
-        self.y_pp_coef_pre = low_pass_direct(np.array([self.y_pp_coef_pre]))[0]
-        self.y_p_coef_pre = low_pass_direct(np.array([self.y_p_coef_pre]))[0]
-        self.y_coef_pre = low_pass_direct(np.array([self.y_coef_pre]))[0]
+        ###################
+        # The looped equation is different from what I thought.
+        # Commenting these out for now
+        # self.y_ppp_coef_pre = self.ODE3_a_b*self.ODE3_d
+        # self.y_pp_coef_pre = (\
+        #     dphi_direct(\
+        #         np.array([self.ODE3_a_b])\
+        #     )[0]*self.ODE3_d\
+        #     + self.ODE3_b_b*self.ODE3_d\
+        #     + self.ODE3_a_b*self.ODE3_e\
+        #     + self.ODE3_a*self.ODE3_e_b)
+        # self.y_p_coef_pre = (\
+        #     dphi_direct(\
+        #         np.array([self.ODE3_b_b])\
+        #     )[0]*self.ODE3_d\
+        #     + self.ODE3_c_b*self.ODE3_d\
+        #     + self.ODE3_b_b*self.ODE3_e\
+        #     + self.ODE3_b*self.ODE3_e_b)
+        # self.y_coef_pre = (\
+        #     dphi_direct(\
+        #         np.array([self.ODE3_c_b])\
+        #     )[0]*self.ODE3_d\
+        #     + self.ODE3_c_b*self.ODE3_e\
+        #     + self.ODE3_c*self.ODE3_e_b)
+        #
+        # self.y_ppp_coef_pre = low_pass_direct(np.array([self.y_ppp_coef_pre]))[0]
+        # self.y_pp_coef_pre = low_pass_direct(np.array([self.y_pp_coef_pre]))[0]
+        # self.y_p_coef_pre = low_pass_direct(np.array([self.y_p_coef_pre]))[0]
+        # self.y_coef_pre = low_pass_direct(np.array([self.y_coef_pre]))[0]
 
-    # Iteration ----------------------------------------------------------------
-    # Evaluates 2 entire orders. Note that no masking is needed for any of the methods
-    # defined in this file. Copies the equilibrium.
-    def iterate_2_full(self,
-        B_alpha_nb2,
-        B_denom_nm1, B_denom_n,
-        n_eval=None,
-        integral_mode = 'double_spline',
-        filter=True, filter_mode='low_pass', filter_arg=100):
-
-        if n_eval > self.get_order() + 2:
-            raise AttributeError('iterate_2_full: can only iterate'\
-            ' the next two order, or repeat previous orders.')
-
-        # If no order is supplied, then iterate to the next order. the Equilibrium
-        # will be edited directly.
-        if n_eval == None:
-            n_eval = self.get_order() + 2 # getting order and checking consistency
-        elif n_eval%2 != 1:
-            raise ValueError("n_eval must be even.")
-
-
-        start_time = time.time()
-        print("Evaluating order",n_eval-1, n_eval)
-
-        # Creating new ChiPhiEpsFunc's for the resulting Equilibrium
-        X_coef_cp = self.unknown['X_coef_cp'].mask(n_eval-2)
-        Y_coef_cp = self.unknown['Y_coef_cp'].mask(n_eval-2)
-        Z_coef_cp = self.unknown['Z_coef_cp'].mask(n_eval-2)
-        B_theta_coef_cp = self.unknown['B_theta_coef_cp'].mask(n_eval-2)
-        B_psi_coef_cp = self.unknown['B_psi_coef_cp'].mask(n_eval-4)
-        iota_coef = self.unknown['iota_coef'].mask((n_eval-4)//2)
-        p_perp_coef_cp = self.unknown['p_perp_coef_cp'].mask(n_eval-2)
-        Delta_coef_cp = self.unknown['Delta_coef_cp'].mask(n_eval-2)
-        # Masking all init conds.
-        B_denom_coef_c = self.constant['B_denom_coef_c'].mask(n_eval-2)
-        B_alpha_coef = self.constant['B_alpha_coef'].mask(n_eval//2)
-        kap_p = self.constant['kap_p']
-        dl_p = self.constant['dl_p']
-        tau_p = self.constant['tau_p']
-        eta = self.constant['eta']
-        # Appending free functions and initial conditions
-
-        B_alpha_coef.append(B_alpha_nb2)
-        B_denom_coef_c.append(B_denom_nm1)
-        B_denom_coef_c.append(B_denom_n)
-
-        # Evaluating order n_eval-1. Even order,
-        # Requires:
-        # X_{n-1}, Y_{n-1}, Z_{n-1},
-        # B_{\theta n-1}, B_0,
-        # B_{\alpha 0}, \bar{\iota}_{(n-2)/2 or (n-3)/2}$
-        # The next order uses B_psi with ZERO constant comp.
-        B_psi_nm3 = iterate_dc_B_psi_nm2(n_eval-1,
-            X_coef_cp, Y_coef_cp, Z_coef_cp,
-            B_theta_coef_cp, B_psi_coef_cp,
-            B_alpha_coef, B_denom_coef_c,
-            kap_p, dl_p, tau_p,
-            iota_coef).integrate_chi(ignore_mode_0=True)
-        B_psi_nm3.content[B_psi_nm3.get_shape()[0]//2] = B_psi_nm30
-
-        self.noise['filter']['B_psi_coef_cp'].append(
-            B_psi_nm3.noise_filter(filter_mode, filter_arg)
-        )
-        if filter:
-            B_psi_nm3 = B_psi_nm3.filter(filter_mode, filter_arg)
-        B_psi_coef_cp.append(B_psi_nm3)
-
-        # B_theta_n-1 requires:
-        # Xn-1, Yn-1, Zn-1, B_theta_n-2, Delta_n-1,
-        # B_psi_n-3, B_denom n-1,
-        # iota_coef (n-3)/2 or (n-2)/2, and B_alpha (n-1)/2 or (n-2)/2
-        # Here, "n-1" = n-1
-        coeff_B_theta_nm1 = self.coeff_B_theta_nm1
-        coeff_dc_B_theta_nm1 = self.coeff_dc_B_theta_nm1
-        coeff_dp_B_theta_nm1 = self.coeff_dp_B_theta_nm1
-        coeff_B_theta_n0 = self.coeff_B_theta_n0
-        coeff_dp_B_theta_n0 = self.coeff_dp_B_theta_n0
-
-        # We want B_theta[n_eval-1]. This means the input order is n_eval,
-        # and at such orders we solve for B_psi and Y's zero component.
-        B_theta_nm1 = iterate_B_theta_nm1_cp(n_eval,
-            X_coef_cp, Y_coef_cp, Z_coef_cp,
-            B_theta_coef_cp, B_psi_coef_cp,
-            B_alpha_coef, B_denom_coef_c,
-            p_perp_coef_cp,
-            Delta_coef_cp,
-            kap_p, dl_p, tau_p, iota_coef,
-            coeff_B_theta_nm1, # test_equilibrium.coeff_B_theta_nm1
-            coeff_dc_B_theta_nm1,
-            coeff_dp_B_theta_nm1,
-            integral_mode, B_theta_n0=B_theta_nm10)
-        B_psi_nm3_new, Ynm1_new = iterate_B_psi_nm30_Y_nm10_p(n_eval, \
-            X_coef_cp, Y_coef_cp, Z_coef_cp, \
-            B_theta_coef_cp, B_psi_coef_cp, \
-            B_alpha_coef, B_denom_coef_c, \
-            p_perp_coef_cp, Delta_coef_cp, \
-            kap_p, dl_p, tau_p, iota_coef, \
-            test_equilibrium)
-        B_psi_coef_cp = B_psi_coef_cp.mask(n_eval-4).append(B_psi_nm3)
-        Y_coef_cp = Y_coef_cp.mask(n_eval-2).append(Ynm1)
-
-
-        # Zn requires:
-        # Here, "n" = n-1
-        # X_{n-1}, Y_{n-1}, Z_{n-1},
-        # B_{\theta n}, B_{\psi n-2},
-        # B_{\alpha (n-2)/2 or (n-3)/2},
-        # \iota_{(n-2)/2 or (n-3)/2}
-        # \kappa, \frac{dl}{d\phi}, \tau
-        Znm1 = iterate_Zn_cp(n_eval-1,
-            X_coef_cp, Y_coef_cp, Z_coef_cp,
-            B_theta_coef_cp, B_psi_coef_cp,
-            B_alpha_coef,
-            kap_p, dl_p, tau_p,
-            iota_coef)
-        self.noise['filter']['Z_coef_cp'].append(
-            Znm1.noise_filter(filter_mode, filter_arg)
-        )
-        if filter:
-            Znm1 = Znm1.filter(filter_mode, filter_arg)
-        Z_coef_cp.append(Znm1)
-
-        # Xn requires:
-        # X_{n-1}, Y_{n-1}, Z_n,
-        # \iota_{(n-3)/2 or (n-2)/2},
-        # B_{\alpha (n-1)/2 or n/2}.
-        # Here, "n" = n-1
-        Xnm1 = iterate_Xn_cp(n_eval-1,
-            X_coef_cp,
-            Y_coef_cp,
-            Z_coef_cp,
-            B_denom_coef_c,
-            B_alpha_coef,
-            kap_p, dl_p, tau_p,
-            iota_coef)
-        self.noise['filter']['X_coef_cp'].append(Xnm1.noise_filter(filter_mode, filter_arg))
-        if filter:
-            Xnm1 = Xnm1.filter(filter_mode, filter_arg)
-        X_coef_cp.append(Xnm1)
-
-        # Yn requires:
-        # X_{n}, Y_{n-1}, Z_{n-1},
-        # B_{\theta n-1}, B_{\psi n-3},
-        # \iota_{(n-3)/2 or (n-4)/2}, B_{\alpha (n-1)/2 or (n-2)/2}
-        # Here, "n" = n-1
-        # The zeroth component will be left zero
-        # until evaluated in the next order.
-        Ynm1 = iterate_Yn_cp(n_eval-1,
-            X_coef_cp,
-            Y_coef_cp,
-            Z_coef_cp,
-            B_psi_coef_cp,
-            B_theta_coef_cp,
-            B_alpha_coef,
-            kap_p, dl_p, tau_p,
-            iota_coef,
-            Yn_free = 0)
-        self.noise['filter']['Y_coef_cp'].append(Ynm1.noise_filter(filter_mode, filter_arg))
-        if filter:
-            Ynm1 = Ynm1.filter(filter_mode, filter_arg)
-        Y_coef_cp.append(Ynm1)
-
-        # Uses B_denom[n], p_[\perp n]$, $\Delta_[n-1]$, $\iota_[(n-1)/2, n/2]$
-        # TODO Integration constant for zeroth mode. It's just y'=f, and the integration
-        # constant need to satisfy integral(Bpsi') = 0
-        Delta_nm1 = iterate_delta_n(n_eval-1,
-            B_denom_coef_c,
-            p_perp_coef_cp,
-            Delta_coef_cp,
-            iota_coef)
-        self.noise['filter']['Delta_coef_cp'].append(Delta_nm1.noise_filter(filter_mode, filter_arg))
-        if filter:
-            Delta_nm1 = Delta_nm1.filter(filter_mode, filter_arg)
-        Delta_coef_cp.append(Delta_nm1)
-
-        # Uses B_theta [n-2], B_[psi n-2], B_alpha first-order terms, B_denom[n],
-        # p_[perp n-1], Delta_[n-1],iota_[(n-3)/2 (n-2)/2]
-        p_perp_nm1 = iterate_p_perp_n(n_eval-1,
-            B_theta_coef_cp,
-            B_psi_coef_cp,
-            B_alpha_coef,
-            B_denom_coef_c,
-            p_perp_coef_cp,
-            Delta_coef_cp,
-            iota_coef)
-        self.noise['filter']['p_perp_coef_cp'].append(p_perp_nm1.noise_filter(filter_mode, filter_arg))
-        if filter:
-            p_perp_nm1 = p_perp_nm1.filter(filter_mode, filter_arg)
-        p_perp_coef_cp.append(p_perp_nm1)
-
-        # no need to ignore_mode_0 for chi integral. This is an odd order.
-        B_psi_nm2 = iterate_dc_B_psi_nm2(n_eval,
-            X_coef_cp, Y_coef_cp, Z_coef_cp,
-            B_theta_coef_cp, B_psi_coef_cp,
-            B_alpha_coef, B_denom_coef_c,
-            kap_p, dl_p, tau_p,
-            iota_coef).integrate_chi()
-        self.noise['filter']['B_psi_coef_cp'].append(B_psi_nm2.noise_filter(filter_mode, filter_arg))
-        if filter:
-            B_psi_nm2 = B_psi_nm2.filter(filter_mode, filter_arg)
-        B_psi_coef_cp.append(B_psi_nm2)
-
-        Zn = iterate_Zn_cp(n_eval,
-            X_coef_cp, Y_coef_cp, Z_coef_cp,
-            B_theta_coef_cp, B_psi_coef_cp,
-            B_alpha_coef,
-            kap_p, dl_p, tau_p,
-            iota_coef)
-        self.noise['filter']['Z_coef_cp'].append(Zn.noise_filter(filter_mode, filter_arg))
-        if filter:
-            Zn = Zn.filter(filter_mode, filter_arg)
-        Z_coef_cp.append(Zn)
-
-        Xn = iterate_Xn_cp(n_eval,
-            X_coef_cp,
-            Y_coef_cp,
-            Z_coef_cp,
-            B_denom_coef_c,
-            B_alpha_coef,
-            kap_p, dl_p, tau_p,
-            iota_coef)
-        self.noise['filter']['X_coef_cp'].append(Xn.noise_filter(filter_mode, filter_arg))
-        if filter:
-            Xn = Xn.filter(filter_mode, filter_arg)
-        X_coef_cp.append(Xn)
-
-        Yn1c = iterate_Yn1c_p(n, X_coef_cp, Y_coef_cp, Z_coef_cp,\
-                          iota_coef,\
-                          tau_p, dl_p, kap_p, eta,\
-                          B_denom_coef_c, B_alpha_coef,
-                          B_psi_coef_cp, B_theta_coef_cp)
-        Yn = iterate_Yn_cp(n_eval,
-            X_coef_cp,
-            Y_coef_cp,
-            Z_coef_cp,
-            B_psi_coef_cp,
-            B_theta_coef_cp,
-            B_alpha_coef,
-            kap_p, dl_p, tau_p,
-            iota_coef,
-            Y_free_n = Yn1c)
-        self.noise['filter']['Y_coef_cp'].append(
-            Yn.noise_filter(filter_mode, filter_arg)
-        )
-        if filter:
-            Yn = Yn.filter(filter_mode, filter_arg)
-        Y_coef_cp.append(Yn)
-
-        Delta_n = iterate_delta_n(n_eval,
-            B_denom_coef_c,
-            p_perp_coef_cp,
-            Delta_coef_cp,
-            iota_coef)
-        self.noise['filter']['Delta_coef_cp'].append(
-            Delta_n.noise_filter(filter_mode, filter_arg)
-        )
-        if filter:
-            Delta_n = Delta_n.filter(filter_mode, filter_arg)
-        Delta_coef_cp.append(Delta_n)
-
-        p_perp_n = iterate_p_perp_n(n_eval,
-            B_theta_coef_cp,
-            B_psi_coef_cp,
-            B_alpha_coef,
-            B_denom_coef_c,
-            p_perp_coef_cp,
-            Delta_coef_cp,
-            iota_coef)
-        self.noise['filter']['p_perp_coef_cp'].append(
-            p_perp_n.noise_filter(filter_mode, filter_arg)
-        )
-        if filter:
-            p_perp_n = p_perp_n.filter(filter_mode, filter_arg)
-        p_perp_coef_cp.append(p_perp_n)
-
-        # n_eval is odd. This means that to solve for B_theta_n, the
-        # input order is n_eval+1. In such order we solve for
-        # B_theta[n_eval+1,0]
-        B_theta_n,loop_suppressing_B_theta_nm1 = iterate_B_theta_nm1_cp(n_eval+1,
-            X_coef_cp, Y_coef_cp, Z_coef_cp,
-            B_theta_coef_cp, B_psi_coef_cp,
-            B_alpha_coef, B_denom_coef_c,
-            p_perp_coef_cp,
-            Delta_coef_cp,
-            kap_p, dl_p, tau_p, iota_coef,
-            coeff_B_theta_nm1, # test_equilibrium.coeff_B_theta_nm1
-            coeff_dc_B_theta_nm1,
-            coeff_dp_B_theta_nm1,
-            integral_mode, B_theta_n0)
-        B_theta_np10 = iterate_B_theta_n0_cp(loop_suppressing_B_theta_nm1,
-                    coeff_B_theta_nm1,
-                    coeff_dc_B_theta_nm1,
-                    coeff_dp_B_theta_nm1,
-                    coeff_B_theta_n0,
-                    coeff_dp_B_theta_n0,
-                    )
-
-        # Requires:
-        # \Lambda_n (X_{n-1}, Y_{n-1}, Z_{n}, \iota_{(n-3)/2}),
-        # B_{\theta n}, B_0, B_{\alpha 0}$
-        iota_nm1b2 = iterate_iota_nm1b2(n_eval,
-            X_coef_cp, Y_coef_cp, Z_coef_cp,\
-            tau_p, dl_p, kap_p,\
-            iota_coef, eta,\
-            B_denom_coef_c, B_alpha_coef, B_theta_coef_cp)
-        iota_coef.append(iota_nm1b2)
-
-        print("Time elapsed(s):",(time.time() - start_time))
-        print('X_coef_cp', X_coef_cp.get_order())
-        print('B_psi_coef_cp', B_psi_coef_cp.get_order())
-        print('B_theta_coef_cp', B_theta_coef_cp.get_order())
-
-
-        return(Equilibrium(X_coef_cp,
-        Y_coef_cp,
-        Z_coef_cp,
-        B_psi_coef_cp,
-        B_theta_coef_cp,
-        B_denom_coef_c,
-        B_alpha_coef,
-        kap_p, dl_p, tau_p,
-        iota_coef, eta,
-        p_perp_coef_cp,
-        Delta_coef_cp, self.noise))
-
+    # # Iteration ----------------------------------------------------------------
+    # # Evaluates 2 entire orders. Note that no masking is needed for any of the methods
+    # # defined in this file. Copies the equilibrium.
 
     # Iterates the magnetic equations only.
     # Calculates Xn, Yn, Zn, B_psin-2 for 2 orders from lower order values.
@@ -1196,7 +958,7 @@ class Equilibrium:
         Y_free_nm1, Y_free_n,
         p_perp_nm1=0, p_perp_n=0,
         Delta_nm1=0, Delta_n=0,
-        n_eval=None, filter=True, filter_mode='low_pass', filter_arg=100):
+        n_eval=None, filter=False, filter_mode='low_pass', filter_arg=100):
 
 
         # If no order is supplied, then iterate to the next order. the Equilibrium
@@ -1218,9 +980,24 @@ class Equilibrium:
         iota_coef = self.unknown['iota_coef'].mask((n_eval-4)//2)
         p_perp_coef_cp = self.unknown['p_perp_coef_cp'].mask(n_eval-2)
         Delta_coef_cp = self.unknown['Delta_coef_cp'].mask(n_eval-2)
+
+        self.noise['filter']['X_coef_cp']\
+            = self.noise['filter']['X_coef_cp'].mask(n_eval-2)
+        self.noise['filter']['Y_coef_cp']\
+            = self.noise['filter']['Y_coef_cp'].mask(n_eval-2)
+        self.noise['filter']['Z_coef_cp']\
+            = self.noise['filter']['Z_coef_cp'].mask(n_eval-2)
+        self.noise['filter']['B_theta_coef_cp']\
+            = self.noise['filter']['B_theta_coef_cp'].mask(n_eval-2)
+        self.noise['filter']['B_psi_coef_cp']\
+            = self.noise['filter']['B_psi_coef_cp'].mask(n_eval-4)
+        self.noise['filter']['p_perp_coef_cp']\
+            = self.noise['filter']['p_perp_coef_cp'].mask(n_eval-2)
+        self.noise['filter']['Delta_coef_cp']\
+            = self.noise['filter']['Delta_coef_cp'].mask(n_eval-2)
         # Masking all init conds.
         B_denom_coef_c = self.constant['B_denom_coef_c'].mask(n_eval-2)
-        B_alpha_coef = self.constant['B_alpha_coef'].mask((n_eval)//2)
+        B_alpha_coef = self.constant['B_alpha_coef'].mask((n_eval)//2-1)
         kap_p = self.constant['kap_p']
         dl_p = self.constant['dl_p']
         tau_p = self.constant['tau_p']
@@ -1378,12 +1155,9 @@ class Equilibrium:
         Y_coef_cp.append(Yn)
 
         print("Time elapsed(s):",(time.time() - start_time))
-        print('X_coef_cp', X_coef_cp.get_order())
-        print('B_psi_coef_cp', B_psi_coef_cp.get_order())
-        print('B_theta_coef_cp', B_theta_coef_cp.get_order())
 
 
-        return(Equilibrium(X_coef_cp,
+        return(Equilibrium.from_known(X_coef_cp,
         Y_coef_cp,
         Z_coef_cp,
         B_psi_coef_cp,
