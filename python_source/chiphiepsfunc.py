@@ -1,5 +1,6 @@
 import chiphifunc
 import warnings
+import numpy as np
 
 '''ChiPhiEpsFunc'''
 # A container for lists of ChiPhiFuncs. Primarily used to handle array index out of bound
@@ -26,7 +27,7 @@ class ChiPhiEpsFunc:
     # Implementation of list append
     def append(self, item):
         self.chiphifunc_list.append(item)
-        
+
     # Append one or more zeros to the end of the list.
     # For evaluating higher order terms with recursion relation. Sometimes
     # expressions used to evaluate a higher order term includes the term itself,
@@ -61,3 +62,39 @@ class ChiPhiEpsFunc:
 
     def __len__(self):
         return(len(self.chiphifunc_list))
+
+    def get_order(self):
+        return(len(self.chiphifunc_list)-1)
+
+    # Make a list with order+1 zero elements
+    def zeros_to_order(order):
+        new_list = []
+        for i in range(order+1):
+            new_list.append(0)
+        return(ChiPhiEpsFunc(new_list))
+
+    # Make a list with order+1 zero elements
+    def zeros_like(chiphiepsfunc_in):
+        return(ChiPhiEpsFunc.zeros_to_order(chiphiepsfunc_in.get_order()))
+
+    # Converting to a list of arrays. For saving and loading.
+    # see recursion_relation.py.
+    def to_content_list(self):
+        content_list = []
+        for i in range(len(self.chiphifunc_list)):
+            item = self.chiphifunc_list[i]
+            if np.isscalar(item):
+                content_list.append(item)
+            else:
+                content_list.append(item.content)
+        return(content_list)
+
+    def from_content_list(content_list):
+        chiphifunc_list = []
+        for item in content_list:
+            if np.isscalar(item):
+                chiphifunc_list.append(item)
+            else:
+                chiphifunc_list.append(chiphifunc.ChiPhiFunc(item))
+        out_chiphiepsfunc = ChiPhiEpsFunc(chiphifunc_list)
+        return(out_chiphiepsfunc)

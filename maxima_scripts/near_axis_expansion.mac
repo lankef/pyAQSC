@@ -2,13 +2,16 @@
 prefix("dpsi");
 "dpsi"(a) := diff(a, eps)/(2*eps);
 
-/* Operators*/
 prefix("dphi");
 "dphi"(a) := diff(a, phi);
 
-/* Operators*/
 prefix("dchi");
 "dchi"(a) := diff(a, chi);
+
+/* An anti-derivative operator */
+prefix("ichi");
+"ichi"(a) := int_chi(a);
+
 
 prefix("dphi_iota_dchi");
 "dphi_iota_dchi"(a) := ((dphi a) + iota_e * (dchi a));
@@ -101,17 +104,24 @@ block([fourier],
 
 /* Initial condition phi dependence */
 depends([dl_p,tau_p, kap_p], [phi]);
-
-p_perp_ecp: power_series(p_perp_coef_cp, eps);
-delta_ecp: power_series(delta_coef_cp, eps);
-
-A_alpha_ecp: dphi_iota_dchi B_theta_ecp;
-A_psi_ecp: (dpsi B_alpha_e) - (dphi_iota_dchi B_psi_ecp) - B_theta_ecp * dpsi iota_e;
-
+depends([
+    X_coef_cp,
+    Y_coef_cp,
+    Z_coef_cp
+    ], [phi, chi]);
+depends([
+    B_psi_coef_cp,
+    B_theta_coef_cp
+    ], [phi, chi]);
 depends([
     p_perp_coef_cp,
-    delta_coef_cp
+    Delta_coef_cp
     ], [phi, chi]);
+depends([B_alpha_coef_c, B_denom_coef_c], [chi]);
+
+p_perp_ecp: power_series(p_perp_coef_cp, eps);
+Delta_ecp: power_series(Delta_coef_cp, eps);
+
 
 
 /* Flux functions */
@@ -120,7 +130,6 @@ iota_e: sum(iota_coef[i]*eps^(2*i), i, 0, inf);
 
 /* Flux Chi functions */
 B_denom_ec: power_series(B_denom_coef_c, eps);
-depends([B_alpha_coef_c], [chi]);
 
 X_coef_cp[0]: 0;
 Y_coef_cp[0]: 0;
@@ -136,16 +145,6 @@ Z_ecp: power_series(Z_coef_cp, eps);
 B_psi_ecp: power_series(B_psi_coef_cp, eps);
 B_theta_ecp: power_series(B_theta_coef_cp, eps);
 
-depends([
-    X_coef_cp,
-    Y_coef_cp,
-    Z_coef_cp
-    ], [phi, chi]);
-
-depends([
-    B_psi_coef_cp,
-    B_theta_coef_cp
-    ], [phi]);
 
 J_ec: B_alpha_e * B_denom_ec;
 
@@ -177,11 +176,10 @@ evaluate(expr, n_in):= block(
         */
         nouns
     ),
-    return(out)
+    return(remove_const_diff(out))
 );
 
-find_var_n_offset_in_expr(expr, var, offset, max_order):=
-    find_var_n_offset_in_expr(expr, var, offset, 1, max_order);
+
 /* Inspecting the coefficient of n+offset-th order var in expr in order n
     by evaluating from n=1 to n=max_order*/
 find_var_n_offset_in_expr(expr, var, offset, min_order, max_order):=block(
@@ -206,7 +204,21 @@ find_var_n_offset_in_expr(expr, var, offset, min_order, max_order):=block(
         disp(sconcat("@@@@@@@@@@@@@@@@@@@@@@@@@@ Coeff for dchi ", var[n_desired], " is:" )),
         disp(ratcoef(ev_result, 'diff(var[n_desired],chi,1))),
         disp(sconcat("@@@@@@@@@@@@@@@@@@@@@@@@@@ Coeff for dphi ", var[n_desired], " is:")),
-        disp(ratcoef(ev_result, 'diff(var[n_desired],phi,1)))
+        disp(ratcoef(ev_result, 'diff(var[n_desired],phi,1))),
+        disp(sconcat("@@@@@@@@@@@@@@@@@@@@@@@@@@ Coeff for dchi dphi ", var[n_desired], " is:" )),
+        disp(ratcoef(ev_result, 'diff(var[n_desired],chi,1,phi,1))),
+        disp(sconcat("@@@@@@@@@@@@@@@@@@@@@@@@@@ Coeff for dphi^2 ", var[n_desired], " is:")),
+        disp(ratcoef(ev_result, 'diff(var[n_desired],phi,2))),
+        disp(sconcat("@@@@@@@@@@@@@@@@@@@@@@@@@@ Coeff for dchi^2 ", var[n_desired], " is:")),
+        disp(ratcoef(ev_result, 'diff(var[n_desired],chi,2))),
+        disp(sconcat("@@@@@@@@@@@@@@@@@@@@@@@@@@ Coeff for dphi^3 ", var[n_desired], " is:")),
+        disp(ratcoef(ev_result, 'diff(var[n_desired],phi,3))),
+        disp(sconcat("@@@@@@@@@@@@@@@@@@@@@@@@@@ Coeff for dchi^2 dphi ", var[n_desired], " is:")),
+        disp(ratcoef(ev_result, 'diff(var[n_desired],chi,2,phi,1))),
+        disp(sconcat("@@@@@@@@@@@@@@@@@@@@@@@@@@ Coeff for dphi^2 dchi ", var[n_desired], " is:")),
+        disp(ratcoef(ev_result, 'diff(var[n_desired],chi,1,phi,2))),
+        disp(sconcat("@@@@@@@@@@@@@@@@@@@@@@@@@@ Coeff for dchi^3 ", var[n_desired], " is:")),
+        disp(ratcoef(ev_result, 'diff(var[n_desired],chi,3)))
     )
 )$
 
@@ -228,14 +240,17 @@ find_var_nm_offset_in_expr(expr, var, offset, min_order, max_order, m):=block(
         disp(var[n_desired,m]),
         /* By definition, Y_coef can only appear as itself, its phi or chi derivative */
         disp(sconcat("@@@@@@@@@@@@@@@@@@@@@@@@@@ Coeff for      ", var[n_desired,m], " is:")),
-        disp(ratcoef(ev_result, var[n_desired,m])),
+        disp(ratsimp(ratcoef(ev_result, var[n_desired,m]))),
         disp(sconcat("@@@@@@@@@@@@@@@@@@@@@@@@@@ Coeff for dchi ", var[n_desired,m], " is:" )),
-        disp(ratcoef(ev_result, 'diff(var[n_desired,m],chi,1))),
+        disp(ratsimp(ratcoef(ev_result, 'diff(var[n_desired,m],chi,1)))),
         disp(sconcat("@@@@@@@@@@@@@@@@@@@@@@@@@@ Coeff for dphi ", var[n_desired,m], " is:")),
-        disp(ratcoef(ev_result, 'diff(var[n_desired,m],phi,1)))
+        disp(ratsimp(ratcoef(ev_result, 'diff(var[n_desired,m],phi,1))))
     )
 )$
 
+
+A_alpha_ecp: (dphi_iota_dchi B_theta_ecp);
+A_psi_ecp: (dpsi B_alpha_e) - (dphi_iota_dchi B_psi_ecp) - B_theta_ecp * dpsi iota_e;
 
 /* Defining LHS */
 jacobian_lhs_ec:ratsimp( B_alpha_e^2 * B_denom_ec)$
@@ -257,7 +272,6 @@ b0_lhs_ecp: ratsimp(-(B_alpha_e - iota_e*B_theta_ecp)*((dchi X_ecp)*(dpsi Y_ecp)
             ))$
 b0_rhs_ecp: ratsimp((dphi Z_ecp) - X_ecp*kap_p*dl_p + dl_p + iota_e*(dchi Z_ecp))$
 
-/* ------------------------------------------------------------------------------------------------------ */
 k0_lhs_ecp: ratsimp(-(B_alpha_e - iota_e*B_theta_ecp)*((dchi Y_ecp)*(dpsi Z_ecp) - (dpsi Y_ecp)*(dchi Z_ecp))
             -B_psi_ecp*(
                 (dchi Z_ecp)*((dphi Y_ecp) - tau_p*X_ecp*dl_p)
@@ -269,7 +283,6 @@ k0_lhs_ecp: ratsimp(-(B_alpha_e - iota_e*B_theta_ecp)*((dchi Y_ecp)*(dpsi Z_ecp)
             ))$
 k0_rhs_ecp: ratsimp((dphi X_ecp) + tau_p*Y_ecp*dl_p + Z_ecp*kap_p*dl_p + iota_e*(dchi X_ecp))$
 
-/* ------------------------------------------------------------------------------------------------------ */
 t0_lhs_ecp: ratsimp(-(B_alpha_e - iota_e*B_theta_ecp)*((dchi Z_ecp)*(dpsi X_ecp) - (dpsi Z_ecp)*(dchi X_ecp))
             -B_psi_ecp*(
                 (dchi X_ecp)*((dphi Z_ecp) - X_ecp*kap_p*dl_p + dl_p)
@@ -280,3 +293,57 @@ t0_lhs_ecp: ratsimp(-(B_alpha_e - iota_e*B_theta_ecp)*((dchi Z_ecp)*(dpsi X_ecp)
                 -(dpsi Z_ecp)*((dphi X_ecp) + tau_p*Y_ecp*dl_p + Z_ecp*kap_p*dl_p)
             ))$
 t0_rhs_ecp: ratsimp((dphi Y_ecp) - tau_p*X_ecp*dl_p + iota_e*(dchi Y_ecp))$
+
+/* Another form of the co/contravariant equations */
+D2_lhs_ecp: J_ec * B_psi_ecp$
+D2_rhs_ecp:
+    intosum(dpsi X_ecp)*((dphi X_ecp) + tau_p*Y_ecp*dl_p + Z_ecp*kap_p*dl_p + iota_e*(dchi X_ecp))
+    + intosum(dpsi Y_ecp)*((dphi Y_ecp) - tau_p*X_ecp*dl_p + iota_e*(dchi Y_ecp))
+    + intosum(dpsi Z_ecp)*((dphi Z_ecp) - kap_p*X_ecp*dl_p + dl_p + iota_e*(dchi Z_ecp))$
+
+D3_lhs_ecp: J_ec * B_theta_ecp$
+D3_rhs_ecp:
+    (dchi X_ecp)*((dphi X_ecp) + tau_p*Y_ecp*dl_p + Z_ecp*kap_p*dl_p + iota_e*(dchi X_ecp))
+    + (dchi Y_ecp)*((dphi Y_ecp) - tau_p*X_ecp*dl_p + iota_e*(dchi Y_ecp))
+    + (dchi Z_ecp)*((dphi Z_ecp) - kap_p*X_ecp*dl_p + dl_p + iota_e*(dchi Z_ecp))$
+
+/* MHD equations */
+/* Equation 1: */
+I_lhs_ecp: B_denom_ec * (dphi_iota_dchi Delta_ecp)
+    + B_denom_ec^2 * (dphi_iota_dchi p_perp_ecp)$
+I_rhs_ecp: iota_e/2 * Delta_ecp * (dchi B_denom_ec)$
+
+/* Equation 2 */
+II_lhs_ecp: A_alpha_ecp * (1-Delta_ecp) * B_denom_ec$
+II_rhs_ecp: -B_theta_ecp * B_denom_ec^2 * (dphi p_perp_ecp)
+    + B_denom_ec^2 * (B_alpha_e - iota_e*B_theta_ecp) * (dchi p_perp_ecp)
+    - 1/2 * (B_alpha_e - iota_e*B_theta_ecp) * Delta_ecp * (dchi B_denom_ec)$
+
+/* Equation 3 */
+III_lhs_ecp: B_denom_ec * (A_psi_ecp*(1-Delta_ecp)
+    + B_denom_ec * B_psi_ecp*(dphi_iota_dchi Delta_ecp))
+    - 1/2 * B_alpha_e * Delta_ecp * (dpsi B_denom_ec)
+    + B_denom_ec * J_ec * (dpsi p_perp_ecp)$
+/* RHS is 0*/
+
+/* Another form of equation 3 */
+E6_lhs_ecp: B_alpha_e * B_denom_ec^2 * (dpsi p_perp_ecp)$
+E6_rhs_ecp: (dphi_iota_dchi (B_psi_ecp * (1-Delta_ecp))) * B_denom_ec
+    + (Delta_ecp-1) * (dpsi B_alpha_e - (dpsi iota_e)*B_theta_ecp) * B_denom_ec
+    + 1/2 * B_alpha_e * Delta_ecp * (dpsi B_denom_ec)$
+
+matchdeclare(any_a, true);
+
+remove_const_diff(expr):= block([out:expr],
+    out: subst(0, diff(B_denom_coef_c[0],chi,1), out),
+    out: subst(0, diff(B_denom_coef_c[0],chi,2), out),
+    out: subst(0, diff(Delta_coef_cp[0],chi,1), out),
+    out: subst(0, diff(Delta_coef_cp[0],chi,2), out),
+    out: subst(0, diff(p_perp_coef_cp[0],chi,1), out),
+    out: subst(0, diff(p_perp_coef_cp[0],chi,2), out),
+    out: subst(0, diff(Delta_coef_cp[0],chi, 1, phi, 1), out),
+    out: subst(0, diff(p_perp_coef_cp[0],chi, 1, phi, 1), out),
+    out: subst(0, diff(dl_p,phi, 1), out),
+    out: subst(0, diff(dl_p,phi, 2), out),
+    ratsimp(out)
+);

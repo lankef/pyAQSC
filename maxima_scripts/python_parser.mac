@@ -45,6 +45,7 @@ readable_string(expr):=block(
     return(string(expr))
 )$
 
+change_to_parallel(string_in):=ssubst("py_sum_parallel","py_sum",out_string)$
 /* Indent every lines in string. For printf*/
 indent(string_in):= sconcat("    ", ssubst("~%    ","~%",string_in))$
 
@@ -162,8 +163,8 @@ block([
         out_string: sconcat(out_string, arg[2])
     ),
 
-    expr_spring: readable_string(output),
-    out_string: sconcat(out_string, sconcat("~%~%out = ", expr_spring)),
+    expr_string: readable_string(output),
+    expr_string: sconcat("~%~%out = ", expr_string),
 
     /* Removing marking for py_sums */
     out_string_list: split(out_string, "py_sum_marked["),
@@ -172,7 +173,14 @@ block([
         out_string: sconcat(out_string, "py_sum", substring(out_string_list[i], 1+sposition("]", out_string_list [i])))
     ),
 
-    return(out_string)
+    /* Removing marking for py_sums on the outmost layer */
+    expr_string_list: split(expr_string, "py_sum_marked["),
+    expr_string: first(expr_string_list),
+    for i: 2 thru length(expr_string_list) do(
+        expr_string: sconcat(expr_string, "py_sum_parallel", substring(expr_string_list[i], 1+sposition("]", expr_string_list [i])))
+    ),
+
+    return(sconcat(out_string,expr_string))
 )$
 
 /* For near axis expansion, fixes some operations. */
@@ -191,7 +199,7 @@ edit_string_py(in_string):= block(
 /* arguments: a string of arguments */
 package(string, name, arguments):=sconcat(
     "from math import floor, ceil~%",
-    "from math_utilities import is_seq, py_sum, is_integer, diff~%",
+    "from math_utilities import *~%",
     "import chiphifunc~%",
     pack_method(string, name, arguments)
 );
