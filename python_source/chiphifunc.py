@@ -10,6 +10,7 @@ from matplotlib import pyplot as plt
 import scipy.integrate
 import scipy.interpolate
 from joblib import Parallel, delayed
+from functools import lru_cache # import functools for caching
 
 # TODO: Add filtering to dphi?
 
@@ -33,7 +34,7 @@ noise_level_periodic = 1e-10
 low_pass_freq=50
 
 # Default diff and integration modes can be modified.
-diff_mode = 'fft' # available: pseudo_spectral, finite_difference, fft
+diff_mode = 'pseudo_spectral' # available: pseudo_spectral, finite_difference, fft, spline
 integral_mode = 'fft' # available: spline, simpson, fft
 non_periodic_integral_mode = 'spline' # available: spline, simpson, fft
 
@@ -179,6 +180,7 @@ class ChiPhiFunc:
     # even*even -> even
     # odd*odd -> odd
     # even*odd -> even
+
     def __mul__(self, other):
 
         # When summing two ChiPhiFunc's, only allows summation
@@ -243,6 +245,7 @@ class ChiPhiFunc:
                        'Therefore, ChiPhiFunc@B is not supported.')
 
     # self^n, based on self.pow().
+    @lru_cache(maxsize=1000)
     def __pow__(self, other):
         if not np.isscalar(other):
             raise TypeError('**\'s other argument must be a non-negative scalar integer.')
@@ -255,7 +258,7 @@ class ChiPhiFunc:
 
         return self.pow(other)
 
-    # Multiplication with a ChiPhiFunc of the same type. Abstract method.
+    # Multiplication with a ChiPhiFunc of the same type. Abstract method.\
     def multiply(a, b, div=False):
         raise NotImplementedError()
 
@@ -263,10 +266,11 @@ class ChiPhiFunc:
     # derivatives. Implemented through dchi_op
     def dchi(self, order=1):
         out = self.content
+        len_chi = len(out)
         if order<0:
             raise AttributeError('dchi order must be positive')
-        for i in range(order):
-            out = dchi_op(self.get_shape()[0], False) @ out
+        mode_i = (1j*np.arange(-len_chi+1,len_chi+1,2)[:,None])**order
+        out = mode_i * out
         return(type(self)(out))
 
     def dphi(self, order=1, mode='default'):
@@ -353,25 +357,36 @@ class ChiPhiFunc:
         return(ChiPhiFuncGrid(np.fft.fft(self.content, axis=1)))
 
     # Plot a period in both chi and phi
-    def display(self, complex = False):
+    def display(self, complex = False, size=(100,100), avg_clim = False):
         plt.rcParams['figure.figsize'] = [4,3]
         # This would trigger an error for most complex,
         # static methods used for evaluation.
-        chi = np.linspace(0, 2*np.pi*0.99, 100)
-        phi = np.linspace(0, 2*np.pi*0.99, 100)
+        chi = np.linspace(0, 2*np.pi*0.99, size[0])
+        phi = np.linspace(0, 2*np.pi*0.99, size[1])
         f = self.get_lambda()
-        plt.pcolormesh(chi, phi, np.real(f(chi, phi.reshape(-1,1))))
+        eval = f(chi, phi.reshape(-1,1))
+        plt.pcolormesh(chi, phi, np.real(eval))
         plt.title('ChiPhiFunc, real component')
         plt.xlabel('chi')
         plt.ylabel('phi')
-        plt.colorbar()
+        if avg_clim:
+            clim = np.average(np.abs(np.real(eval)))
+            plt.clim(-clim, clim)
+            plt.colorbar(extend='both')
+        else:
+            plt.colorbar()
         plt.show()
         if complex:
-            plt.pcolormesh(chi, phi, np.imag(f(chi, phi.reshape(-1,1))))
+            plt.pcolormesh(chi, phi, np.imag(eval))
             plt.title('ChiPhiFunc, imaginary component')
             plt.xlabel('chi')
             plt.ylabel('phi')
-            plt.colorbar()
+            if avg_clim:
+                clim = np.average(np.abs(np.imag(eval)))
+                plt.clim(-clim, clim)
+                plt.colorbar(extend='both')
+            else:
+                plt.colorbar()
             plt.show()
 
     # JIT -----------------------------------------------------------------------------
@@ -502,6 +517,7 @@ class ChiPhiFuncNull(ChiPhiFunc):
 # invert_mode=True only used for int_chi(). Should be False by default,
 # but numba doesn't support default parameters.
 # -- Output: 2d matrix.
+
 @njit(complex128[:,:](int64, boolean))
 def dchi_op(len_chi, invert=False):
     ind_chi = len_chi-1
@@ -541,21 +557,21 @@ def fourier_to_exp_op(n_dim):
         ])
     return util_matrix
 
-# Remove the center row of a content array.
-def remove_center(content_in):
-    return(content_in[np.abs(np.arange(len(content_in))+0.5-len(content_in)/2)>=1])
+# # Remove the center row of a content array.
+# def remove_center(content_in):
+#     return(content_in[np.abs(np.arange(len(content_in))+0.5-len(content_in)/2)>=1])
 
 # Add a given element at the center of a content array.
-def add_center(content_in, center_elem):
-    if len(content_in)%2!=0:
-        raise AttributeError('add_zero_center input must be of even length')
-    shape = list(content_in.shape)
-    shape[0] = shape[0]+1
-    out = np.zeros(shape)
-    out[:len(content_in)//2] = content_in[:len(content_in)//2]
-    out[-len(content_in)//2:] = content_in[-len(content_in)//2:]
-    out[-len(content_in)//2-1] = center_elem
-    return(out)
+# def add_center(content_in, center_elem):
+#     if len(content_in)%2!=0:
+#         raise AttributeError('add_zero_center input must be of even length')
+#     shape = list(content_in.shape)
+#     shape[0] = shape[0]+1
+#     out = np.zeros(shape)
+#     out[:len(content_in)//2] = content_in[:len(content_in)//2]
+#     out[-len(content_in)//2:] = content_in[-len(content_in)//2:]
+#     out[-len(content_in)//2-1] = center_elem
+#     return(out)
 
 # two representations for phi dependence are implemented: Fourier and grid.
 
@@ -602,6 +618,7 @@ class ChiPhiFuncGrid(ChiPhiFunc):
     # Then do pointwise product.
     # -- Input: self and another ChiPhiFuncGrid
     # -- Output: a new ChiPhiFuncGrid
+    @lru_cache(maxsize=1000)
     def multiply(self, other, div = False):
         a, b = self.stretch_phi_to_match(other)
         if div:
@@ -613,6 +630,7 @@ class ChiPhiFuncGrid(ChiPhiFunc):
     # Wrapper for mul_grid_jit. Handles int power.
     # -- Input: self and an int
     # -- Output: a new ChiPhiFuncGrid
+    @lru_cache(maxsize=1000)
     def pow(self, int_pow):
         new_content = self.content.copy()
         for i in range(int_pow-1):
@@ -685,12 +703,16 @@ class ChiPhiFuncGrid(ChiPhiFunc):
     # Math ---------------------------------------------------------------
     def integrate_chi(self, ignore_mode_0=False):
         len_chi = self.get_shape()[0]
-        if len_chi%2==1\
-        and np.max(np.abs(self.content[len_chi//2]))>noise_level_int\
-        and not ignore_mode_0:
-            raise ValueError('Integrand has a significant chi-independent '\
-            'component!')
-        return(type(self)(dchi_op(len_chi, True) @ self.content))
+        temp = np.arange(-len_chi+1,len_chi+1,2,dtype=np.float32)[:,None]
+        if len_chi%2==1:
+            temp[len(temp)//2]=np.inf
+            if np.max(np.abs(self.content[len_chi//2]))>noise_level_int\
+            and not ignore_mode_0:
+                raise ValueError('Integrand has a significant chi-independent '\
+                'component!')
+
+        mode_i = -1j/temp
+        return(type(self)(mode_i * self.content))
 
 
     # Used for solvability condition. phi-integrate a ChiPhiFuncGrid over 0 to
@@ -704,6 +726,7 @@ class ChiPhiFuncGrid(ChiPhiFunc):
     # over a period
     # mode='fft' uses FFT.
     # -- Output: a new ChiPhiFuncGrid
+    @lru_cache(maxsize=1000)
     def integrate_phi(self, periodic, mode = 'default'):
         # number of phi grids
         len_chi = self.get_shape()[0]
@@ -897,10 +920,14 @@ class ChiPhiFuncGrid(ChiPhiFunc):
                 ax2.set_title('constant')
                 ax3 = plt.subplot(133)
                 ax3.set_title('sin')
-                if colormap_mode:
+                if colormap_mode and len(fourier.content) != 1:
                     modesin = np.linspace(2, len(fourier.content)-1, len(fourier.content)//2)
                     modecos = np.linspace(len(fourier.content)-1, 2, len(fourier.content)//2)
                     phi = np.linspace(0, 2*np.pi*(1-1/len_phi), len_phi)
+                    print('phi',phi.shape)
+                    print('modesin',modesin.shape)
+                    print('modecos',modecos.shape)
+                    print('np.real(fourier.content)[len(fourier.content)//2+1:]', np.real(fourier.content)[len(fourier.content)//2+1:].shape)
                     ax1.pcolormesh(phi, modesin, np.real(fourier.content)[len(fourier.content)//2+1:])
                     ax3.pcolormesh(phi, modecos, np.real(fourier.content)[:len(fourier.content)//2])
                 else:
@@ -915,9 +942,10 @@ class ChiPhiFuncGrid(ChiPhiFunc):
             ax2.set_title('Imaginary')
 
             if colormap_mode:
-                mode = np.linspace(-len(fourier.content)+1, len(fourier.content)-1, len(fourier.content)//2)
+                mode = np.linspace(-len(self.content)+1, len(self.content)-1, len(self.content))
                 phi = np.linspace(0, 2*np.pi*(1-1/len_phi), len_phi)
-                ax1.pcolormesh(phi, mode, np.real(fourier.content)[len(fourier.content)//2:])
+                ax1.pcolormesh(phi, mode, np.real(self.content))
+                ax2.pcolormesh(phi, mode, np.imag(self.content))
             else:
                 ax1.plot(phis,np.real(self.content).T)
                 ax2.plot(phis,np.imag(self.content).T)
@@ -1810,6 +1838,10 @@ def solve_integration_factor(coeff, coeff_dp, f, \
             raise AttributeError('integral_mode not recognized.')
         # Solving with intermediate p by integrating factor
 
+        print('int_p')
+        print(int_p)
+        print('f_looped')
+        print(f_looped)
         int_p_2pi = np.array([int_p[:,-1]]).T
         exp_neg2pi = np.exp(-int_p_2pi)
         exp_phi = np.exp(int_p)
@@ -1831,7 +1863,10 @@ def solve_integration_factor(coeff, coeff_dp, f, \
 
         integration_factor = integration_factor*exp_negphi
         integration_factor_2pi = integration_factor_2pi*exp_neg2pi
-
+        print('exp_neg2pi')
+        print(exp_neg2pi)
+        print('integration_factor')
+        print(integration_factor)
         # If the integral of p is periodic, I is periodic.
         # The BVP cannot get solved.
         if np.average(np.abs(int_p[:,0] - int_p[:,-1])) < np.max(f_looped)*noise_level_periodic:
@@ -1839,7 +1874,9 @@ def solve_integration_factor(coeff, coeff_dp, f, \
             print('returning integration factor.')
             c1=0
         else:
-            c1 = integration_factor_2pi/(1-exp_neg2pi)
+            # exp_neg2pi may contain 1's.
+            exp_neg2pi[exp_neg2pi == 1] = np.inf
+            c1=integration_factor_2pi/(1-exp_neg2pi)
         out = c1*exp_negphi+integration_factor
         out = out[:,:-1]
         return(out*f_eff_scaling, 0)

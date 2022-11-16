@@ -6,6 +6,7 @@ from numba import int32, bool_, float32
 import scipy.fftpack
 import chiphifunc
 import warnings
+from functools import lru_cache
 
 n_jobs = 8
 
@@ -91,10 +92,13 @@ def diff_backend(y, x_name, order):
     return(out)
 
 # Maxima sometimes merges a few diff's together.
+@lru_cache(maxsize=1000)
 def diff(y, x_name1, order1, x_name2=None, order2=None):
     out = diff_backend(y, x_name1, order1)
     if x_name2 is not None:
         out = diff_backend(out, x_name2, order2)
+    if type(out) is chiphifunc.ChiPhiFuncGrid:
+        out=out#.filter() # TODO: REPLACE WITH REGULARITY
     return(out)
 
 # integrate over chi.
