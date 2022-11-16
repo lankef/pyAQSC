@@ -97,13 +97,13 @@ def diff(y, x_name1, order1, x_name2=None, order2=None):
     out = diff_backend(y, x_name1, order1)
     if x_name2 is not None:
         out = diff_backend(out, x_name2, order2)
-    if type(out) is chiphifunc.ChiPhiFuncGrid:
+    if type(out) is chiphifunc.ChiPhiFunc:
         out=out#.filter() # TODO: REPLACE WITH REGULARITY
     return(out)
 
 # integrate over chi.
 def int_chi(y):
-    if isinstance(y, chiphifunc.ChiPhiFuncGrid):
+    if isinstance(y, chiphifunc.ChiPhiFunc):
         return(y.integrate_chi())
     elif y == 0:
         return(0)

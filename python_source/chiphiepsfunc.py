@@ -95,6 +95,6 @@ class ChiPhiEpsFunc:
             if np.isscalar(item):
                 chiphifunc_list.append(item)
             else:
-                chiphifunc_list.append(chiphifunc.ChiPhiFuncGrid(item))
+                chiphifunc_list.append(chiphifunc.ChiPhiFunc(item))
         out_chiphiepsfunc = ChiPhiEpsFunc(chiphifunc_list)
         return(out_chiphiepsfunc)
