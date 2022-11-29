@@ -12,8 +12,10 @@ import scipy.interpolate
 from joblib import Parallel, delayed
 from functools import lru_cache # import functools for caching
 
-# TODO: Add filtering to dphi?
+# Filtering need to be used with caution since there's no explicit regularity
+# constraint for phi dependence.
 
+# For error throwing.
 # integrate_chi() should not be run on a ChiPhiFunc with a chi-independent component,
 # because this produces a non-periodic function. However, zero-checking the
 # component is not feasible, because cancellation is often not exact in numerical
@@ -36,7 +38,7 @@ low_pass_freq=50
 # Default diff and integration modes can be modified.
 diff_mode = 'pseudo_spectral' # available: pseudo_spectral, finite_difference, fft, spline
 integral_mode = 'fft' # available: spline, simpson, fft
-non_periodic_integral_mode = 'spline' # available: spline, simpson, fft
+non_periodic_integral_mode = 'fft' # available: spline, simpson, fft
 
 # Threshold for p amplitude to use asymptotic expansion for y'+py=f
 asymptotic_threshold = 30
@@ -780,6 +782,7 @@ class ChiPhiFunc:
     # v_source_A(chi, phi) * va_{n+1}(chi, phi) = v_rhs{n}(chi, phi).
     # When Y_mode=True, solves
     # wrapper for jit-enabled method batch_underdetermined_degen_jit.
+    # Necessary because the equation for Yn's outmost components exactly cancel.
     # -- Input --
     # v_source_A, v_rhs: ChiPhiFunc,
     # rank_rhs: int, 'n' in the equation above
@@ -849,14 +852,19 @@ class ChiPhiFunc:
     # v_source_A(chi, phi) * va_{n}(chi, phi) = v_rhs{n}(chi, phi).
     # You can also think of this as "/" with chi-dependent "other" argument.
     # wrapper for jit-enabled method batch_degen_jit.
-    def solve_degen(v_source_A, v_rhs, rank_rhs):
+    def solve_degen(v_source_A, v_source_B, v_rhs, rank_rhs):
 
         # checking input types
         if type(v_source_A) is not ChiPhiFunc\
+            or type(v_source_B) is not ChiPhiFunc\
             or type(v_rhs) is not ChiPhiFunc:
             raise TypeError('ChiPhiFunc.solve_underdetermined: '\
                             'v_source_A, v_rhs, vai should all be ChiPhiFunc.')
 
+
+        v_source_A_content = v_source_A.content
+        v_source_B_content = v_source_B.content
+        v_rhs_content = v_rhs.content
         if v_source_A.get_shape()[0] + rank_rhs - 1 != v_rhs.get_shape()[0]:
             print("v_source_A shape:", v_source_A.get_shape())
             print("v_rhs shape:", v_rhs.get_shape())
@@ -867,13 +875,13 @@ class ChiPhiFunc:
             # LHS and RHS's even and oddness.
             v_rhs_content = ChiPhiFunc.add_jit(
                 v_rhs_content,
-                np.zeros((v_source_A.get_shape()[0]+rank_rhs-1, v_rhs.get_shape()[1]), dtype=np.complex128)
+                np.zeros((v_source_A.get_shape()[0]+rank_rhs-1, v_rhs.get_shape()[1]), dtype=np.complex128),
+                1
             )
-        v_source_A_content = v_source_A.content
-        v_rhs_content = v_rhs.content
 
         va_content = batch_degen_jit(
             v_source_A.content,
+            v_source_B.content,
             v_rhs.content,
             rank_rhs
         )
@@ -1418,12 +1426,14 @@ def batch_ynp1_jit(v_source_A, v_source_B, v_rhs, rank_rhs, i_free, vai, ignore_
 #     a + rank_rhs - 1 = m
 # -- Output --
 # va: 2d matrix, content of ChiPhiFunc. Has #dim = rank_rhs
-@njit(complex128[:,:](complex128[:,:], complex128[:,:], int64), parallel=True)
-def batch_degen_jit(v_source_A, v_rhs, rank_rhs):
+@njit(complex128[:,:](complex128[:,:], complex128[:,:], complex128[:,:], int64), parallel=True)
+def batch_degen_jit(v_source_A, v_source_B, v_rhs, rank_rhs):
 #     if type(v_source_A) is not ChiPhiFunc or type(v_source_B) is not ChiPhiFunc:
 #         raise TypeError('batch_underdetermined_deconv: input should be ChiPhiFunc.')
     A_slices = np.ascontiguousarray(v_source_A.T) # now the axis 0 is phi grid
+    B_slices = np.ascontiguousarray(v_source_B.T) # now the axis 0 is phi grid
     v_rhs_slices = np.ascontiguousarray(v_rhs.T) # now the axis 0 is phi grid
+    dchi_matrix = np.ascontiguousarray(dchi_op(rank_rhs, False))
     # axis 0 is phi grid, axis 1 is chi mode
     va_transposed = np.zeros((len(A_slices), rank_rhs), dtype = np.complex128)
     if len(A_slices) != len(v_rhs_slices):
@@ -1432,7 +1442,9 @@ def batch_degen_jit(v_source_A, v_rhs, rank_rhs):
         raise ValueError('batch_underdetermined_deconv: #dim_A + rank_rhs - 1 = #dim_v_rhs must hold.')
     for i in prange(A_slices.shape[0]):
         A_conv_matrix_i = conv_matrix(A_slices[i], rank_rhs)
-        va_transposed[i, :] = solve_degenerate_jit(A_conv_matrix_i,v_rhs_slices[i])
+        B_conv_matrix_i = np.ascontiguousarray(conv_matrix(B_slices[i], rank_rhs))
+        total_matrix = A_conv_matrix_i + B_conv_matrix_i@dchi_matrix
+        va_transposed[i, :] = solve_degenerate_jit(total_matrix,v_rhs_slices[i])
     return va_transposed.T
 
 ''' IV. Solving linear PDE in phi grids '''

@@ -50,12 +50,12 @@ def display(array, complex=True):
         plt.show()
 
 # Plots the content of two ChiPhiFunc's and compare.
-def compare_chiphifunc(A, B, fourier_mode=True, simple_mode = True):
+def compare_chiphifunc(A, B, fourier_mode=True, simple_mode = True, colormap_mode=False):
     if not simple_mode:
         print('A')
-        A.display_content(fourier_mode=fourier_mode)
+        A.display_content(fourier_mode=fourier_mode, colormap_mode=colormap_mode)
         print('B')
-        B.display_content(fourier_mode=fourier_mode)
+        B.display_content(fourier_mode=fourier_mode, colormap_mode=colormap_mode)
 
 
     diff_AB = A-B
