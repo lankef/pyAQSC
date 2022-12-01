@@ -54,11 +54,34 @@ def iterate_Yn_cp(n_eval,
     B_psi_coef_cp,
     B_theta_coef_cp,
     B_alpha_coef,
-    kap_p, dl_p, tau_p,
+    B_denom_coef_c,
+    kap_p, dl_p, tau_p, eta,
     iota_coef,
-    Yn_free):
+    Yn_free=np.nan,
+    Yn1s_p=np.nan):
     # Getting coeffs
     # Both uses B_alpha0 and X1 only
+    if Yn_free==np.nan and n_eval%2==0:
+        raise AttributeError('Yn_free must be provided for even orders')
+    elif Yn1s_p==np.nan and n_eval%2==1:
+        raise AttributeError('Yn1s_p must be provided for even orders')
+
+    if n_eval%2==1:
+        Yn_free, _= iterate_Yn1c_p(0,
+            n_eval=n_eval,
+            X_coef_cp=X_coef_cp,
+            Y_coef_cp=Y_coef_cp,
+            Z_coef_cp=Z_coef_cp,
+            iota_coef=iota_coef,
+            tau_p=tau_p,
+            dl_p=dl_p,
+            kap_p=kap_p,
+            eta=eta,
+            B_denom_coef_c=B_denom_coef_c,
+            B_alpha_coef=B_alpha_coef,
+            B_psi_coef_cp=B_psi_coef_cp,
+            B_theta_coef_cp=B_theta_coef_cp,
+            Yn1s_p=Yn1s_p)
 
     coef_a = parsed.eval_ynp1.coef_a(n_eval-1, B_alpha_coef, X_coef_cp)
     coef_b = parsed.eval_ynp1.coef_b(B_alpha_coef, X_coef_cp)
@@ -93,16 +116,15 @@ def iterate_Yn_cp(n_eval,
 # Requires:
 # \Lambda_n (X_{n-1}, Y_{n-1}, Z_{n}, \iota_{(n-3)/2}),
 # B_{\theta n}, B_0, B_{\alpha 0}$
-def iterate_iota_nm1b2(n,
+def iterate_iota_nm1b2(sigma_tilde_n0, n_eval,
     X_coef_cp, Y_coef_cp, Z_coef_cp,\
                tau_p, dl_p, kap_p,\
                iota_coef, eta,\
-               B_denom_coef_c, B_alpha_coef, B_theta_coef_cp):
+               B_denom_coef_c, B_alpha_coef, B_theta_coef_cp, Yn1s_p):
 
-    if n%2!=1:
+    if n_eval%2!=1:
         raise ValueError("n must be even to evaluate iota_{(n-1)/2}")
 
-    Yn1s_p, Yn1c_p = Y_coef_cp[n].get_Yn1s_Yn1c()
     Y11s_p, Y11c_p = Y_coef_cp[1].get_Yn1s_Yn1c()
     _, X11c_p = X_coef_cp[1].get_Yn1s_Yn1c()
 
@@ -110,20 +132,19 @@ def iterate_iota_nm1b2(n,
 
     # Note: mask n leaves nth-order as the last order in.
     # Xi requires Yn, Zn+1=0. This means mask(n-1) and mask(n)
-    Xi_n_p = parsed.eval_full_xi_n.eval_full_Xi_n_p(
-        n, X_coef_cp, Y_coef_cp.mask(n-1).zero_append(), Z_coef_cp.mask(n).zero_append(), \
-        kap_p, dl_p, tau_p, iota_coef.mask((n-1)//2-1).zero_append()).get_constant()
+    Xi_n_p = parsed.eval_full_Xi_n_p(
+        n_eval, X_coef_cp, Y_coef_cp.mask(n_eval-1).zero_append(), Z_coef_cp.mask(n_eval).zero_append(), \
+        kap_p, dl_p, tau_p, iota_coef.mask((n_eval-1)//2-1).zero_append()).get_constant()
     iota_0 = iota_coef[0]
 
     # Evaluates exp(2*iota_bar_0*integral_of_sigma_to_phi').
     exponent = 2*iota_0*sigma_p.integrate_phi(periodic = False)
     exp_factor = exponent.exp()
     exponent_2pi = 2*iota_0*sigma_p.integrate_phi(periodic = True)
-    exp_factor_2pi = np.e**exponent_2pi
-
-    # Defnition. On pg 4 above (8)
-    sigma_n_tilde   = Yn1c_p/Y11s_p
-    sigma_n_tilde_0 = sigma_n_tilde.get_phi_zero()
+    if isinstance(exponent_2pi,ChiPhiFunc):
+        exp_factor_2pi = exponent_2pi.exp() # the result was a float
+    else:
+        exp_factor_2pi = np.e**exponent_2pi # the result was a float
 
     # Yn1s_p MUST be evaluated with iota_nm1b2=0!
     Lambda_n_p_tilde = Lambda_n_p(Yn1s_p, Y11s_p, Y11c_p, X11c_p, iota_0, tau_p, dl_p, sigma_p, Xi_n_p)
@@ -136,15 +157,16 @@ def iterate_iota_nm1b2(n,
 
     # B_{\theta n 0}. The whole term might be 0 depending on init conds (current free?)
     try:
-        B_theta_n0 = B_theta_coef_cp[n].get_constant()
+        B_theta_n0 = B_theta_coef_cp[n_eval].get_constant()
     except AttributeError:
-        B_theta_n0 = B_theta_coef_cp[n]
+        B_theta_n0 = B_theta_coef_cp[n_eval]
 
     # The denominator,
     denom = (exp_factor*(1+sigma_p**2+(eta/kap_p)**4/4/B0)).integrate_phi(periodic = True)
+
     return(
         ((exp_factor*(Lambda_n_p_tilde+2*B_alpha0*B0*B_theta_n0/(Y11s_p**2))).integrate_phi(periodic = True)
-        + sigma_n_tilde_0*(1-exp_factor_2pi))/denom
+        + sigma_tilde_n0*(1-exp_factor_2pi))/denom
     )
 
 # Evaluates Zn,
@@ -173,44 +195,46 @@ def iterate_Zn_cp(
         iota_coef = iota_coef
     ).cap_m(n_eval))
 
+def iterate_Yn1s_p(n_eval,
+    X_coef_cp, Y_coef_cp, Z_coef_cp,
+    B_psi_coef_cp, B_theta_coef_cp,
+    B_alpha_coef,
+    kap_p, dl_p, tau_p, eta,
+    iota_coef):
+    return(parsed.evaluate_ynp1s1_full(n_eval-1,
+        X_coef_cp,
+        # Y_coef_cp.mask(n_eval) also works
+        Y_coef_cp.mask(n_eval-1).zero_append(),
+        Z_coef_cp,
+        B_psi_coef_cp,
+        B_theta_coef_cp,
+        B_alpha_coef,
+        kap_p, dl_p, tau_p, eta,
+        iota_coef).get_constant())
+
 # Solving for Yn1c for odd orders
-def iterate_Yn1c_p(n, X_coef_cp, Y_coef_cp, Z_coef_cp,\
+def iterate_Yn1c_p(sigma_tilde_n0,\
+                  n_eval, X_coef_cp, Y_coef_cp, Z_coef_cp,\
                   iota_coef,\
                   tau_p, dl_p, kap_p, eta,\
                   B_denom_coef_c, B_alpha_coef,
-                  B_psi_coef_cp, B_theta_coef_cp, B_theta_np10):
-
-    Yn1s_p = parsed.evaluate_ynp1s1_full(n-1,
-    X_coef_cp,
-    Y_coef_cp.mask(n-1).zero_append(),
-    Z_coef_cp,
-    B_psi_coef_cp,
-    B_theta_coef_cp,
-    B_alpha_coef,
-    kap_p, dl_p, tau_p, eta,
-        iota_coef).get_constant()
-    #
-    # print('iterate_Yn1c_p: Yn1s_p')
-    # Yn1s_p.display_content()
+                  B_psi_coef_cp, B_theta_coef_cp, Yn1s_p):
 
     Y11s_p, Y11c_p = Y_coef_cp[1].get_Yn1s_Yn1c()
     _, X11c_p = X_coef_cp[1].get_Yn1s_Yn1c()
 
     # Note the difference with iota_nm1b2: iota(n-1)//2=0 is no longer applied here.
     Xi_n_p_no_iota_mask = parsed.eval_full_Xi_n_p(
-        n, X_coef_cp, Y_coef_cp.mask(n-1).zero_append(), Z_coef_cp.mask(n).zero_append(), \
+        n_eval, X_coef_cp, Y_coef_cp.mask(n_eval-1).zero_append(), Z_coef_cp.mask(n_eval).zero_append(), \
         kap_p, dl_p, tau_p, iota_coef).get_constant()
     Xi_n_p = parsed.eval_full_Xi_n_p(
-        n, X_coef_cp, Y_coef_cp.mask(n-1).zero_append(), Z_coef_cp.mask(n).zero_append(), \
-        kap_p, dl_p, tau_p, iota_coef.mask((n-1)//2-1).zero_append()).get_constant()
+        n_eval, X_coef_cp, Y_coef_cp.mask(n_eval-1).zero_append(), Z_coef_cp.mask(n_eval).zero_append(), \
+        kap_p, dl_p, tau_p, iota_coef.mask((n_eval-1)//2-1).zero_append()).get_constant()
 
     iota_0 = iota_coef[0]
-    B0 = B_denom_coef_c[0]
-    B_alpha0 = B_alpha_coef[0]
 
     sigma_p = Y11c_p/Y11s_p # Definition. On pg 4 below (6)
     Lambda_n_p_eval = Lambda_n_p(Yn1s_p, Y11s_p, Y11c_p, X11c_p, iota_0, tau_p, dl_p, sigma_p, Xi_n_p_no_iota_mask)
-
 
     exponent = 2*iota_0*sigma_p.integrate_phi(periodic = False)
     exp_factor = exponent.exp()
@@ -222,16 +246,21 @@ def iterate_Yn1c_p(n, X_coef_cp, Y_coef_cp, Z_coef_cp,\
     # B_{\alpha 0}
     B_alpha0 = B_alpha_coef[0]
 
-    print('avg RHS',np.average((Lambda_n_p_eval+2*B_alpha0*B0*B_theta_np10/(Y11s_p**2)).content))
-    print('exp_factor_neg')
-    # exp_factor_neg.display_content()
-    sigma_tilde_n = exp_factor_neg*((\
+    # B_{\theta n 0}. The whole term might be 0 depending on init conds (current free?)
+    try:
+        B_theta_np10 = B_theta_coef_cp[n_eval+1].get_constant()
+    except AttributeError:
+        B_theta_np10 = B_theta_coef_cp[n_eval+1]
+
+    sigma_tilde_n = exp_factor_neg*(\
+        sigma_tilde_n0\
+        +(\
             exp_factor\
             *(Lambda_n_p_eval+2*B_alpha0*B0*B_theta_np10/(Y11s_p**2))\
         ).integrate_phi(periodic=False)\
     )
 
-    return(sigma_tilde_n, Lambda_n_p_eval)
+    return(sigma_tilde_n*Y11s_p, Lambda_n_p_eval)
 
 # Evaluates Yn1s for odd n's.
 # X_{n}, Y_{n-1}, Z_{n-1},
@@ -522,7 +551,7 @@ class Equilibrium:
         B_psi_nm20,
         B_alpha_nb2,
         B_denom_nm1, B_denom_n,
-        Y_free_nm1, Y_free_n,
+        Y_free_n,
         p_perp_nm1=0, p_perp_n=0,
         Delta_nm1=0, Delta_n=0,
         n_eval=None, filter=False, filter_mode='low_pass', filter_arg=100):
@@ -592,12 +621,19 @@ class Equilibrium:
         # X_{n-1}, Y_{n-1}, Z_{n-1},
         # B_{\theta n-1}, B_0,
         # B_{\alpha 0}, \bar{\iota}_{(n-2)/2 or (n-3)/2}$
-        B_psi_nm3 = iterate_dc_B_psi_nm2(n_eval-1,
-            X_coef_cp, Y_coef_cp, Z_coef_cp,
-            B_theta_coef_cp, B_psi_coef_cp,
-            B_alpha_coef, B_denom_coef_c,
-            kap_p, dl_p, tau_p,
-            iota_coef).integrate_chi(ignore_mode_0=True)
+        B_psi_nm3 = iterate_dc_B_psi_nm2(n_eval=n_eval-1,
+            X_coef_cp=X_coef_cp,
+            Y_coef_cp=Y_coef_cp,
+            Z_coef_cp=Z_coef_cp,
+            B_theta_coef_cp=B_theta_coef_cp,
+            B_psi_coef_cp=B_psi_coef_cp,
+            B_alpha_coef=B_alpha_coef,
+            B_denom_coef_c=B_denom_coef_c,
+            kap_p=kap_p,
+            dl_p=dl_p,
+            tau_p=tau_p,
+            iota_coef=iota_coef
+            ).integrate_chi(ignore_mode_0=True)
 
         self.noise['filter']['B_psi_coef_cp'].append(
             B_psi_nm3.noise_filter(filter_mode, filter_arg)
@@ -612,12 +648,18 @@ class Equilibrium:
         # B_{\alpha (n-2)/2 or (n-3)/2},
         # \iota_{(n-2)/2 or (n-3)/2}
         # \kappa, \frac{dl}{d\phi}, \tau
-        Znm1 = iterate_Zn_cp(n_eval-1,
-            X_coef_cp, Y_coef_cp, Z_coef_cp,
-            B_theta_coef_cp, B_psi_coef_cp,
-            B_alpha_coef,
-            kap_p, dl_p, tau_p,
-            iota_coef)
+        Znm1 = iterate_Zn_cp(n_eval=n_eval-1,
+            X_coef_cp=X_coef_cp,
+            Y_coef_cp=Y_coef_cp,
+            Z_coef_cp=Z_coef_cp,
+            B_theta_coef_cp=B_theta_coef_cp,
+            B_psi_coef_cp=B_psi_coef_cp,
+            B_alpha_coef=B_alpha_coef,
+            kap_p=kap_p,
+            dl_p=dl_p,
+            tau_p=tau_p,
+            iota_coef=iota_coef
+            )
         self.noise['filter']['Z_coef_cp'].append(
             Znm1.noise_filter(filter_mode, filter_arg)
         )
@@ -629,93 +671,149 @@ class Equilibrium:
         # X_{n-1}, Y_{n-1}, Z_n,
         # \iota_{(n-3)/2 or (n-2)/2},
         # B_{\alpha (n-1)/2 or n/2}.
-        Xnm1 = iterate_Xn_cp(n_eval-1,
-            X_coef_cp,
-            Y_coef_cp,
-            Z_coef_cp,
-            B_denom_coef_c,
-            B_alpha_coef,
-            kap_p, dl_p, tau_p,
-            iota_coef)
+        Xnm1 = iterate_Xn_cp(n_eval=n_eval-1,
+            X_coef_cp=X_coef_cp,
+            Y_coef_cp=Y_coef_cp,
+            Z_coef_cp=Z_coef_cp,
+            B_denom_coef_c=B_denom_coef_c,
+            B_alpha_coef=B_alpha_coef,
+            kap_p=kap_p,
+            dl_p=dl_p,
+            tau_p=tau_p,
+            iota_coef=iota_coef
+            )
         self.noise['filter']['X_coef_cp'].append(Xnm1.noise_filter(filter_mode, filter_arg))
         if filter:
             Xnm1 = Xnm1.filter(filter_mode, filter_arg)
         X_coef_cp.append(Xnm1)
 
+        Ynm11s_p = iterate_Yn1s_p(n_eval=n_eval-1,
+            X_coef_cp=X_coef_cp,
+            Y_coef_cp=Y_coef_cp,
+            Z_coef_cp=Z_coef_cp,
+            B_psi_coef_cp=B_psi_coef_cp,
+            B_theta_coef_cp=B_theta_coef_cp,
+            B_alpha_coef=B_alpha_coef,
+            kap_p=kap_p,
+            dl_p=dl_p,
+            tau_p=tau_p,
+            eta=eta,
+            iota_coef=iota_coef
+            )
+
+        iota_nm2b2 = iterate_iota_nm1b2(sigma_tilde_n0=0,
+            n_eval=n_eval-1,
+            X_coef_cp=X_coef_cp,
+            Y_coef_cp=Y_coef_cp,
+            Z_coef_cp=Z_coef_cp,
+            tau_p=tau_p,
+            dl_p=dl_p,
+            kap_p=kap_p,
+            iota_coef=iota_coef,
+            eta=eta,
+            B_denom_coef_c=B_denom_coef_c,
+            B_alpha_coef=B_alpha_coef,
+            B_theta_coef_cp=B_theta_coef_cp,
+            Yn1s_p=Ynm11s_p
+            )
+        iota_coef.append(iota_nm2b2)
+
         # Requires:
         # X_{n}, Y_{n-1}, Z_{n-1},
         # B_{\theta n-1}, B_{\psi n-3},
         # \iota_{(n-3)/2 or (n-4)/2}, B_{\alpha (n-1)/2 or (n-2)/2}
-        Ynm1 = iterate_Yn_cp(n_eval-1,
-            X_coef_cp,
-            Y_coef_cp,
-            Z_coef_cp,
-            B_psi_coef_cp,
-            B_theta_coef_cp,
-            B_alpha_coef,
-            kap_p, dl_p, tau_p,
-            iota_coef,
-            Y_free_nm1)
+        Ynm1 = iterate_Yn_cp(n_eval=n_eval-1,
+            X_coef_cp=X_coef_cp,
+            Y_coef_cp=Y_coef_cp,
+            Z_coef_cp=Z_coef_cp,
+            B_psi_coef_cp=B_psi_coef_cp,
+            B_theta_coef_cp=B_theta_coef_cp,
+            B_alpha_coef=B_alpha_coef,
+            B_denom_coef_c=B_denom_coef_c,
+            kap_p=kap_p,
+            dl_p=dl_p,
+            tau_p=tau_p,
+            eta=eta,
+            iota_coef=iota_coef,
+            # Yn_free=Y_free_nm1, Evaluated in Ynm1
+            Yn1s_p=Ynm11s_p
+            )
         self.noise['filter']['Y_coef_cp'].append(Ynm1.noise_filter(filter_mode, filter_arg))
         if filter:
             Ynm1 = Ynm1.filter(filter_mode, filter_arg)
         Y_coef_cp.append(Ynm1)
 
-        iota_nm2b2 = iterate_iota_nm1b2(n_eval-1,
-            X_coef_cp, Y_coef_cp, Z_coef_cp,\
-            tau_p, dl_p, kap_p,\
-            iota_coef, eta,\
-            B_denom_coef_c, B_alpha_coef, B_theta_coef_cp)
-        iota_coef.append(iota_nm2b2)
 
         # Order n_eval ---------------------------------------------------
         # no need to ignore_mode_0 for chi integral. This is an odd order.
-        B_psi_nm2 = iterate_dc_B_psi_nm2(n_eval,
-            X_coef_cp, Y_coef_cp, Z_coef_cp,
-            B_theta_coef_cp, B_psi_coef_cp,
-            B_alpha_coef, B_denom_coef_c,
-            kap_p, dl_p, tau_p,
-            iota_coef).integrate_chi(ignore_mode_0 = True)
+        B_psi_nm2 = iterate_dc_B_psi_nm2(n_eval=n_eval,
+            X_coef_cp=X_coef_cp,
+            Y_coef_cp=Y_coef_cp,
+            Z_coef_cp=Z_coef_cp,
+            B_theta_coef_cp=B_theta_coef_cp,
+            B_psi_coef_cp=B_psi_coef_cp,
+            B_alpha_coef=B_alpha_coef,
+            B_denom_coef_c=B_denom_coef_c,
+            kap_p=kap_p,
+            dl_p=dl_p,
+            tau_p=tau_p,
+            iota_coef=iota_coef
+            ).integrate_chi(ignore_mode_0 = True)
         B_psi_nm2.content[B_psi_nm2.get_shape()[0]//2] = B_psi_nm20
         self.noise['filter']['B_psi_coef_cp'].append(B_psi_nm2.noise_filter(filter_mode, filter_arg))
         if filter:
             B_psi_nm2 = B_psi_nm2.filter(filter_mode, filter_arg)
         B_psi_coef_cp.append(B_psi_nm2)
 
-        Zn = iterate_Zn_cp(n_eval,
-            X_coef_cp, Y_coef_cp, Z_coef_cp,
-            B_theta_coef_cp, B_psi_coef_cp,
-            B_alpha_coef,
-            kap_p, dl_p, tau_p,
-            iota_coef)
+        Zn = iterate_Zn_cp(n_eval=n_eval,
+            X_coef_cp=X_coef_cp,
+            Y_coef_cp=Y_coef_cp,
+            Z_coef_cp=Z_coef_cp,
+            B_theta_coef_cp=B_theta_coef_cp,
+            B_psi_coef_cp=B_psi_coef_cp,
+            B_alpha_coef=B_alpha_coef,
+            kap_p=kap_p,
+            dl_p=dl_p,
+            tau_p=tau_p,
+            iota_coef=iota_coef
+            )
         self.noise['filter']['Z_coef_cp'].append(Zn.noise_filter(filter_mode, filter_arg))
         if filter:
             Zn = Zn.filter(filter_mode, filter_arg)
         Z_coef_cp.append(Zn)
 
-        Xn = iterate_Xn_cp(n_eval,
-            X_coef_cp,
-            Y_coef_cp,
-            Z_coef_cp,
-            B_denom_coef_c,
-            B_alpha_coef,
-            kap_p, dl_p, tau_p,
-            iota_coef)
+        Xn = iterate_Xn_cp(n_eval=n_eval,
+            X_coef_cp=X_coef_cp,
+            Y_coef_cp=Y_coef_cp,
+            Z_coef_cp=Z_coef_cp,
+            B_denom_coef_c=B_denom_coef_c,
+            B_alpha_coef=B_alpha_coef,
+            kap_p=kap_p,
+            dl_p=dl_p,
+            tau_p=tau_p,
+            iota_coef=iota_coef
+            )
         self.noise['filter']['X_coef_cp'].append(Xn.noise_filter(filter_mode, filter_arg))
         if filter:
             Xn = Xn.filter(filter_mode, filter_arg)
         X_coef_cp.append(Xn)
 
-        Yn = iterate_Yn_cp(n_eval,
-            X_coef_cp,
-            Y_coef_cp,
-            Z_coef_cp,
-            B_psi_coef_cp,
-            B_theta_coef_cp,
-            B_alpha_coef,
-            kap_p, dl_p, tau_p,
-            iota_coef,
-            Y_free_n)
+        Yn = iterate_Yn_cp(n_eval=n_eval,
+            X_coef_cp=X_coef_cp,
+            Y_coef_cp=Y_coef_cp,
+            Z_coef_cp=Z_coef_cp,
+            B_psi_coef_cp=B_psi_coef_cp,
+            B_theta_coef_cp=B_theta_coef_cp,
+            B_alpha_coef=B_alpha_coef,
+            B_denom_coef_c=B_denom_coef_c,
+            kap_p=kap_p,
+            dl_p=dl_p,
+            tau_p=tau_p,
+            eta=eta,
+            iota_coef=iota_coef,
+            # Yn1s_p=Yn1s_p, Not needed
+            Yn_free=Y_free_n
+            )
         self.noise['filter']['Y_coef_cp'].append(Yn.noise_filter(filter_mode, filter_arg))
         if filter:
             Yn = Yn.filter(filter_mode, filter_arg)
