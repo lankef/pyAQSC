@@ -837,7 +837,7 @@ class ChiPhiFunc:
                 1 # Sign is 1
             )
 
-        va_content = tensor_ynp1(
+        va_content = tensor_solve_underdet_degen(
             v_source_A_content,
             v_source_B_content,
             v_rhs_content,
@@ -1220,7 +1220,8 @@ def finite_diff_matrix(stencil, n_dim):
 # Note: "vector" means a series of chi coefficients in this context.
 #
 # -- Input --
-# v_source_A: 2d matrix, content of ChiPhiFunc, #dim = a
+# v_source_A: (?, len_chi, len_phi)
+# v_source_B: (?, len_chi, len_phi)
 # v_rhs: 2d matrix, content of ChiPhiFunc. Should be #dim = m vector
 #     produced by convolution of a #dim = rank_rhs vector.
 # rank_rhs: int, rank of v_rhs.
@@ -1237,8 +1238,7 @@ def finite_diff_matrix(stencil, n_dim):
 #
 # -- Output --
 # va: 2d matrix, content of ChiPhiFunc. Has #dim = rank_rhs+1.
-# Modification of batch_underdetermined_degen_jit for solving (conv(a) + conv(b)@dchi)@Yn+1 = RHS - LHS(Yn+1 = 0).
-def tensor_ynp1(v_source_A, v_source_B, v_rhs, rank_rhs, i_free, vai, ignore_extra, Y_mode=True):
+def tensor_solve_underdet_degen(v_source_A, v_source_B, v_rhs, rank_rhs, i_free, vai, ignore_extra, Y_mode=True):
 
     # Checking dimensionality
     if len(v_source_A) + rank_rhs != len(v_rhs):
@@ -1276,7 +1276,7 @@ def tensor_ynp1(v_source_A, v_source_B, v_rhs, rank_rhs, i_free, vai, ignore_ext
     va_sln = tensor_solve_degenerate_underdetermined(total_matrices,\
                                          v_rhs, 0, vai, Y_mode)
     return va_sln
-    
+
 ''' IV. Solving linear PDE in phi grids '''
 
 ''' IV.1 Solving the periodic linear PDE (a + b * dphi + c * dchi) y = f(phi, chi) '''
