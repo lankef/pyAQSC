@@ -837,7 +837,7 @@ class ChiPhiFunc:
                 1 # Sign is 1
             )
 
-        va_content = tensor_solve_underdet_degen(
+        va_content = tensor_solve_A_B_dchi(
             v_source_A_content,
             v_source_B_content,
             v_rhs_content,
@@ -1215,7 +1215,7 @@ def finite_diff_matrix(stencil, n_dim):
         out_transposed[i] = np.roll(first_row, i)
     return(out_transposed.T)
 
-# For solving a*va = v_rhs, where va, vb have the same number of dimensions.
+# For solving (va+vb dchi)x = rhs, where va, vb have the same number of chi modes.
 # In the context below, "#dim" represents number of chi mode components.
 # Note: "vector" means a series of chi coefficients in this context.
 #
@@ -1238,7 +1238,7 @@ def finite_diff_matrix(stencil, n_dim):
 #
 # -- Output --
 # va: 2d matrix, content of ChiPhiFunc. Has #dim = rank_rhs+1.
-def tensor_solve_underdet_degen(v_source_A, v_source_B, v_rhs, rank_rhs, i_free, vai, ignore_extra, Y_mode=True):
+def tensor_solve_A_B_dchi(v_source_A, v_source_B, v_rhs, rank_rhs, i_free, vai, ignore_extra, Y_mode=True):
 
     # Checking dimensionality
     if len(v_source_A) + rank_rhs != len(v_rhs):
