@@ -40,9 +40,9 @@ noise_level_periodic = 1e-10
 low_pass_freq=50
 
 # Default diff and integration modes can be modified.
-diff_mode = 'pseudo_spectral' # available: pseudo_spectral, finite_difference, fft, spline
-integral_mode = 'fft' # available: spline, simpson, fft
-two_pi_integral_mode = 'simpson' # available: spline, simpson, fft
+diff_mode = 'pseudo_spectral' # aYn_freelable: pseudo_spectral, finite_difference, fft, spline
+integral_mode = 'fft' # aYn_freelable: spline, simpson, fft
+two_pi_integral_mode = 'simpson' # aYn_freelable: spline, simpson, fft
 
 # Threshold for p amplitude to use asymptotic expansion for y'+py=f
 asymptotic_threshold = 30
@@ -457,6 +457,15 @@ class ChiPhiFunc:
         # static methods used for evaluation.
         return(self.content.shape)
 
+    def mask_constant(self):
+        if self.get_shape()[0]%2!=1:
+            raise ValueError('Only even order coeffs have constant components')
+        new_content = self.content.copy()
+        new_content[len(new_content)//2] = np.zeros(new_content.shape[1])
+        return(ChiPhiFunc(new_content))
+
+
+
     # Returns the constant component.
     def get_constant(self):
         len_chi = self.get_shape()[0]
@@ -787,68 +796,108 @@ class ChiPhiFunc:
         return(util_matrix)
 
     ''' I.1.8 Deconvolution ("dividing" chi-dependent terms) '''
+
+    def get_O_O_einv_from_A_B(chiphifunc_A, chiphifunc_B, i_free, rank_rhs):
+
+        if not (type(chiphifunc_A) is ChiPhiFunc\
+            and type(chiphifunc_B) is ChiPhiFunc):
+            raise TypeError('Both of chiphifunc_A, chiphifunc_B '\
+                            'should be ChiPhiFunc. The actual types are:'
+                            +str(type(chiphifunc_A))+', '
+                            +str(type(chiphifunc_B)))
+
+        chiphifunc_A_content, chiphifunc_B_content = chiphifunc_A.stretch_phi_to_match(chiphifunc_B)
+
+        # generate the LHS operator O_matrices = (va conv + vb conv dchi)
+        O_matrices = 0
+        A_conv_matrices = conv_tensor(chiphifunc_A_content, rank_rhs+1)
+        O_matrices += A_conv_matrices
+
+        dchi_matrix = dchi_op(rank_rhs+1, False)
+        B_conv_matrices = conv_tensor(chiphifunc_B_content, rank_rhs+1)
+        O_matrices += np.einsum('ijk,jl->ilk',B_conv_matrices,dchi_matrix)
+
+        O_einv = tensor_inv_square_excluding_col(O_matrices, i_free)
+        O_einv = np.concatenate((O_einv[:i_free], np.zeros((1,O_einv.shape[1],O_einv.shape[2])), O_einv[i_free:]))
+        return(O_matrices, O_einv)
+
+
     # Solve under-determined degenerate system equivalent
-    # v_source_A(chi, phi) * va_{n+1}(chi, phi) = v_rhs{n}(chi, phi).
+    # chiphifunc_A(chi, phi) * y_{n+1}(chi, phi) = chiphifunc_rhs{n}(chi, phi).
     # When Y_mode=True, solves
     # wrapper for jit-enabled method batch_underdetermined_degen_jit.
     # Necessary because the equation for Yn's outmost components exactly cancel.
     # -- Input --
-    # v_source_A, v_rhs: ChiPhiFunc,
+    # chiphifunc_A (must be provided), chiphifunc_B, chiphifunc_rhs: ChiPhiFunc,
+    # chiphifunc_B can be nan.
     # rank_rhs: int, 'n' in the equation above
     # i_free: int, index of free var in va,
-    # vai: ChiPhiFunc with a single row, value of free component.
-    def solve_underdet_degen(v_source_A, v_source_B, v_rhs, rank_rhs, i_free, vai,
-        Y_mode = False, ignore_extra=False):
-        # Checking input validity
-        if type(v_source_A) is not ChiPhiFunc\
-            or type(v_source_B) is not ChiPhiFunc\
-            or type(v_rhs) is not ChiPhiFunc:
-            raise TypeError('ChiPhiFunc.solve_underdetermined: '\
-                            'v_source_A, v_rhs, should all be '\
-                            'ChiPhiFunc. The actual types are:'
-                            +str(type(v_source_A))+', '
-                            +str(type(v_rhs)))
+    # Yn_free: ChiPhiFunc with a single row, value of free component.
+    def solve_A_B_dchi_y(chiphifunc_A, chiphifunc_B, chiphifunc_rhs, rank_rhs, Yn_free):
+        # Checking input types
+        if not (type(chiphifunc_rhs) is ChiPhiFunc):
+            raise TypeError('chiphifunc_rhs should be ChiPhiFunc. The actual types are:'
+                            +str(type(chiphifunc_rhs)))
 
-        v_source_A_content, v_source_B_content = v_source_A.stretch_phi_to_match(v_source_B)
-        v_source_A_content, v_rhs_content = v_source_A.stretch_phi_to_match(v_rhs)
+        chiphifunc_A_content, chiphifunc_rhs_content = chiphifunc_A.stretch_phi_to_match(chiphifunc_rhs)
+        chiphifunc_A = ChiPhiFunc(chiphifunc_A_content)
+        len_chi = chiphifunc_rhs.get_shape()[0]
 
-        if type(vai) is not ChiPhiFunc:
-            if np.isscalar(vai):
-                vai_content = np.full((1,v_source_A_content.shape[1]),vai, dtype=np.complex128)
+        # Convertin constant Yn_free to ChiPhiFunc
+        if type(Yn_free) is not ChiPhiFunc:
+            if np.isscalar(Yn_free):
+                Yn_free_content = np.full((1,chiphifunc_A_content.shape[1]),Yn_free,dtype=np.complex128)
             else:
                 raise TypeError('ChiPhiFunc.solve_underdetermined: '\
-                                'vai is not scalar ChiPhiFunc. '\
-                                'The actual type is: '+str(type(vai)))
+                                'Yn_free is not scalar ChiPhiFunc. '\
+                                'The actual type is: '+str(type(Yn_free)))
         else:
-            vai_content = vai.content
+            Yn_free_content = Yn_free.content
 
-        # Center-pad v_rhs if it's too short
-        if v_source_A.get_shape()[0] + rank_rhs != v_rhs.get_shape()[0]:
-            # warnings.warn('Warning: A, v_rhs and rank_rhs doesn\'t satisfy mode'
+        # Center-pad chiphifunc_rhs if it's too short
+        if chiphifunc_A.get_shape()[0] + rank_rhs != len_chi:
+            # warnings.warn('Warning: A, chiphifunc_rhs and rank_rhs doesn\'t satisfy mode'
             #               ' number requirements. Zero-padding rhs chi components.'+
-            #               ' v_source_A shape=' + str(v_source_A.get_shape()) +
-            #               ', _rhs shape=' + str(v_rhs.get_shape()) +
+            #               ' chiphifunc_A shape=' + str(chiphifunc_A.get_shape()) +
+            #               ', _rhs shape=' + str(chiphifunc_rhs.get_shape()) +
             #               ', rank_rhs=' + str(rank_rhs))
-             # This creates a padded content for v_rhs in case some components are zero. However, we still need to put in check for
+             # This creates a padded content for chiphifunc_rhs in case some components are zero. However, we still need to put in check for
              # LHS and RHS's even and oddness.
-            v_rhs_content = ChiPhiFunc.add_jit(\
-                v_rhs_content,\
-                np.zeros((v_source_A.get_shape()[0]+rank_rhs, v_rhs.get_shape()[1]), dtype=np.complex128),\
+            chiphifunc_rhs_content = ChiPhiFunc.add_jit(\
+                chiphifunc_rhs_content,\
+                np.zeros((chiphifunc_A.get_shape()[0]+rank_rhs, chiphifunc_rhs.get_shape()[1]), dtype=np.complex128),\
                 1 # Sign is 1
             )
 
-        va_content = tensor_solve_A_B_dchi(
-            v_source_A_content,
-            v_source_B_content,
-            v_rhs_content,
-            rank_rhs,
-            i_free,
-            vai_content,
-            ignore_extra=ignore_extra,
-            Y_mode=Y_mode
-        )
+        i_free = (rank_rhs+1)//2 # location of Yn0 or Yn1p
+        O_matrices, O_einv = ChiPhiFunc.get_O_O_einv_from_A_B(chiphifunc_A, chiphifunc_B, i_free, rank_rhs)
+        O_free_col = O_matrices[:,i_free,:]
+        vector_free_coef = np.einsum('ijk,jk->ik',O_einv, O_free_col)#A_einv@A_free_col
+        vector_free_coef[i_free] = -np.ones((vector_free_coef.shape[1]))
 
-        return(ChiPhiFunc(va_content))
+        if chiphifunc_rhs_content.shape[0]%2!=0: # at odd orders (ODE exists)
+            # The rest of the procedure is carried out normally with
+            # i_free pointing at Yn1p. The resulting Yn should be
+            # Yn = (A_einv@np.ascontiguousarray(chiphifunc_rhs) - Yn1p * vector_free_coef)[:n_dim]
+            # where vector_free_coef is a vector. This gives Yn1n = Yn1n and
+            #
+            # Yn1n = Yn[i_1n] = (A_einv@chiphifunc_rhs - Yn1p * vector_free_coef)[i_1n]
+            # = A_einv[i_1n]@chiphifunc_rhs - Yn1p * vector_free_coef[i_1n]
+            #
+            # Therefore,
+            #                                           Yn1n + Yn1p = Yn_free is equivalent to
+            # A_einv[i_1n]@chiphifunc_rhs - Yn1p * vector_free_coef[i_1n] + Yn1p = Yn_free
+            # A_einv[i_1n]@chiphifunc_rhs - Yn1p * (vector_free_coef[i_1n]-1) = Yn_free
+            # A_einv[i_1n]@chiphifunc_rhs - Yn_free = Yn1p * (vector_free_coef[i_1n]-1)
+            # (A_einv[i_1n]@chiphifunc_rhs - Yn_free)/(vector_free_coef[i_1n]-1) = Yn1p
+            # i_1n is shifted by the padding
+            i_1n = i_free-1 # Index of Yn1n (or if n is even, Yn2_n)
+            vec_free = (np.einsum('ik,ik->k',O_einv[i_1n],chiphifunc_rhs_content) - Yn_free_content)/(vector_free_coef[i_1n]-1)
+        else:
+            vec_free = Yn_free_content
+
+        Yn = (np.einsum('ijk,jk->ik',O_einv,chiphifunc_rhs_content) - vec_free * vector_free_coef)
+        return(ChiPhiFunc(Yn))
 
 ''' I.2 Utilities '''
 # Integrates a function on a grid using Simpson's method.
@@ -1060,6 +1109,9 @@ class ChiPhiFuncNull(ChiPhiFunc):
     def dphi(self, order=1):
         return(self)
 
+    def get_constant(self):
+        raise TypeError('Cannot get constant of a ChiPhiFuncNull.')
+
 ''' III. Grid 1D deconvolution (used for "dividing" a chi-dependent quantity)'''
 # This part solves the pointwise product function problem A*va = B*vb woth unknown va.
 # by chi mode matching. It treats both pointwise products as matrix
@@ -1076,8 +1128,6 @@ class ChiPhiFuncNull(ChiPhiFunc):
 # with a, b are convolutions, which are (o+(n+1)-1, n+1) or (o+n-1, n) degenerate
 # matrices.
 # Codes written in this part are specifically for 1D deconvolution used for ChiPhiFunc.
-
-''' III.1 va, vb with the same number of dimensions '''
 
 ''' III.2 va has 1 more component than vb '''
 # Invert an (n,n) submatrix of a (m>n+1,n+1) rectangular matrix by taking the first
@@ -1099,6 +1149,7 @@ def tensor_inv_square_excluding_col(in_matrices, ind_col):
     n_row = in_matrices.shape[0]
     n_col = in_matrices.shape[1]
     n_phi = in_matrices.shape[2]
+    n_clip = (n_row-n_col+1)//2 # How much is the transposed array larger than Yn
     if n_row<=n_col:
         raise ValueError("Input should have more rows than cols")
 
@@ -1114,70 +1165,13 @@ def tensor_inv_square_excluding_col(in_matrices, ind_col):
     sqinv = np.moveaxis(sqinv,0,2)
     padded = np.zeros((n_row, n_row, n_phi), dtype = np.complex128)
     padded[rows_to_remove:-rows_to_remove, rows_to_remove:-rows_to_remove,:] = sqinv
-    return(padded)
-
-
-# Solve degenerate underdetermined equation system A@va = B@vb, where A, B
-# are (m,n+1) (m,n) matrices (m>n+1) of rank n, vb is a n-dim vector, and
-# va is an n+1-dim vector with a free element vai at i.
-#
-# -- Input --
-# (m,n+1,len_phi), rank n+1 A,
-# (m,len_phi) np array-like v_rhs
-#
-# -- Return --
-# (n+1,len_phi) np array-like va
-#
-# -- Note --
-# For recursion relations with ChiPhiFunc's, A and B should come from
-# convolution matrices. That still needs implementation.
-# When Y_mode=True, vai is the sum between the center two elements.
-# (A must have an even number of rows)
-# (Yn1p + Yn1n = Yn1c = Y11s * sigma_twiddle_n)
-def tensor_solve_degenerate_underdetermined(A, v_rhs, i_free, vai, Y_mode=False):
-    n_dim = A.shape[1]-1 # #dim of vb, which is #dim_va-1. vb is v_rhs before the convolution
-    if Y_mode:
-        # if A.shape[1]%2!=0:
-        #     warnings.warn('Warning: Y_mode=True on even order. vai should be Yn0')
-        i_1p = A.shape[1]//2   # Index of Yn1p (or if n is even, Yn0)
-        i_1n = A.shape[1]//2-1 # Index of Yn1n (or if n is even, Yn2_n)
-        i_free = i_1p # set Yn1p as free var
-    if A.shape[0] != v_rhs.shape[0]:
-        raise ValueError("solve_underdetermined: A, v_rhs must have the same number of rows")
-    clip_n = (A.shape[0]-n_dim)//2 # How much is the transposed array larger than Yn
-    A_einv = tensor_inv_square_excluding_col(A, i_free)[clip_n:-clip_n]
-    A_free_col = A[:,i_free,:]
-    v_rhs = v_rhs
-    va_free_coef = np.einsum('ijk,jk->ik',A_einv, A_free_col)#A_einv@A_free_col
-    # This vector is actually m-dim, with m-n blank elems at the end.
-    if Y_mode and A.shape[1]%2==0: # Y_mode=True and on odd order (ODE exists)
-        # The rest of the procedure is carried out normally with
-        # i_free pointing at Yn1n. The resulting Yn should be
-        # Yn = (A_einv@np.ascontiguousarray(v_rhs) - Yn1n * va_free_coef)[:n_dim]
-        # where va_free_coef is a vector. This gives Yn1n = Yn1n and
-        #
-        # Yn1n = Yn[i_1n] = (A_einv@v_rhs - Yn1p * va_free_coef)[i_1n]
-        # = A_einv[i_1n]@v_rhs - Yn1p * va_free_coef[i_1n]
-        #
-        # Therefore,
-        #                                           Yn1n + Yn1p = vai is equivalent to
-        # A_einv[i_1n]@v_rhs - Yn1p * va_free_coef[i_1n] + Yn1p = vai
-        # A_einv[i_1n]@v_rhs - Yn1p * (va_free_coef[i_1n]-1) = vai
-        # A_einv[i_1n]@v_rhs - vai = Yn1p * (va_free_coef[i_1n]-1)
-        # (A_einv[i_1n]@v_rhs - vai)/(va_free_coef[i_1n]-1) = Yn1p
-        # i_1n is shifted by the padding
-        #(A_einv[clip_n+i_1n]@v_rhs - vai)/(va_free_coef[clip_n+i_1n]-1)
-        vec_free = (np.einsum('ik,ik->k',A_einv[i_1n],v_rhs) - vai)/(va_free_coef[i_1n]-1)
-    else:
-        vec_free = vai
-    Yn = (np.einsum('ijk,jk->ik',A_einv,v_rhs) - vec_free * va_free_coef)
-    return(np.concatenate((Yn[:i_free], vec_free ,Yn[i_free:])))
+    return(padded[n_clip:-n_clip])
 
 # @njit(complex128[:](complex128[:,:], complex128[:,:], complex128[:], int64, complex128))
-# def solve_degenerate_underdetermined_jit(A, B, vb, i_free, vai):
+# def solve_degenerate_underdetermined_jit(A, B, vb, i_free, Yn_free):
 #     B_cont = np.ascontiguousarray(B)
 #     vb_cont = np.ascontiguousarray(vb)
-#     return(solve_degenerate_underdetermined_jit(A, B_cont@vb_cont, i_free, vai))
+#     return(solve_degenerate_underdetermined_jit(A, B_cont@vb_cont, i_free, Yn_free))
 
 ''' III.3 Convolution operator generator and ChiPhiFunc.content numba wrapper '''
 # Generate convolution operator from a for an n_dim vector.
@@ -1220,11 +1214,11 @@ def finite_diff_matrix(stencil, n_dim):
 # Note: "vector" means a series of chi coefficients in this context.
 #
 # -- Input --
-# v_source_A: (?, len_chi, len_phi)
-# v_source_B: (?, len_chi, len_phi)
-# v_rhs: 2d matrix, content of ChiPhiFunc. Should be #dim = m vector
+# chiphifunc_A: (?, len_chi, len_phi)
+# chiphifunc_B: (?, len_chi, len_phi)
+# chiphifunc_rhs: 2d matrix, content of ChiPhiFunc. Should be #dim = m vector
 #     produced by convolution of a #dim = rank_rhs vector.
-# rank_rhs: int, rank of v_rhs.
+# rank_rhs: int, rank of chiphifunc_rhs.
 #     Think of the problem A@va = B@vb, where
 #     A and B are convolution matrices with the same row number.
 #     n_dim_rhs is the dimensionality of vb. In a recursion relation,
@@ -1233,49 +1227,12 @@ def finite_diff_matrix(stencil, n_dim):
 #     a + #dim_va - 1 = m
 #     a + (rank_rhs+1) - 1 = m
 # i_free: int, the index of va's free element. Note that #dim_va = rank_rhs + 1.
-# vai:  2d matrix with a single row, content of ChiPhiFunc
+# Yn_free:  2d matrix with a single row, content of ChiPhiFunc
 #    represents a function of only phi given on grid.
 #
 # -- Output --
 # va: 2d matrix, content of ChiPhiFunc. Has #dim = rank_rhs+1.
-def tensor_solve_A_B_dchi(v_source_A, v_source_B, v_rhs, rank_rhs, i_free, vai, ignore_extra, Y_mode=True):
 
-    # Checking dimensionality
-    if len(v_source_A) + rank_rhs != len(v_rhs):
-        if len(v_source_A) + rank_rhs < len(v_rhs):
-            num_extra = (len(v_rhs) - (len(v_source_A) + rank_rhs))//2
-            # ignoring extra component is allowed and extra components are small
-            # Can't have an even number of extra components
-            # Checking extra components' size
-            if ignore_extra\
-                and (len(v_rhs) - (len(v_source_A) + rank_rhs))%2==0\
-                and max_log10(v_rhs[:num_extra]) < max_log10(v_rhs[num_extra:-num_extra]) - noise_order_solve\
-                and max_log10(v_rhs[-num_extra:]) < max_log10(v_rhs[num_extra:-num_extra]) - noise_order_solve:
-                v_rhs = v_rhs[num_extra:-num_extra]
-            else:
-                print('#dim_A, rank_rhs, #dim_v_rhs:', len(v_source_A), rank_rhs, len(v_rhs))
-                raise ValueError('batch_underdetermined_deconv: #dim_A + rank_rhs < #dim'\
-                    '_v_rhs.')
-        else:
-            print('#dim_A, rank_rhs, #dim_v_rhs:', len(v_source_A), rank_rhs, len(v_rhs))
-            raise ValueError('batch_underdetermined_deconv: #dim_A + rank_rhs > #dim'\
-                '_v_rhs.')
-
-    # axis 0 is phi grid, axis 1 is chi mode
-    va_sln = np.zeros((rank_rhs+1, v_source_A.shape[1]), dtype = np.complex128)
-    if v_source_A.shape[1] != v_rhs.shape[1]:
-        raise ValueError('batch_underdetermined_deconv: A, v_rhs must have the same number of phi grids.')
-
-    # generate dchi operators
-    A_conv_matrices = conv_tensor(v_source_A, rank_rhs+1)
-    total_matrices = A_conv_matrices
-    if Y_mode:
-        dchi_matrix = dchi_op(rank_rhs+1, False)
-        B_conv_matrices = conv_tensor(v_source_B, rank_rhs+1)
-        total_matrices += np.einsum('ijk,jl->ilk',B_conv_matrices,dchi_matrix)
-    va_sln = tensor_solve_degenerate_underdetermined(total_matrices,\
-                                         v_rhs, 0, vai, Y_mode)
-    return va_sln
 
 ''' IV. Solving linear PDE in phi grids '''
 

@@ -104,13 +104,11 @@ def iterate_Yn_cp(n_eval,
     # plt.plot(np.log10(np.mean(np.abs(ynp1_rhsmlhs.content), axis=1)))
     # plt.show()
     # print('rank_rhs', n_eval)
-    return(ChiPhiFunc.solve_underdet_degen(Y_mode=True,
-                                        v_source_A=coef_a,
-                                        v_source_B=coef_b,
-                                        v_rhs=ynp1_rhsmlhs,
+    return(ChiPhiFunc.solve_A_B_dchi_y(chiphifunc_A=coef_a,
+                                        chiphifunc_B=coef_b,
+                                        chiphifunc_rhs=ynp1_rhsmlhs,
                                         rank_rhs=n_eval, # Yn has n+1 dof. So, RHS must have n dof.
-                                        i_free=0, # (dummy)
-                                        vai=Yn_free, ignore_extra=True))
+                                        Yn_free=Yn_free))
 
 # Evaluates iota_{(n-1)/2}.
 # Requires:
@@ -189,7 +187,7 @@ def iterate_Zn_cp(
         Y_coef_cp=Y_coef_cp.mask(n_eval-1),
         Z_coef_cp=Z_coef_cp.mask(n_eval-1).zero_append(),
         B_theta_coef_cp=B_theta_coef_cp,
-        B_psi_coef_cp=B_psi_coef_cp.mask(n_eval-1),
+        B_psi_coef_cp=B_psi_coef_cp.mask(n_eval-2),
         B_alpha_coef=B_alpha_coef,
         kap_p=kap_p, dl_p=dl_p, tau_p=tau_p,
         iota_coef = iota_coef
@@ -272,9 +270,9 @@ def iterate_Yn1c_p(sigma_tilde_n0,\
 # Must be evaluated with iota_{(n-1)/2} = 0 to get lambda_tilde
 def Lambda_n_p(Yn1s_p, Y11s_p, Y11c_p, X11c_p, iota_0, tau_p, dl_p, sigma_p, Xi_n_p):
     return(
-        Yn1s_p.dphi()*sigma_p/Y11s_p
+        diff(Yn1s_p,'phi',1)*sigma_p/Y11s_p
         -2*iota_0*Yn1s_p/Y11s_p
-        -Yn1s_p*Y11c_p.dphi()/(Y11s_p**2)
+        -Yn1s_p*diff(Y11c_p,'phi',1)/(Y11s_p**2)
         +2*tau_p*dl_p*Yn1s_p*X11c_p/(Y11s_p**2)
         -2*Xi_n_p/(Y11s_p**2)
     )

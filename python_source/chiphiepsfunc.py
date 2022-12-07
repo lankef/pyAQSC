@@ -42,7 +42,7 @@ class ChiPhiEpsFunc:
     # For testing recursion. Produces a sub-list up to the nth element (order).
     def mask(self, n):
         if n>len(self.chiphifunc_list)-1:
-            warnings.warn('Mask size is larger than the list\'s size')
+            raise IndexError('Mask size is larger than the list\'s size')
         return(ChiPhiEpsFunc(self.chiphifunc_list[:n+1]))
 
 
