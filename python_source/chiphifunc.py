@@ -3,7 +3,9 @@ import timeit
 import warnings
 import scipy.signal
 import scipy.fftpack
+import math # factorial in dphi_direct
 from matplotlib import pyplot as plt
+
 
 # Numba doesn't support scipy methods. Therefore, scipy integrals are sped up
 # with joblib.
@@ -40,9 +42,9 @@ noise_level_periodic = 1e-10
 low_pass_freq=50
 
 # Default diff and integration modes can be modified.
-diff_mode = 'pseudo_spectral' # aYn_freelable: pseudo_spectral, finite_difference, fft, spline
-integral_mode = 'fft' # aYn_freelable: spline, simpson, fft
-two_pi_integral_mode = 'simpson' # aYn_freelable: spline, simpson, fft
+diff_mode = 'fft' # available: pseudo_spectral, finite_difference, fft, spline
+integral_mode = 'fft' # avalable: spline, simpson, fft
+two_pi_integral_mode = 'spline' # available: spline, simpson
 
 # Threshold for p amplitude to use asymptotic expansion for y'+py=f
 asymptotic_threshold = 30
@@ -451,11 +453,26 @@ class ChiPhiFunc:
     def noise_filter(self, mode='low_pass', arg=low_pass_freq):
         return(self-self.filter(mode=mode, arg=arg))
 
+    # Force a ChiPhiFunc to have real evaluation results by
+    # averaging (positive mode coeffs) and (- negative mode coeffs)
+    # to make sure the evaluated result is real, too.
+    def enforce_real(self):
+        new_content = self.content
+        len_chi = new_content.shape[0]
+        avg = (new_content - np.flip(new_content, 0))/2
+        if len_chi%2==1:
+            avg[len_chi//2] = new_content[len_chi//2]
+        return(ChiPhiFunc(avg))
+
     ''' I.1.4 Properties '''
+
+    # Getting the shape of the content
     def get_shape(self):
-        # This would trigger an error for most complex,
-        # static methods used for evaluation.
         return(self.content.shape)
+
+    # Getting the average amplitude of the content
+    def get_amplitude(self):
+        return(np.average(np.abs(self.content)))
 
     def mask_constant(self):
         if self.get_shape()[0]%2!=1:
@@ -464,7 +481,11 @@ class ChiPhiFunc:
         new_content[len(new_content)//2] = np.zeros(new_content.shape[1])
         return(ChiPhiFunc(new_content))
 
+    def real(self):
+        return(ChiPhiFunc(np.real(self.content)))
 
+    def imag(self):
+        return(ChiPhiFunc(1j*np.imag(self.content)))
 
     # Returns the constant component.
     def get_constant(self):
@@ -551,10 +572,13 @@ class ChiPhiFunc:
     # Plot phi-dependent power-Fourier coefficients on overlapping line plots.
     def display_content(self, fourier_mode = True, colormap_mode = False):
         plt.rcParams['figure.figsize'] = [8,3]
-        len_phi = self.get_shape()[1]
+        content = self.content
+        if content.shape[1]==1:
+            content = content*np.ones((1,100))
+        len_phi = content.shape[1]
         phis = np.linspace(0,2*np.pi*(1-1/len_phi), len_phi)
         if fourier_mode:
-            fourier = self.export_trig()
+            fourier = ChiPhiFunc(content).export_trig()
             if len(fourier.content)%2==0:
                 ax1 = plt.subplot(121)
                 ax1.set_title('cos')
@@ -599,18 +623,22 @@ class ChiPhiFunc:
             ax2.set_title('Imaginary')
 
             if colormap_mode:
-                mode = np.linspace(-len(self.content)+1, len(self.content)-1, len(self.content))
+                mode = np.linspace(-len(content)+1, len(content)-1, len(content))
                 phi = np.linspace(0, 2*np.pi*(1-1/len_phi), len_phi)
-                ax1.pcolormesh(phi, mode, np.real(self.content))
-                ax2.pcolormesh(phi, mode, np.imag(self.content))
+                ax1.pcolormesh(phi, mode, np.real(content))
+                ax2.pcolormesh(phi, mode, np.imag(content))
             else:
-                ax1.plot(phis,np.real(self.content).T)
-                ax2.plot(phis,np.imag(self.content).T)
+                ax1.plot(phis,np.real(content).T)
+                ax2.plot(phis,np.imag(content).T)
         plt.show()
 
     # FFT the content and returns a ChiPhiFunc
-    def get_spectrum(self):
+    def fft(self):
         return(ChiPhiFunc(np.fft.fft(self.content, axis=1)))
+
+    # IFFT the content and returns a ChiPhiFunc
+    def ifft(self):
+        return(ChiPhiFunc(np.fft.ifft(self.content, axis=1)))
 
     # Plot a period in both chi and phi
     def display(self, complex = False, size=(100,100), avg_clim = False):
@@ -797,6 +825,11 @@ class ChiPhiFunc:
 
     ''' I.1.8 Deconvolution ("dividing" chi-dependent terms) '''
 
+    # Get O, O_einv and vector_free_coef that solves the eqaution system
+    # O y = (A + B dchi) y = RHS <=>
+    #   y = O_einv - vec_free * vec_free_coef
+    # Or in code format,
+    # y = (np.einsum('ijk,jk->ik',O_einv,chiphifunc_rhs_content) - vec_free * vector_free_coef)
     def get_O_O_einv_from_A_B(chiphifunc_A, chiphifunc_B, i_free, rank_rhs):
 
         if not (type(chiphifunc_A) is ChiPhiFunc\
@@ -819,85 +852,90 @@ class ChiPhiFunc:
 
         O_einv = tensor_inv_square_excluding_col(O_matrices, i_free)
         O_einv = np.concatenate((O_einv[:i_free], np.zeros((1,O_einv.shape[1],O_einv.shape[2])), O_einv[i_free:]))
-        return(O_matrices, O_einv)
+        O_free_col = O_matrices[:,i_free,:]
+        vector_free_coef = np.einsum('ijk,jk->ik',O_einv, O_free_col)#A_einv@A_free_col
+        vector_free_coef[i_free] = -np.ones((vector_free_coef.shape[1]))
 
+        return(O_matrices, O_einv, vector_free_coef)
 
-    # Solve under-determined degenerate system equivalent
+    # Solve an under-determined degenerate system equivalent to
     # chiphifunc_A(chi, phi) * y_{n+1}(chi, phi) = chiphifunc_rhs{n}(chi, phi).
-    # When Y_mode=True, solves
-    # wrapper for jit-enabled method batch_underdetermined_degen_jit.
     # Necessary because the equation for Yn's outmost components exactly cancel.
+    # Assumes that Yn0 or Yn1s (not Yn1p!) is known.
     # -- Input --
     # chiphifunc_A (must be provided), chiphifunc_B, chiphifunc_rhs: ChiPhiFunc,
     # chiphifunc_B can be nan.
     # rank_rhs: int, 'n' in the equation above
     # i_free: int, index of free var in va,
-    # Yn_free: ChiPhiFunc with a single row, value of free component.
-    def solve_A_B_dchi_y(chiphifunc_A, chiphifunc_B, chiphifunc_rhs, rank_rhs, Yn_free):
-        # Checking input types
-        if not (type(chiphifunc_rhs) is ChiPhiFunc):
-            raise TypeError('chiphifunc_rhs should be ChiPhiFunc. The actual types are:'
-                            +str(type(chiphifunc_rhs)))
+    # Yn_free: Yn0 or Yn1p, depending on rank_rhs.
+    # ChiPhiFunc with a single row, value of free component.
+    # def solve_A_B_dchi_y(chiphifunc_A, chiphifunc_B, chiphifunc_rhs, rank_rhs, Yn_free):
+    #     # Checking input types and stretching RHS.
+    #     if not (type(chiphifunc_A) is ChiPhiFunc\
+    #         and type(chiphifunc_B) is ChiPhiFunc):
+    #         raise TypeError('All chiphifunc_A, chiphifunc_B, chiphifunc_rhs'\
+    #                         ' should be ChiPhiFunc. The actual types are:'
+    #                         +str(type(chiphifunc_A))+', '
+    #                         +str(type(chiphifunc_B))+', '
+    #                         +str(type(chiphifunc_rhs)))
+    #
+    #     if not (chiphifunc_A.get_shape()[1]==chiphifunc_B.get_shape()[1]
+    #         and chiphifunc_A.get_shape()[1]==chiphifunc_rhs.get_shape()[1]):
+    #         raise ValueError('All inputs need to have the same number of phi grids.')
 
-        chiphifunc_A_content, chiphifunc_rhs_content = chiphifunc_A.stretch_phi_to_match(chiphifunc_rhs)
-        chiphifunc_A = ChiPhiFunc(chiphifunc_A_content)
-        len_chi = chiphifunc_rhs.get_shape()[0]
 
-        # Convertin constant Yn_free to ChiPhiFunc
-        if type(Yn_free) is not ChiPhiFunc:
-            if np.isscalar(Yn_free):
-                Yn_free_content = np.full((1,chiphifunc_A_content.shape[1]),Yn_free,dtype=np.complex128)
-            else:
-                raise TypeError('ChiPhiFunc.solve_underdetermined: '\
-                                'Yn_free is not scalar ChiPhiFunc. '\
-                                'The actual type is: '+str(type(Yn_free)))
-        else:
-            Yn_free_content = Yn_free.content
-
-        # Center-pad chiphifunc_rhs if it's too short
-        if chiphifunc_A.get_shape()[0] + rank_rhs != len_chi:
-            # warnings.warn('Warning: A, chiphifunc_rhs and rank_rhs doesn\'t satisfy mode'
-            #               ' number requirements. Zero-padding rhs chi components.'+
-            #               ' chiphifunc_A shape=' + str(chiphifunc_A.get_shape()) +
-            #               ', _rhs shape=' + str(chiphifunc_rhs.get_shape()) +
-            #               ', rank_rhs=' + str(rank_rhs))
-             # This creates a padded content for chiphifunc_rhs in case some components are zero. However, we still need to put in check for
-             # LHS and RHS's even and oddness.
-            chiphifunc_rhs_content = ChiPhiFunc.add_jit(\
-                chiphifunc_rhs_content,\
-                np.zeros((chiphifunc_A.get_shape()[0]+rank_rhs, chiphifunc_rhs.get_shape()[1]), dtype=np.complex128),\
-                1 # Sign is 1
-            )
-
-        i_free = (rank_rhs+1)//2 # location of Yn0 or Yn1p
-        O_matrices, O_einv = ChiPhiFunc.get_O_O_einv_from_A_B(chiphifunc_A, chiphifunc_B, i_free, rank_rhs)
-        O_free_col = O_matrices[:,i_free,:]
-        vector_free_coef = np.einsum('ijk,jk->ik',O_einv, O_free_col)#A_einv@A_free_col
-        vector_free_coef[i_free] = -np.ones((vector_free_coef.shape[1]))
-
-        if chiphifunc_rhs_content.shape[0]%2!=0: # at odd orders (ODE exists)
-            # The rest of the procedure is carried out normally with
-            # i_free pointing at Yn1p. The resulting Yn should be
-            # Yn = (A_einv@np.ascontiguousarray(chiphifunc_rhs) - Yn1p * vector_free_coef)[:n_dim]
-            # where vector_free_coef is a vector. This gives Yn1n = Yn1n and
-            #
-            # Yn1n = Yn[i_1n] = (A_einv@chiphifunc_rhs - Yn1p * vector_free_coef)[i_1n]
-            # = A_einv[i_1n]@chiphifunc_rhs - Yn1p * vector_free_coef[i_1n]
-            #
-            # Therefore,
-            #                                           Yn1n + Yn1p = Yn_free is equivalent to
-            # A_einv[i_1n]@chiphifunc_rhs - Yn1p * vector_free_coef[i_1n] + Yn1p = Yn_free
-            # A_einv[i_1n]@chiphifunc_rhs - Yn1p * (vector_free_coef[i_1n]-1) = Yn_free
-            # A_einv[i_1n]@chiphifunc_rhs - Yn_free = Yn1p * (vector_free_coef[i_1n]-1)
-            # (A_einv[i_1n]@chiphifunc_rhs - Yn_free)/(vector_free_coef[i_1n]-1) = Yn1p
-            # i_1n is shifted by the padding
-            i_1n = i_free-1 # Index of Yn1n (or if n is even, Yn2_n)
-            vec_free = (np.einsum('ik,ik->k',O_einv[i_1n],chiphifunc_rhs_content) - Yn_free_content)/(vector_free_coef[i_1n]-1)
-        else:
-            vec_free = Yn_free_content
-
-        Yn = (np.einsum('ijk,jk->ik',O_einv,chiphifunc_rhs_content) - vec_free * vector_free_coef)
-        return(ChiPhiFunc(Yn))
+        # chiphifunc_A_content, chiphifunc_rhs_content = chiphifunc_A.stretch_phi_to_match(chiphifunc_rhs)
+        # chiphifunc_A = ChiPhiFunc(chiphifunc_A_content)
+        # len_chi = chiphifunc_rhs.get_shape()[0]
+        #
+        # # Calculating the inverted matrices
+        # i_free = (rank_rhs+1)//2 # location of Yn0 or Yn1p
+        # O_matrices, O_einv, vector_free_coef = ChiPhiFunc.get_O_O_einv_from_A_B(chiphifunc_A, chiphifunc_B, i_free, rank_rhs)
+        #
+        # # Converting constant Yn_free to ChiPhiFunc
+        # if type(Yn_free) is not ChiPhiFunc:
+        #     if np.isscalar(Yn_free):
+        #         Yn_free_content = np.full((1,chiphifunc_A_content.shape[1]),Yn_free,dtype=np.complex128)
+        #     else:
+        #         raise TypeError('ChiPhiFunc.solve_underdetermined: '\
+        #                         'Yn_free is not scalar ChiPhiFunc. '\
+        #                         'The actual type is: '+str(type(Yn_free)))
+        # else:
+        #     Yn_free_content = Yn_free.content
+        # # Center-pad chiphifunc_rhs if it's too short
+        # #          [0  ]
+        # # [RHS] => [RHS]
+        # #          [0  ]
+        # if chiphifunc_A.get_shape()[0] + rank_rhs != len_chi:
+        #     chiphifunc_rhs_content = ChiPhiFunc.add_jit(\
+        #         chiphifunc_rhs_content,\
+        #         np.zeros((chiphifunc_A.get_shape()[0]+rank_rhs, chiphifunc_rhs.get_shape()[1]), dtype=np.complex128),\
+        #         1 # Sign is 1
+        #     )
+        #
+        # if chiphifunc_rhs_content.shape[0]%2!=0: # at odd orders (ODE exists)
+        #     # The rest of the procedure is carried out normally with
+        #     # i_free pointing at Yn1p. The resulting Yn should be
+        #     # Yn = (A_einv@np.ascontiguousarray(chiphifunc_rhs) - Yn1p * vector_free_coef)[:n_dim]
+        #     # where vector_free_coef is a vector. This gives Yn1n = Yn1n and
+        #     #
+        #     # Yn1n = Yn[i_1n] = (A_einv@chiphifunc_rhs - Yn1p * vector_free_coef)[i_1n]
+        #     # = A_einv[i_1n]@chiphifunc_rhs - Yn1p * vector_free_coef[i_1n]
+        #     #
+        #     # Therefore,
+        #     #                                           Yn1n + Yn1p = Yn_free is equivalent to
+        #     # A_einv[i_1n]@chiphifunc_rhs - Yn1p * vector_free_coef[i_1n] + Yn1p = Yn_free
+        #     # A_einv[i_1n]@chiphifunc_rhs - Yn1p * (vector_free_coef[i_1n]-1) = Yn_free
+        #     # A_einv[i_1n]@chiphifunc_rhs - Yn_free = Yn1p * (vector_free_coef[i_1n]-1)
+        #     # (A_einv[i_1n]@chiphifunc_rhs - Yn_free)/(vector_free_coef[i_1n]-1) = Yn1p
+        #     # i_1n is shifted by the padding
+        #     i_1n = i_free-1 # Index of Yn1n (or if n is even, Yn2_n)
+        #     vec_free = (np.einsum('ik,ik->k',O_einv[i_1n],chiphifunc_rhs_content) - Yn_free_content)/(vector_free_coef[i_1n]-1)
+        # else:
+        #     vec_free = Yn_free_content
+        #
+        # Yn = (np.einsum('ijk,jk->ik',O_einv,chiphifunc_rhs_content) - vec_free * vector_free_coef)
+        # return(ChiPhiFunc(Yn))
 
 ''' I.2 Utilities '''
 # Integrates a function on a grid using Simpson's method.
@@ -1009,8 +1047,9 @@ def low_pass_direct(content, freq):
 
 # dphi of a content matrix
 def dphi_direct(content, order=1, mode='default'):
+
     if order<0:
-        raise AttributeError('dphi order must be positive.')
+        raise AttributeError('Order must be positive for dphi_direct().')
 
     if mode=='default':
         mode = diff_mode
@@ -1032,10 +1071,13 @@ def dphi_direct(content, order=1, mode='default'):
         return(np.gradient(content, axis=1, edge_order=2)\
         /(np.pi*2/content.shape[1]))
 
-
     if mode=='spline':
-        out = integrate_phi_spline(content, periodic=False,
-            diff=True, diff_order=order)
+        if order>0:
+            out = integrate_phi_spline(content, periodic=False,
+                diff=True, diff_order=order)
+        if order<0:
+            out = integrate_phi_spline(content, periodic=False,
+                diff=False, diff_order=-order)
         return(out)
 
     else:
@@ -1112,6 +1154,15 @@ class ChiPhiFuncNull(ChiPhiFunc):
     def get_constant(self):
         raise TypeError('Cannot get constant of a ChiPhiFuncNull.')
 
+    def cap_m(self):
+        raise TypeError('Cannot cap_m() a ChiPhiFuncNull.')
+
+    def real(self):
+        raise TypeError('Cannot get real components from a ChiPhiFuncNull.')
+
+    def imag(self):
+        raise TypeError('Cannot get imag components from a ChiPhiFuncNull.')
+
 ''' III. Grid 1D deconvolution (used for "dividing" a chi-dependent quantity)'''
 # This part solves the pointwise product function problem A*va = B*vb woth unknown va.
 # by chi mode matching. It treats both pointwise products as matrix
@@ -1184,6 +1235,7 @@ def conv_matrix(vec, n_dim):
     return(out_transposed.T)
 
 # Generate a tensor convolving a ChiPhiFunc content with n_dim chi modes.
+# For multiplication in FFT space during ODE solves.
 # The convolution is done by:
 # x2_conv_y2 = np.einsum('ijk,jk->ik',conv_x2, y2.content)
 @njit(complex128[:,:,:](complex128[:,:], int64))
@@ -1194,6 +1246,30 @@ def conv_tensor(content, n_dim):
     for i in prange(n_dim):
         out[i:i+len_chi, i, :] = content
     return(out)
+
+# A convolution operator acting convolving
+# a fft of len_phi with a source tensor (O_einv).
+# see paper note for correct format of this matrix
+# Sadly jit doesn't support np.fft.
+# source has shape [n_a, n_b, n_phi]
+# returns [n_a, n_b, n_phi_row, n_phi_col]
+def fft_conv_tensor_batch(source):
+    len_a = source.shape[0]
+    len_b = source.shape[1]
+    len_phi = source.shape[2]
+    out = np.zeros((len_a, len_b, len_phi, len_phi), dtype = np.complex128)
+    # How much to roll source
+    roll = (np.fft.fftfreq(len_phi)*len_phi).astype(np.int64)
+    # Where does 0 elem start/end
+    split = (len_phi+1)//2
+    split_b = np.roll(np.arange(len_phi%2, len_phi+len_phi%2, dtype = np.int64),split)
+    for i in range(len_phi):
+        index = roll[i]
+        out[:, :, i, :] = np.roll(source, index, axis = 2)
+        split_start = min(split, split_b[i])
+        split_end = max(split, split_b[i])
+        out[:, :, i, split_start:split_end] = 0
+    return(np.transpose(out, (0,1,3,2))/len_phi)
 
 # The first finite differene implementation
 @njit(complex128[:,:](complex128[:], int64))
@@ -1480,7 +1556,7 @@ def fft_dphi_op(len_phi):
 
 # A convolution operator acting convolving
 # a fft of len_phi with source.
-# see paper not for correct format of this matrix
+# see paper note for correct format of this matrix
 # Sadly jit doesn't support np.fft.
 # source has shape [n_chi, n_phi]
 # returns [n_chi, n_phi_row, n_phi_col]

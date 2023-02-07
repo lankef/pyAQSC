@@ -1,0 +1,47 @@
+Coef_iota_2_in_6: (
+    (2*Delta_coef_cp[0]-2)*B_alpha_coef[0]*B_denom_coef_c[0]*('diff(B_theta_coef_cp[2],chi,1))
+    +(1-Delta_coef_cp[0])*('diff(Y_coef_cp[1],chi,2))*('diff(Y_coef_cp[1],phi,1))
+    +(1-Delta_coef_cp[0])*iota_coef[0]*Y_coef_cp[1]*('diff(Y_coef_cp[1],chi,3))
+    +(1-Delta_coef_cp[0])*Y_coef_cp[1]*('diff(Y_coef_cp[1],chi,2,phi,1))
+    +(
+        (9*Delta_coef_cp[0]-9)*iota_coef[0]*('diff(Y_coef_cp[1],chi,1))
+        -Y_coef_cp[1]*('diff(Delta_coef_cp[0],phi,1)))*('diff(Y_coef_cp[1],chi,2)
+    )
+    +(10*Delta_coef_cp[0]-10)*('diff(Y_coef_cp[1],chi,1))*('diff(Y_coef_cp[1],chi,1,phi,1))
+    +5*('diff(Delta_coef_cp[0],phi,1))*('diff(Y_coef_cp[1],chi,1))^2
+    +(1-Delta_coef_cp[0])*('diff(X_coef_cp[1],chi,2))*('diff(X_coef_cp[1],phi,1))
+    +(1-Delta_coef_cp[0])*iota_coef[0]*X_coef_cp[1]*('diff(X_coef_cp[1],chi,3))
+    +(1-Delta_coef_cp[0])*X_coef_cp[1]*('diff(X_coef_cp[1],chi,2,phi,1))
+    +(
+        (9*Delta_coef_cp[0]-9)*iota_coef[0]*('diff(X_coef_cp[1],chi,1))
+        -X_coef_cp[1]*('diff(Delta_coef_cp[0],phi,1)))*('diff(X_coef_cp[1],chi,2)
+    )
+    +(10*Delta_coef_cp[0]-10)*('diff(X_coef_cp[1],chi,1))*('diff(X_coef_cp[1],chi,1,phi,1))
+    +5*('diff(Delta_coef_cp[0],phi,1))*('diff(X_coef_cp[1],chi,1))^2
+    +(2*B_alpha_coef[0]*B_denom_coef_c[0]
+        -2*B_alpha_coef[0]*B_denom_coef_c[0]*Delta_coef_cp[0])*('diff(B_psi_coef_cp[0],chi,2)))
+/(6*B_alpha_coef[0])
+
+Coef_iota_3_in_8: ((2*Delta_coef_cp[0]-2)*B_alpha_coef[0]*B_denom_coef_c[0]*('diff(B_theta_coef_cp[2],chi,1))
+    +(1-Delta_coef_cp[0])*('diff(Y_coef_cp[1],chi,2))*('diff(Y_coef_cp[1],phi,1))
+    +(1-Delta_coef_cp[0])*iota_coef[0]*Y_coef_cp[1]*('diff(Y_coef_cp[1],chi,3))
+    +(1-Delta_coef_cp[0])*Y_coef_cp[1]*('diff(Y_coef_cp[1],chi,2,phi,1))
+    +(
+        (13*Delta_coef_cp[0]-13)*iota_coef[0]*('diff(Y_coef_cp[1],chi,1))
+        -Y_coef_cp[1]*('diff(Delta_coef_cp[0],phi,1)))*('diff(Y_coef_cp[1],chi,2)
+    )
+    +(1*Delta_coef_cp[0]-1)*2*(n_eval-1)*('diff(Y_coef_cp[1],chi,1))*('diff(Y_coef_cp[1],chi,1,phi,1))
+    +7*('diff(Delta_coef_cp[0],phi,1))*('diff(Y_coef_cp[1],chi,1))^2
+    +(1-Delta_coef_cp[0])*('diff(X_coef_cp[1],chi,2))*('diff(X_coef_cp[1],phi,1))
+    +(1-Delta_coef_cp[0])*iota_coef[0]*X_coef_cp[1]*('diff(X_coef_cp[1],chi,3))
+    +(1-Delta_coef_cp[0])*X_coef_cp[1]*('diff(X_coef_cp[1],chi,2,phi,1))
+    +((13*Delta_coef_cp[0]-13)*iota_coef[0]*('diff(X_coef_cp[1],chi,1))
+        -X_coef_cp[1]*('diff(Delta_coef_cp[0],phi,1)))*('diff(X_coef_cp[1],chi,2))
+    +(1*Delta_coef_cp[0]-1)*2*(n_eval-1)*('diff(X_coef_cp[1],chi,1))*('diff(X_coef_cp[1],chi,1,phi,1))
+    +7*('diff(Delta_coef_cp[0],phi,1))*('diff(X_coef_cp[1],chi,1))^2
+    +(
+        2*B_alpha_coef[0]*B_denom_coef_c[0]
+        -2*B_alpha_coef[0]*B_denom_coef_c[0]*Delta_coef_cp[0]
+    )*('diff(B_psi_coef_cp[0],chi,2))
+)
+/(8*B_alpha_coef[0])
