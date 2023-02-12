@@ -153,7 +153,6 @@ def mul_grid_jit(a, b):
     out_transposed = np.zeros((phi_dim, a.shape[0]+b.shape[0]-1), dtype=np.complex128)
     for i in prange(phi_dim):
         out_transposed[i,:] = np.convolve(aT[i], bT[i])
-
     return out_transposed.T
 
 # Calculates the max amplitude's order of magnitude
@@ -161,8 +160,23 @@ def mul_grid_jit(a, b):
 def max_log10(input):
     return(np.log10(np.max(np.abs(input))))
 
+# If input is a ChiPhiFunc, average along phi.
+# If input is a scalar, do nothing
+def phi_avg(in_quant):
+    if type(in_quant) is ChiPhiFunc and type(in_quant) is not ChiPhiFuncNull:
+        new_content = np.array([
+            np.mean(in_quant.content,axis=1)
+        ]).T
+        return(ChiPhiFunc(new_content))
+    elif np.isscalar(in_quant):
+        return(in_quant)
+    else:
+        raise TypeError('phi_avg input can only be a scalar or a ChiPhiFunc. '\
+        'Actual type is' + str(type(in_quant)))
+
 ''' I.1 Grid implementation '''
-# ChiPhiFunc is an abstract superclass.
+# ChiPhiFunc represents a function of chi and phi in even/odd fourier series in
+# chi and on grid points located at (0, ... 2pi(n-1)/n) in phi.
 class ChiPhiFunc:
     # Initializer. Fourier_mode==True converts sin, cos coeffs to exponential
     def __init__(self, content=np.nan, fourier_mode=False):
@@ -180,6 +194,22 @@ class ChiPhiFunc:
         self.content = np.complex128(content)
         if fourier_mode:
             self.trig_to_exp()
+
+    # Obtains the m=index component of this ChiPhiFunc.
+    # DOES NOT WORK like list indexing.
+    def __getitem__(self, index):
+        len_chi = len(self.content)
+        # Checking even/oddness and total length
+        if len_chi%2==index%2 or np.abs(index)>np.abs(len_chi-1):
+            raise ValueError('Cannot get the '+str(index)+
+                             '-th element from an n='
+                             +str(-1)+' ChiPhiFunc.')
+        new_content = np.array([self.content[len_chi//2+index//2]])
+        return(ChiPhiFunc(new_content))
+
+    def __setitem__(self, key, newvalue):
+        raise NotImplementedError('ChiPhiFunc should only be modified by'\
+        ' mathematical operations, not element-wise editing.')
 
     ''' I.1.1 Operators '''
     # -self (negative) operator.
@@ -312,7 +342,8 @@ class ChiPhiFunc:
     # -- Output: a new ChiPhiFunc
     @lru_cache(maxsize=1000)
     def multiply(self, other, div = False):
-        a, b = self.stretch_phi_to_match(other)
+        # mul_grid_jit(a, b) never modifies the original. Skip copying.
+        a, b = self.stretch_phi_to_match(other, always_copy=False)
         if div:
             b = 1.0/b
         # Now both are stretch to be dim (n_a, n_phi), (n_b, n_phi).
@@ -324,10 +355,10 @@ class ChiPhiFunc:
     # -- Input: self and another ChiPhiFunc
     # -- Output: a new ChiPhiFunc
     def add_ChiPhiFunc(self, other, sign=1):
-        a,b = self.stretch_phi_to_match(other)
+        # add_jit(a,b,sign) never modifies the original. Skip copying.
+        a,b = self.stretch_phi_to_match(other, always_copy = False)
         # Now that grid points are matched by stretch_phi, we can invoke add_jit()
         # To add matching rows(chi coeffs) and grid points.
-
         return ChiPhiFunc(ChiPhiFunc.add_jit(a,b,sign))
 
     # Addition of a constant with a ChiPhiFunc.
@@ -453,17 +484,6 @@ class ChiPhiFunc:
     def noise_filter(self, mode='low_pass', arg=low_pass_freq):
         return(self-self.filter(mode=mode, arg=arg))
 
-    # Force a ChiPhiFunc to have real evaluation results by
-    # averaging (positive mode coeffs) and (- negative mode coeffs)
-    # to make sure the evaluated result is real, too.
-    def enforce_real(self):
-        new_content = self.content
-        len_chi = new_content.shape[0]
-        avg = (new_content - np.flip(new_content, 0))/2
-        if len_chi%2==1:
-            avg[len_chi//2] = new_content[len_chi//2]
-        return(ChiPhiFunc(avg))
-
     ''' I.1.4 Properties '''
 
     # Getting the shape of the content
@@ -481,11 +501,20 @@ class ChiPhiFunc:
         new_content[len(new_content)//2] = np.zeros(new_content.shape[1])
         return(ChiPhiFunc(new_content))
 
+    # Functions like np.imag
     def real(self):
         return(ChiPhiFunc(np.real(self.content)))
 
+    # Functions like np.real
     def imag(self):
-        return(ChiPhiFunc(1j*np.imag(self.content)))
+        return(ChiPhiFunc(np.imag(self.content)))
+
+    # TODO: Real ChiPhiFunc's always have
+    # Re[C(+m)]=Re[C(-m)]
+    # Im[C(+m)]=-Im[C(-m)]
+    def ensure_real(self):
+        return()
+
 
     # Returns the constant component.
     def get_constant(self):
@@ -536,17 +565,43 @@ class ChiPhiFunc:
 
         return(type(self)(Yn1_s), type(self)(Yn1_c))
 
-    # Takes the center m+1 rows of content.
+    # Takes the center m+1 rows of content. If the ChiPhiFunc
+    # contain less chi modes than m+1, It will be zero-padded.
     def cap_m(self, m):
-        num_row = m+1
-        tot_row = len(self.content)
-        num_clip = tot_row - num_row
-        if num_row == tot_row:
+        target_chi = m+1
+        len_chi = self.get_shape()[0]
+        num_clip = len_chi - target_chi
+        if target_chi == len_chi:
             return(self)
+        if target_chi > len_chi:
+            self.pad_m(m)
         if num_clip%2 != 0:
-            raise AttributeError('cap_mode only works when input and '\
+            raise AttributeError('cap_m only works when input and '\
             'self.content are both even or odd.')
         return(type(self)(self.content[num_clip//2:-num_clip//2]))
+
+    def pad_m(self,m):
+        return self.pad_chi(m+1)
+
+    # Pads a ChiPhiFunc to be have  total mode components.
+    # Both self.get_shape[0] and  must be even/odd.
+    # Note: This takes the total number of mode components, rather
+    # than m, because it's primarily used when solving the looped
+    # equations. It's sometimes less confusing to use the total number
+    # of mode components (equations) than the m of the corresponding equations.
+    def pad_chi(self, target_chi):
+        len_chi = self.get_shape()[0]
+        if len_chi%2!=target_chi%2:
+            raise AttributeError('pad_chi only works when target_chi and '\
+            'self.get_shape[0] are both even or odd.')
+
+        if target_chi < len_chi:
+            raise AttributeError('pad_chi only works when m is smaller '\
+            'than the highest mode number in self.content. For expanding '\
+            'a ChiPhiFunc, please use cap_m')
+        padding = ChiPhiFunc(np.zeros((target_chi, self.get_shape()[1])))
+        return(self+padding)
+
 
     ''' I.1.5 Output and plotting '''
     # Get a 2d vectorized function for plotting this term
@@ -565,7 +620,8 @@ class ChiPhiFunc:
         # The outer dot product is summing along axis 0.
         return(np.vectorize(
             lambda chi, phi : sum(
-                [np.e**(1j*(chi)*mode_chi[i]) * np.interp((phi)%(2*np.pi), phi_looped, content_looped[i]) for i in range(len_chi)]
+                [np.e**(1j*(chi)*mode_chi[i]) * np.interp((phi)%(2*np.pi),
+                 phi_looped, content_looped[i]) for i in range(len_chi)]
             )
         ))
 
@@ -683,42 +739,42 @@ class ChiPhiFunc:
     # Switches between a compiled and a non-compiled implementation
     # depending on debug_mode (because print and appending global)
     # doesn't work in compiled methods.
-    def add_jit(a, b, sign):
-        if debug_mode:
-            return(ChiPhiFunc.add_jit_debug(a, b, sign))
-        else:
-            return(ChiPhiFunc.add_jit_compiled(a, b, sign))
-
-    def add_jit_debug(a, b, sign):
-        shape = (max(a.shape[0], b.shape[0]),max(a.shape[1],b.shape[1]))
-        out = np.zeros(shape, dtype=np.complex128)
-        a_pad_row = (shape[0] - a.shape[0])//2
-        a_pad_col = (shape[1] - a.shape[1])//2
-        b_pad_row = (shape[0] - b.shape[0])//2
-        b_pad_col = (shape[1] - b.shape[1])//2
-        out[a_pad_row:shape[0]-a_pad_row,a_pad_col:shape[1]-a_pad_col] += a
-        out[b_pad_row:shape[0]-b_pad_row,b_pad_col:shape[1]-b_pad_col] += b*sign
-
-        # Debug. Compares the orders of magnitude of inputs.
-        a_padded = np.empty(shape, dtype=np.complex128)
-        a_padded[:] = np.nan
-        b_padded = np.empty(shape, dtype=np.complex128)
-        b_padded[:] = np.nan
-        a_padded[a_pad_row:shape[0]-a_pad_row,a_pad_col:shape[1]-a_pad_col]\
-            = np.log10(np.abs(a))
-        b_padded[b_pad_row:shape[0]-b_pad_row,b_pad_col:shape[1]-b_pad_col]\
-            = np.log10(np.abs(b))
-        pow_diff = np.abs(a_padded - b_padded)
-
-        # inf values shows up because often a and/or b is 0. Ignore them.
-        pow_diff[pow_diff == np.inf] = np.nan
-        debug_pow_diff_add.append(pow_diff.flatten())
-
-        return(out)
+    # def add_jit(a, b, sign):
+    #     if debug_mode:
+    #         return(ChiPhiFunc.add_jit_debug(a, b, sign))
+    #     else:
+    #         return(ChiPhiFunc.add_jit_compiled(a, b, sign))
+    #
+    # def add_jit_debug(a, b, sign):
+    #     shape = (max(a.shape[0], b.shape[0]),max(a.shape[1],b.shape[1]))
+    #     out = np.zeros(shape, dtype=np.complex128)
+    #     a_pad_row = (shape[0] - a.shape[0])//2
+    #     a_pad_col = (shape[1] - a.shape[1])//2
+    #     b_pad_row = (shape[0] - b.shape[0])//2
+    #     b_pad_col = (shape[1] - b.shape[1])//2
+    #     out[a_pad_row:shape[0]-a_pad_row,a_pad_col:shape[1]-a_pad_col] += a
+    #     out[b_pad_row:shape[0]-b_pad_row,b_pad_col:shape[1]-b_pad_col] += b*sign
+    #
+    #     # Debug. Compares the orders of magnitude of inputs.
+    #     a_padded = np.empty(shape, dtype=np.complex128)
+    #     a_padded[:] = np.nan
+    #     b_padded = np.empty(shape, dtype=np.complex128)
+    #     b_padded[:] = np.nan
+    #     a_padded[a_pad_row:shape[0]-a_pad_row,a_pad_col:shape[1]-a_pad_col]\
+    #         = np.log10(np.abs(a))
+    #     b_padded[b_pad_row:shape[0]-b_pad_row,b_pad_col:shape[1]-b_pad_col]\
+    #         = np.log10(np.abs(b))
+    #     pow_diff = np.abs(a_padded - b_padded)
+    #
+    #     # inf values shows up because often a and/or b is 0. Ignore them.
+    #     pow_diff[pow_diff == np.inf] = np.nan
+    #     debug_pow_diff_add.append(pow_diff.flatten())
+    #
+    #     return(out)
 
     # The original add_jit
     @njit(complex128[:,:](complex128[:,:], complex128[:,:], int64))
-    def add_jit_compiled(a, b, sign):
+    def add_jit(a, b, sign):
         shape = (max(a.shape[0], b.shape[0]),max(a.shape[1],b.shape[1]))
         out = np.zeros(shape, dtype=np.complex128)
         a_pad_row = (shape[0] - a.shape[0])//2
@@ -750,9 +806,17 @@ class ChiPhiFunc:
 
     # Used in operators, wrapper for stretch_phi. Match self's shape to another ChiPhiFunc.
     # returns 2 CONTENTS.
-    def stretch_phi_to_match(self, other):
+    # always_copy: always make copy for contents.
+    # If set to False, when the two ChiPhiFunc have an equal number of
+    # phi grids, this method directly points to their content.
+    def stretch_phi_to_match(self, other, always_copy=True):
+        if type(other) is not ChiPhiFunc:
+            raise TypeError('stretch_phi_to_match only takes ChiPhiFunc.')
         if self.get_shape()[1] == other.get_shape()[1]:
-            return(self.content, other.content)
+            if always_copy:
+                return(np.copy(self.content), np.copy(other.content))
+            else:
+                return(self.content, other.content)
         # warnings.warn('Warning: phi grid stretching has occured. Shapes are:'\
         #     'self:'+str(self.get_shape())+'; other:'+str(other.get_shape()))
         max_phi_len = max(self.get_shape()[1], other.get_shape()[1])
@@ -771,7 +835,7 @@ class ChiPhiFunc:
     def stretch_phi(content, len_target):
         len_phi = content.shape[1]
         if len_phi == len_target:
-            return(content)
+            return(np.copy(content))
         # Create empty output for numba
         stretched = np.zeros((content.shape[0],len_target+1), dtype=np.complex128)
         # Create 'x' for interpolation. 'x' is 1 longer than lengths specified due to wrapping
@@ -839,7 +903,7 @@ class ChiPhiFunc:
                             +str(type(chiphifunc_A))+', '
                             +str(type(chiphifunc_B)))
 
-        chiphifunc_A_content, chiphifunc_B_content = chiphifunc_A.stretch_phi_to_match(chiphifunc_B)
+        chiphifunc_A_content, chiphifunc_B_content = chiphifunc_A.stretch_phi_to_match(chiphifunc_B, always_copy=False)
 
         # generate the LHS operator O_matrices = (va conv + vb conv dchi)
         O_matrices = 0
@@ -856,7 +920,7 @@ class ChiPhiFunc:
         vector_free_coef = np.einsum('ijk,jk->ik',O_einv, O_free_col)#A_einv@A_free_col
         vector_free_coef[i_free] = -np.ones((vector_free_coef.shape[1]))
 
-        return(O_matrices, O_einv, vector_free_coef)
+        return(O_matrices, O_einv, -vector_free_coef)
 
     # Solve an under-determined degenerate system equivalent to
     # chiphifunc_A(chi, phi) * y_{n+1}(chi, phi) = chiphifunc_rhs{n}(chi, phi).
@@ -1106,6 +1170,9 @@ class ChiPhiFuncNull(ChiPhiFunc):
     def __init__(self, content=np.nan):
         self.content = np.nan
 
+    def __getitem__(self, index):
+        raise TypeError('__getitem__ cannot operate on ChiPhiFuncNull.')
+
     def __neg__(self):
         return(self)
 
@@ -1290,8 +1357,8 @@ def finite_diff_matrix(stencil, n_dim):
 # Note: "vector" means a series of chi coefficients in this context.
 #
 # -- Input --
-# chiphifunc_A: (?, len_chi, len_phi)
-# chiphifunc_B: (?, len_chi, len_phi)
+# chiphifunc_A: (?, , len_phi)
+# chiphifunc_B: (?, , len_phi)
 # chiphifunc_rhs: 2d matrix, content of ChiPhiFunc. Should be #dim = m vector
 #     produced by convolution of a #dim = rank_rhs vector.
 # rank_rhs: int, rank of chiphifunc_rhs.
