@@ -442,7 +442,6 @@ class ChiPhiFunc:
                 raise AttributeError('It is not advised to integrate over 2pi with spectral method.')
             def integral(i_chi):
                 out = scipy.fftpack.diff(self.content[i_chi], order=-1)
-                out = out - out[0] # Enforces zero at phi=0 boundary condition.
                 return(out)
             out_list = Parallel(n_jobs=n_jobs, backend=backend, require=require)(
                 delayed(integral)(i_chi) for i_chi in range(len(self.content))
@@ -1100,6 +1099,8 @@ def dphi_op_pseudospectral(n_phi):
 # a low pass filter acting on a content matrix
 def low_pass_direct(content, freq):
     len_phi = content.shape[1]
+    if freq*2>=len_phi:
+        return(np.copy(content))
     W = np.abs(np.fft.fftfreq(len_phi))
     f_signal = np.fft.fft(content, axis = 1)
 
@@ -1221,7 +1222,7 @@ class ChiPhiFuncNull(ChiPhiFunc):
     def get_constant(self):
         raise TypeError('Cannot get constant of a ChiPhiFuncNull.')
 
-    def cap_m(self):
+    def cap_m(self, dummy):
         raise TypeError('Cannot cap_m() a ChiPhiFuncNull.')
 
     def real(self):

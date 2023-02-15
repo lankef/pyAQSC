@@ -6,7 +6,7 @@
 from chiphifunc import *
 from chiphiepsfunc import *
 from math_utilities import *
-from looped_lambdas import *
+from looped_coef_lambdas import *
 import numpy as np
 
 # parsed relations
@@ -189,26 +189,26 @@ def iterate_Yn_cp_magnetic(n_eval,
     if n_eval%2!=0: # at odd orders (ODE exists)
         # The rest of the procedure is carried out normally with
         # i_free pointing at Yn1p. The resulting Yn should be
-        # Yn = (A_einv@np.ascontiguousarray(chiphifunc_rhs) - Yn1p * vector_free_coef)[:n_dim]
+        # Yn = (A_einv@np.ascontiguousarray(chiphifunc_rhs) + Yn1p * vector_free_coef)[:n_dim]
         # where vector_free_coef is a vector. This gives Yn1n = Yn1n and
         #
-        # Yn1n = Yn[i_1n] = (A_einv@chiphifunc_rhs - Yn1p * vector_free_coef)[i_1n]
-        # = A_einv[i_1n]@chiphifunc_rhs - Yn1p * vector_free_coef[i_1n]
+        # Yn1n = Yn[i_1n] = (-A_einv@chiphifunc_rhs + Yn1p * vector_free_coef)[i_1n]
+        # = -A_einv[i_1n]@chiphifunc_rhs + Yn1p * vector_free_coef[i_1n]
         #
         # Therefore,
         #                                           Yn1n + Yn1p = Yn_free is equivalent to
-        # A_einv[i_1n]@chiphifunc_rhs - Yn1p * vector_free_coef[i_1n] + Yn1p = Yn_free
-        # A_einv[i_1n]@chiphifunc_rhs - Yn1p * (vector_free_coef[i_1n]-1) = Yn_free
-        # A_einv[i_1n]@chiphifunc_rhs - Yn_free = Yn1p * (vector_free_coef[i_1n]-1)
-        # (A_einv[i_1n]@chiphifunc_rhs - Yn_free)/(vector_free_coef[i_1n]-1) = Yn1p
+        # -A_einv[i_1n]@chiphifunc_rhs + Yn1p * vector_free_coef[i_1n] + Yn1p = Yn_free
+        # -A_einv[i_1n]@chiphifunc_rhs + Yn1p * (vector_free_coef[i_1n]-1) = Yn_free
+        # -A_einv[i_1n]@chiphifunc_rhs + Yn_free = Yn1p * (vector_free_coef[i_1n]-1)
+        # (-A_einv[i_1n]@chiphifunc_rhs + Yn_free)/(vector_free_coef[i_1n]-1) = Yn1p
         # i_1n is shifted by the padding
         i_1p = (n_eval+1)//2 # location of Yn0 or Yn1p
         i_1n = i_free-1 # Index of Yn1n (or if n is even, Yn2_n)
-        vec_free = (np.einsum('ik,ik->k',O_einv[i_1n],chiphifunc_rhs_content) - Yn_free_content)/(vector_free_coef[i_1n]-1)
+        vec_free = (-np.einsum('ik,ik->k',O_einv[i_1n],chiphifunc_rhs_content) + Yn_free_content)/(vector_free_coef[i_1n]-1)
     else:
         vec_free = Yn_free_content
 
-        Yn = (np.einsum('ijk,jk->ik',O_einv,chiphifunc_rhs_content) - vec_free * vector_free_coef)
+        Yn = (np.einsum('ijk,jk->ik',O_einv,chiphifunc_rhs_content) + vec_free * vector_free_coef)
     return(ChiPhiFunc(Yn))
 
 
@@ -668,7 +668,7 @@ class Equilibrium:
     # generates a set of lambda functions that evaluates these coefficients
     # at order n. See looped_lambdas.py for more details.
     def prepare_lambdas(self):
-        self.looped_coef_lambdas = eval_looped_lambdas(self)
+        self.looped_coef_lambdas = eval_looped_coef_lambdas(self)
         return()
     # The looped equation uses some very long coefficients with simple n dependence.
     # the below methods calculates these coefficients using n-independent parts
