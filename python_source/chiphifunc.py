@@ -397,8 +397,7 @@ class ChiPhiFunc:
                 raise ValueError('Integrand has a significant chi-independent '\
                 'component!')
 
-        mode_i = -1j/temp
-        return(type(self)(mode_i * self.content))
+        return(type(self)(-1j * self.content/temp))
 
     # NOTE: will not be passed items awaiting for conditions.
     def dphi(self, order=1, mode='default'):
@@ -630,6 +629,9 @@ class ChiPhiFunc:
         content = self.content
         if content.shape[1]==1:
             content = content*np.ones((1,100))
+        if type(content) is ChiPhiFuncNull:
+            print('display_content(): input is ChiPhiFuncNull.')
+            return()
         len_phi = content.shape[1]
         phis = np.linspace(0,2*np.pi*(1-1/len_phi), len_phi)
         if fourier_mode:
@@ -892,7 +894,8 @@ class ChiPhiFunc:
     # O y = (A + B dchi) y = RHS <=>
     #   y = O_einv - vec_free * vec_free_coef
     # Or in code format,
-    # y = (np.einsum('ijk,jk->ik',O_einv,chiphifunc_rhs_content) - vec_free * vector_free_coef)
+    # y = (np.einsum('ijk,jk->ik',O_einv,chiphifunc_rhs_content) + vec_free * vector_free_coef)
+    # rankrhs is the number of comp in Y minus 1.
     def get_O_O_einv_from_A_B(chiphifunc_A, chiphifunc_B, i_free, rank_rhs):
 
         if not (type(chiphifunc_A) is ChiPhiFunc\
@@ -916,6 +919,7 @@ class ChiPhiFunc:
         O_einv = tensor_inv_square_excluding_col(O_matrices, i_free)
         O_einv = np.concatenate((O_einv[:i_free], np.zeros((1,O_einv.shape[1],O_einv.shape[2])), O_einv[i_free:]))
         O_free_col = O_matrices[:,i_free,:]
+
         vector_free_coef = np.einsum('ijk,jk->ik',O_einv, O_free_col)#A_einv@A_free_col
         vector_free_coef[i_free] = -np.ones((vector_free_coef.shape[1]))
 
