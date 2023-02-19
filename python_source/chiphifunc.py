@@ -624,7 +624,7 @@ class ChiPhiFunc:
         ))
 
     # Plot phi-dependent power-Fourier coefficients on overlapping line plots.
-    def display_content(self, fourier_mode = True, colormap_mode = False):
+    def display_content(self, fourier_mode = False, colormap_mode = False):
         plt.rcParams['figure.figsize'] = [8,3]
         content = self.content
         if content.shape[1]==1:

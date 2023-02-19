@@ -7,7 +7,6 @@ import numpy as np
 
 # parsed relations
 import MHD_parsed
-from recursion_relations import *
 
 # Performance
 import time
@@ -38,12 +37,11 @@ def generate_RHS(
     ''' O_einv and vec_free for Y. Y is unknown at all orders '''
     # but solved from different equations (II tilde/D3) at each (even/odd) order.
     O_matrices, O_einv, vector_free_coef = \
-        iterate_Yn_cp_operators(
+        recursion_relations.iterate_Yn_cp_operators(
             n_eval=n_eval-1,
             X_coef_cp=X_coef_cp,
             B_alpha_coef=B_alpha_coef
         )
-    print('oeinv shape', O_einv.shape)
     out_dict_RHS['O_einv'] = O_einv
     out_dict_RHS['vector_free_coef'] = np.fft.ifft(fft_filter(np.fft.fft(vector_free_coef, axis = 1), len_tensor, axis=1), axis=1)
     # Even orders
@@ -61,14 +59,14 @@ def generate_RHS(
         B_psi_coef_cp_n0_masked = B_psi_coef_cp.mask(n_eval-4)
         B_psi_coef_cp_n0_masked.append(B_psi_n_n0_masked)
         ''' Z and p, contains B_psi, unknown at even orders '''
-        Znm1_no_B_psi = iterate_Zn_cp(
+        Znm1_no_B_psi = recursion_relations.iterate_Zn_cp(
             n_eval-1,
             X_coef_cp, Y_coef_cp, Z_coef_cp,
             B_theta_coef_cp, B_psi_coef_cp_n0_masked,
             B_alpha_coef,
             kap_p, dl_p, tau_p,
             iota_coef)
-        pnm1_no_B_psi = iterate_p_perp_n(
+        pnm1_no_B_psi = recursion_relations.iterate_p_perp_n(
             n_eval=n_eval-1,
             B_theta_coef_cp=B_theta_coef_cp,
             B_psi_coef_cp=B_psi_coef_cp_n0_masked,
@@ -82,7 +80,7 @@ def generate_RHS(
         Z_coef_cp_no_B_psi = Z_coef_cp.mask(n_eval-2)
         Z_coef_cp_no_B_psi.append(Znm1_no_B_psi)
         ''' X and Delta, contains B_psi, unknown at even orders '''
-        Xnm1_no_B_psi = iterate_Xn_cp(n_eval-1,
+        Xnm1_no_B_psi = recursion_relations.iterate_Xn_cp(n_eval-1,
             X_coef_cp,
             Y_coef_cp,
             Z_coef_cp_no_B_psi,
@@ -90,7 +88,7 @@ def generate_RHS(
             B_alpha_coef,
             kap_p, dl_p, tau_p,
             iota_coef)
-        Deltanm1_no_B_psi = iterate_delta_n_0_offset(n_eval=n_eval-1,
+        Deltanm1_no_B_psi = recursion_relations.iterate_delta_n_0_offset(n_eval=n_eval-1,
             B_denom_coef_c=B_denom_coef_c,
             p_perp_coef_cp=p_perp_coef_cp_no_B_psi,
             Delta_coef_cp=Delta_coef_cp,
@@ -123,7 +121,7 @@ def generate_RHS(
             'be calculated before evaluating the looped equations at an odd order.')
 
     ''' Y, unknown at all orders and contains B_psi. '''
-    Yn_rhs_content_no_unknown = iterate_Yn_cp_RHS(n_eval=n_eval-1,
+    Yn_rhs_content_no_unknown = recursion_relations.iterate_Yn_cp_RHS(n_eval=n_eval-1,
         X_coef_cp=X_coef_cp_no_B_psi,
         Y_coef_cp=Y_coef_cp,
         Z_coef_cp=Z_coef_cp,
@@ -255,7 +253,8 @@ def generate_tensor_operator(
     B_alpha_coef, B_denom_coef_c,
     kap_p, tau_p, dl_p,
     eta, iota_coef,
-    O_einv, vector_free_coef
+    O_einv, vector_free_coef,
+    looped_coef_lambdas
 ):
     # An internal method taking care of some dupicant code
     def to_tensor_fft_op(ChiPhiFunc_in):
@@ -277,7 +276,12 @@ def generate_tensor_operator(
     dphi_slice = (np.full((len_tensor,len_tensor), 1) * 1j * fft_freq)
     dphi_array_single_elem = np.tile(dphi_slice, [1,1,1,1])
     dphi_array_single_row = np.tile(dphi_slice, [n_unknown,1,1,1])
-    dphi_array = np.tile(dphi_slice, [n_unknown, n_unknown-2,1,1])
+    # dphi_array is used exclusively for B_theta.
+    # At even orders there is one less comp to solve for.
+    if n_unknown%2==0:
+        dphi_array_B_theta = np.tile(dphi_slice, [n_unknown, n_unknown-2,1,1])
+    else:
+        dphi_array_B_theta = np.tile(dphi_slice, [n_unknown, n_unknown-1,1,1])
     out_dict_tensor={}
     ''' Y coeffs '''
     # An (n, 1, 2, 2) tensor, acting on
@@ -371,7 +375,7 @@ def generate_tensor_operator(
         tensor_fft_op_dchi_B_theta = fft_conv_tensor_batch(tensor_fft_coef_dchi_B_theta)
         tensor_fft_op_dphi_B_theta = fft_conv_tensor_batch(tensor_fft_coef_dphi_B_theta)
         # Applying dphi
-        tensor_fft_op_dphi_B_theta = tensor_fft_op_dphi_B_theta*dphi_array
+        tensor_fft_op_dphi_B_theta = tensor_fft_op_dphi_B_theta*dphi_array_B_theta
         # Merging
         full_tensor_fft_op_B_theta = (
             tensor_fft_op_B_theta
@@ -384,20 +388,20 @@ def generate_tensor_operator(
         # A (n, 1, 2, 2) tensor, acting on
         #     [[B_psi0']]
         # B_psi are only solved at even orders (odd n_eval)
-        looped_B_psi_coefs = MHD_parsed.eval_B_psi_coefs(
-            n_eval=n_eval,
-            X_coef_cp=X_coef_cp,
-            Y_coef_cp=Y_coef_cp,
-            Delta_coef_cp=Delta_coef_cp,
-            B_alpha_coef=B_alpha_coef,
-            B_denom_coef_c=B_denom_coef_c,
-            dl_p=dl_p,
-            tau_p=tau_p,
-            kap_p=kap_p,
-            iota_coef=iota_coef)
+        # looped_coef_lambdas = MHD_parsed.eval_B_psi_coefs(
+        #     n_eval=n_eval,
+        #     X_coef_cp=X_coef_cp,
+        #     Y_coef_cp=Y_coef_cp,
+        #     Delta_coef_cp=Delta_coef_cp,
+        #     B_alpha_coef=B_alpha_coef,
+        #     B_denom_coef_c=B_denom_coef_c,
+        #     dl_p=dl_p,
+        #     tau_p=tau_p,
+        #     kap_p=kap_p,
+        #     iota_coef=iota_coef)
         ''' B_psi coefs in Y '''
         # Coeff of B_psi in the RHS of Y equations
-        coef_B_psi_dphi_1_in_Y_RHS = looped_B_psi_coefs['coef_B_psi_dphi_1_in_Y_RHS'].pad_chi(n_eval+1)
+        coef_B_psi_dphi_1_in_Y_RHS = looped_coef_lambdas['lambda_B_psi_dphi_1_in_Y_RHS'](n_eval).pad_chi(n_eval+1)
         out_dict_tensor['coef_B_psi_dphi_1_in_Y_RHS'] = coef_B_psi_dphi_1_in_Y_RHS
         # Applying inverted operators
         coef_B_psi_dphi_1_in_Y_var = ChiPhiFunc(np.einsum('ijk,jk->ik',O_einv,coef_B_psi_dphi_1_in_Y_RHS.content))
@@ -425,17 +429,17 @@ def generate_tensor_operator(
         ).cap_m(n_eval-2)
 
         ''' Merging B_psi coeffs '''
-        coef_B_psi_dphi_0_direct = looped_B_psi_coefs['coef_B_psi_dphi_0_direct']
-        coef_B_psi_dphi_1_direct = looped_B_psi_coefs['coef_B_psi_dphi_1_direct']
-        coef_B_psi_dphi_1_in_X = looped_B_psi_coefs['coef_B_psi_dphi_1_in_X']
-        coef_B_psi_dphi_2_in_X = looped_B_psi_coefs['coef_B_psi_dphi_2_in_X']
-        coef_B_psi_dphi_3_in_X = looped_B_psi_coefs['coef_B_psi_dphi_3_in_X']
-        coef_B_psi_dphi_0_in_Z = looped_B_psi_coefs['coef_B_psi_dphi_0_in_Z']
-        coef_B_psi_dphi_1_in_Z = looped_B_psi_coefs['coef_B_psi_dphi_1_in_Z']
-        coef_B_psi_dphi_0_in_p = looped_B_psi_coefs['coef_B_psi_dphi_0_in_p']
-        coef_B_psi_dphi_1_in_p = looped_B_psi_coefs['coef_B_psi_dphi_1_in_p']
-        coef_B_psi_dphi_0_in_Delta = looped_B_psi_coefs['coef_B_psi_dphi_0_in_Delta']
-        coef_B_psi_dphi_1_in_Delta = looped_B_psi_coefs['coef_B_psi_dphi_1_in_Delta']
+        coef_B_psi_dphi_0_direct = looped_coef_lambdas['lambda_B_psi_dphi_0_direct'](n_eval)
+        coef_B_psi_dphi_1_direct = looped_coef_lambdas['lambda_B_psi_dphi_1_direct'](n_eval)
+        coef_B_psi_dphi_1_in_X = looped_coef_lambdas['lambda_B_psi_dphi_1_in_X'](n_eval)
+        coef_B_psi_dphi_2_in_X = looped_coef_lambdas['lambda_B_psi_dphi_2_in_X'](n_eval)
+        coef_B_psi_dphi_3_in_X = looped_coef_lambdas['lambda_B_psi_dphi_3_in_X'](n_eval)
+        coef_B_psi_dphi_0_in_Z = looped_coef_lambdas['lambda_B_psi_dphi_0_in_Z'](n_eval)
+        coef_B_psi_dphi_1_in_Z = looped_coef_lambdas['lambda_B_psi_dphi_1_in_Z'](n_eval)
+        coef_B_psi_dphi_0_in_p = looped_coef_lambdas['lambda_B_psi_dphi_0_in_p'](n_eval)
+        coef_B_psi_dphi_1_in_p = looped_coef_lambdas['lambda_B_psi_dphi_1_in_p'](n_eval)
+        coef_B_psi_dphi_0_in_Delta = looped_coef_lambdas['lambda_B_psi_dphi_0_in_Delta'](n_eval)
+        coef_B_psi_dphi_1_in_Delta = looped_coef_lambdas['lambda_B_psi_dphi_1_in_Delta'](n_eval)
         coef_B_psi_dphi_1 = (
             coef_B_psi_dphi_1_in_Y
             +coef_B_psi_dphi_1_direct
@@ -611,7 +615,6 @@ def solve(n_unknown, target_len_phi,
     # Making a blank ChiPhiFunc with the correct shape. The free parameter's
     # contribution only has 2 chi components, and will cause errors when
     # n_unknown>2.
-    print('filtered_inv_looped_fft_operator',filtered_inv_looped_fft_operator.shape)
     Delta_offset_unit_contribution = ChiPhiFunc(np.zeros((filtered_inv_looped_fft_operator.shape[0], filtered_inv_looped_fft_operator.shape[1])))
     # How much a Delta_offset of 1 shift -filtered_solution[-1,0]
     # This has shape (2, len_tensor)
@@ -663,14 +666,9 @@ def iterate_looped(
     eta, iota_coef,
     # lamnda for the coefficient of the scalar free parameter in RHS
     looped_coef_lambdas,
-    iota_new=0
-
 ):
     if target_len_phi<max_freq*2:
         raise ValueError('target_len_phi must >= max_freq*2.')
-    if n_unknown%2==1:
-        iota_coef=iota_coef.mask((n_unknown-3)//2)
-        iota_coef.append(iota_new)
 
     # First calculate RHS
     out_dict_RHS = generate_RHS(
@@ -713,7 +711,8 @@ def iterate_looped(
         eta = eta,
         iota_coef = iota_coef,
         O_einv = O_einv,
-        vector_free_coef = vector_free_coef
+        vector_free_coef = vector_free_coef,
+        looped_coef_lambdas = looped_coef_lambdas
     )
     filtered_inv_looped_fft_operator =  out_dict_tensor['filtered_inv_looped_fft_operator']
 
@@ -733,7 +732,7 @@ def iterate_looped(
         # Even order
         B_theta_n = B_theta_coef_cp[n_unknown][0]
         if n_unknown>2:
-            B_theta_n_no_center_content = np.zeros((n_unknown-1, target_len_phi))
+            B_theta_n_no_center_content = np.zeros((n_unknown-1, target_len_phi), np.complex128)
             B_theta_n_no_center_content[:n_unknown//2-1] = solution[:n_unknown//2-1]
             B_theta_n_no_center_content[n_unknown//2:] = solution[n_unknown//2-1:-2]
             B_theta_n += ChiPhiFunc(B_theta_n_no_center_content)
@@ -790,12 +789,54 @@ def iterate_looped(
         # Calculating Yn
         vec_free = solution[-2]
         Yn_rhs_content_no_unknown = out_dict_RHS['Yn_rhs_content_no_unknown']
-        Yn = ChiPhiFunc((np.einsum('ijk,jk->ik',O_einv,Yn_rhs_content_no_unknown) + vec_free * vector_free_coef))
+        Yn = ChiPhiFunc(np.einsum('ijk,jk->ik',O_einv,Yn_rhs_content_no_unknown) + vec_free * vector_free_coef)
         return({
             'B_theta_n': ChiPhiFunc(solution[:-2]),
-            'B_theta_np10': ChiPhiFunc(np.array([solution[-2]])),
+            'B_theta_np10': ChiPhiFunc(np.array([solution[-1]])),
             'vec_free': vec_free,
             'O_einv': O_einv,
             'vector_free_coef': vector_free_coef,
-            'Yn': Yn
+            'Yn': Yn,
+            'filtered_RHS_0_offset': filtered_RHS_0_offset,# TODO: REMOVE!
+            'filtered_inv_looped_fft_operator': filtered_inv_looped_fft_operator,# TODO: REMOVE!
         })
+
+''' V. Utilities '''
+''' V.1. Low-pass filter for simplifying tensor to invert '''
+# Shorten an array in FFT representation to leave only target_length elements.
+# by removing the highest frequency modes. The resulting array can be IFFT'ed.
+def fft_filter(fft_in, target_length, axis):
+    if target_length>fft_in.shape[axis]:
+        raise ValueError('target_length should be smaller than the'\
+                        'length of fft_in along axis.')
+    elif target_length==fft_in.shape[axis]:
+        return(fft_in)
+    # FFT of an array contains mode amplitude in the order given by
+    # fftfreq(length)*length. For example, for length=7,
+    # [ 0.,  1.,  2.,  3., -3., -2., -1.]
+    left = fft_in.take(indices=range(0, (target_length+1)//2), axis=axis)
+    right = fft_in.take(indices=range(-(target_length//2), 0), axis=axis)
+    return(np.concatenate((left, right), axis=axis)*target_length/fft_in.shape[axis])
+
+# Pad an array in FFT representation to target_length elements.
+# by adding zeroes as highest frequency modes.
+# The resulting array can be IFFT'ed.
+def fft_pad(fft_in, target_length, axis):
+    if target_length<fft_in.shape[axis]:
+        raise ValueError('target_length should be larger than the'\
+                        'length of fft_in along axis.')
+    elif target_length==fft_in.shape[axis]:
+        return(fft_in)
+    new_shape = list(fft_in.shape)
+    original_length = new_shape[axis]
+    new_shape[axis] = target_length - original_length
+    center_array = np.zeros(new_shape)
+    # FFT of an array contains mode amplitude in the order given by
+    # fftfreq(length)*length. For example, for length=7,
+    # [ 0.,  1.,  2.,  3., -3., -2., -1.]
+    left = fft_in.take(indices=range(0, (original_length+1)//2), axis=axis)
+    right = fft_in.take(indices=range(-(original_length//2), 0), axis=axis)
+    return(np.concatenate((left, center_array, right), axis=axis)*target_length/fft_in.shape[axis])
+
+# Cyclic import
+import recursion_relations

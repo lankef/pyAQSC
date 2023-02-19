@@ -5,9 +5,13 @@ import timeit
 import scipy.signal
 from matplotlib import pyplot as plt
 
+# Used for loading stel.
+from scipy.interpolate import interp1d
+
 # for importing parsed codes
 from chiphifunc import *
 from chiphiepsfunc import *
+from recursion_relations import *
 from math_utilities import is_seq,py_sum,is_integer,diff
 
 # Size of the chi and phi grid used for evaluation
@@ -16,6 +20,40 @@ n_grid_chi = 500
 points = np.linspace(0, 2*np.pi*(1-1/n_grid_phi), n_grid_phi)
 chi = np.linspace(0, 2*np.pi*(1-1/n_grid_chi), n_grid_chi)
 phi = points
+
+# Generate a ChiPhiFunc.
+# len_chi: # chi components,
+# len_phi: # phi grid points,
+# num_harmonics: # phi harmonics per chi component,
+# amp_range: range of amplitude
+# harm_range: range of harmonic number
+def rand_ChiPhiFunc(len_chi, len_phi=1000, num_harmonics=5, amp_range = (0.5,2), harm_range = (1,6)):
+    if len(amp_range) !=2 or len(harm_range) != 2:
+        raise TypeError('amp_range and harm_range should both have length of 2.')
+    content_raw = []
+    for i_chi in range(len_chi):
+        chi_comp = 0
+        for i_harm in range(num_harmonics):
+            harm = np.random.randint(harm_range[1]-harm_range[0])+int(harm_range[0])
+            amplitude = np.random.random()*(amp_range[1]-amp_range[0])+amp_range[0]
+            phis = np.linspace(0, 2*np.pi*(1-1/n_grid_phi), n_grid_phi)
+            if_sin = np.random.random()
+            if if_sin>0.5:
+                chi_comp += np.array(amplitude*np.sin(harm*points))
+            else:
+                chi_comp += np.array(amplitude*np.cos(harm*points))
+        content_raw.append(chi_comp)
+    return(ChiPhiFunc(np.array(content_raw),fourier_mode=True))
+
+def rand_ChiPhiEpsFunc(order, zero_outer=False):
+    list_out = [0]
+    for i in range(order):
+        new_content = rand_ChiPhiFunc(i+1).content
+        if zero_outer:
+            new_content[0,:]=0
+            new_content[-1,:]=0
+        list_out.append(ChiPhiFunc(new_content))
+    return(ChiPhiEpsFunc(list_out))
 
 # Evaluate a callable on 'points' (defined above)
 def evaluate(func):
@@ -50,7 +88,7 @@ def display(array, complex=True):
         plt.show()
 
 # Plots the content of two ChiPhiFunc's and compare.
-def compare_chiphifunc(A, B, fourier_mode=True, simple_mode = True, colormap_mode=False):
+def compare_chiphifunc(A, B, fourier_mode=False, simple_mode=True, colormap_mode=False):
     if not simple_mode:
         print('A')
         A.display_content(fourier_mode=fourier_mode, colormap_mode=colormap_mode)
@@ -129,8 +167,6 @@ def cumulative_error(chiphifunc_in, callable_chiphifunc, callable_array, num_ste
     plt.ylabel('Error')
     plt.xlabel('# execution')
     plt.show()
-
-
 
 # Generates R or Z from Eduardo's axis shape array for pyqsc
 # The notation represents [number of harmonics, 0 harm, value,
@@ -400,3 +436,247 @@ def chiphifunc_debug_plot():
     chiphifunc.debug_pow_diff_add = []
     chiphifunc.debug_max_value = []
     chiphifunc.debug_avg_value = []
+
+def import_from_stel(stel = Qsc.from_paper('r2 section 5.2')):
+    # Spline fit and interpolate to certain elements
+    # Or if the item is scalar, creates a filled 1d array of
+    # len_phi
+    def to_phi(varphi, nfp, x, len_phi=len_phi):
+        if np.isscalar(x):
+            return(np.full((len_phi), x))
+        else:
+            interp_array = x
+            interp_array = np.tile(interp_array,nfp+1)
+            phis = np.array([])
+            for i in range(nfp+1):
+                phis = np.append(phis,varphi+np.pi*2/nfp*i)
+            f = interp1d(phis, interp_array, kind='cubic')
+            return(f(np.linspace(0,np.pi*2*(len_phi-1)/len_phi, len_phi)))
+
+    dl_p = stel.abs_G0_over_B0
+    iota = stel.iotaN
+    iota_coef = ChiPhiEpsFunc([iota])
+    tau_p = ChiPhiFuncGrid(np.array([to_phi(stel.varphi, stel.nfp, -stel.torsion)]))
+    kap_p = ChiPhiFuncGrid(np.array([to_phi(stel.varphi, stel.nfp, stel.curvature)]))
+    B0 = 1/stel.B0**2
+    eta = stel.etabar*np.sqrt(2)*B0**0.25
+    #
+    r_factor = np.sqrt(2/stel.Bbar)
+    # X, Y, Z -----------------------------------
+    X1 = ChiPhiFuncGrid(np.array([
+        to_phi(stel.varphi, stel.nfp, stel.X1s), # sin coeff is zero
+        to_phi(stel.varphi, stel.nfp, stel.X1c),
+    ]), fourier_mode = True)*r_factor
+    X2 = ChiPhiFuncGrid(np.array([
+        to_phi(stel.varphi, stel.nfp, stel.X2s),
+        to_phi(stel.varphi, stel.nfp, stel.X20),
+        to_phi(stel.varphi, stel.nfp, stel.X2c)
+    ]), fourier_mode = True)*r_factor**2
+    X3 = ChiPhiFuncGrid(np.array([
+        to_phi(stel.varphi, stel.nfp, stel.X3s3),
+        to_phi(stel.varphi, stel.nfp, stel.X3s1),
+        to_phi(stel.varphi, stel.nfp, stel.X3c1),
+        to_phi(stel.varphi, stel.nfp, stel.X3c3)*r_factor**3
+    ]), fourier_mode = True)
+    X_coef_cp = ChiPhiEpsFunc([0, X1, X2])
+    Y1 = ChiPhiFuncGrid(np.array([
+        to_phi(stel.varphi, stel.nfp, stel.Y1s), # sin coeff is zero
+        to_phi(stel.varphi, stel.nfp, stel.Y1c),
+    ]), fourier_mode = True)*r_factor
+    Y2 = ChiPhiFuncGrid(np.array([
+        to_phi(stel.varphi, stel.nfp, stel.Y2s),
+        to_phi(stel.varphi, stel.nfp, stel.Y20),
+        to_phi(stel.varphi, stel.nfp, stel.Y2c)
+    ]), fourier_mode = True)*r_factor**2
+    Y3 = ChiPhiFuncGrid(np.array([
+        to_phi(stel.varphi, stel.nfp, stel.Y3s3),
+        to_phi(stel.varphi, stel.nfp, stel.Y3s1),
+        to_phi(stel.varphi, stel.nfp, stel.Y3c1),
+        to_phi(stel.varphi, stel.nfp, stel.Y3c3)
+    ]), fourier_mode = True)*r_factor**3
+    Y_coef_cp = ChiPhiEpsFunc([0, Y1, Y2])
+    Z2 = ChiPhiFuncGrid(np.array([
+        to_phi(stel.varphi, stel.nfp, stel.Z2s),
+        to_phi(stel.varphi, stel.nfp, stel.Z20),
+        to_phi(stel.varphi, stel.nfp, stel.Z2c)
+    ]), fourier_mode = True)*r_factor**2
+    Z3 = ChiPhiFuncGrid(np.array([
+        to_phi(stel.varphi, stel.nfp, stel.Z3s3),
+        to_phi(stel.varphi, stel.nfp, stel.Z3s1),
+        to_phi(stel.varphi, stel.nfp, stel.Z3c1),
+        to_phi(stel.varphi, stel.nfp, stel.Z3c3)
+    ]), fourier_mode = True)*r_factor**3
+    Z_coef_cp = ChiPhiEpsFunc([0, 0, Z2])
+    # B components
+
+
+    Btc20 = 2*stel.I2/stel.B0
+    B_theta_coef_cp = ChiPhiEpsFunc([0, 0, ChiPhiFuncGrid(np.array([
+        to_phi(stel.varphi, stel.nfp, Btc20)
+    ]))])
+
+    B_psi_coef_cp = ChiPhiEpsFunc([0])
+
+    B1c = -2*B0*eta
+    B1 = ChiPhiFuncGrid(np.array([
+        np.zeros(len_phi),
+        to_phi(stel.varphi, stel.nfp, B1c)
+    ]))
+    B20 = (0.75*stel.etabar**2/np.sqrt(B0) - stel.B20)*4*B0**2
+    B2c = (0.75*stel.etabar**2/np.sqrt(B0) - stel.B2c)*4*B0**2
+    B2s = -4*stel.B2s*B0**2
+    B2 = ChiPhiFuncGrid(np.array([
+        to_phi(stel.varphi, stel.nfp, B2s),
+        to_phi(stel.varphi, stel.nfp, B20),
+        to_phi(stel.varphi, stel.nfp, B2c)
+    ]))
+    B_denom_coef_c = ChiPhiEpsFunc([B0, B1, ChiPhiFuncGrid(np.array([B20]))])
+
+    Ba0 = np.array([to_phi(stel.varphi, stel.nfp, stel.G0)])
+    Ba1 = np.array([to_phi(stel.varphi, stel.nfp, 2/stel.B0*(stel.G2 + stel.iotaN*stel.I2))])
+    B_alpha_coef = ChiPhiEpsFunc([ChiPhiFuncGrid(Ba0), ChiPhiFuncGrid(Ba1)])
+
+    # X_coef_cp.mask(2), Done
+    # Y_coef_cp.mask(2), Done
+    # Z_coef_cp.mask(2), Done
+    # B_psi_coef_cp.mask(0), Done
+    # B_theta_coef_cp.mask(2), Done
+    # B_denom_coef_c.mask(2), Done
+    # B_alpha_coef.mask(1), Done
+    # kap_p, dl_p, tau_p, Done
+    # iota_coef.mask(0), eta, Done
+    equilibrium_out = Equilibrium.from_known(X_coef_cp,
+        Y_coef_cp,
+        Z_coef_cp,
+        B_psi_coef_cp,
+        B_theta_coef_cp,
+        B_denom_coef_c,
+        B_alpha_coef,
+        kap_p, dl_p, tau_p,
+        iota_coef, eta,
+        ChiPhiEpsFunc([0,0,0]), # no pressure or delta
+        ChiPhiEpsFunc([0,0,0]))
+
+    return(equilibrium_out, Y3)
+
+def import_from_stel(stel = Qsc.from_paper('r2 section 5.2'), len_phi=1000):
+    # Spline fit and interpolate to certain elements
+    # Or if the item is scalar, creates a filled 1d array of
+    # len_phi
+    def to_phi(varphi, nfp, x, len_phi=len_phi):
+        if np.isscalar(x):
+            return(np.full((len_phi), x))
+        else:
+            interp_array = x
+            interp_array = np.tile(interp_array,nfp+1)
+            phis = np.array([])
+            for i in range(nfp+1):
+                phis = np.append(phis,varphi+np.pi*2/nfp*i)
+            f = interp1d(phis, interp_array, kind='cubic')
+            return(f(np.linspace(0,np.pi*2*(len_phi-1)/len_phi, len_phi)))
+
+    dl_p = stel.abs_G0_over_B0
+    iota = stel.iotaN
+    iota_coef = ChiPhiEpsFunc([iota])
+    tau_p = ChiPhiFunc(np.array([to_phi(stel.varphi, stel.nfp, -stel.torsion)]))
+    kap_p = ChiPhiFunc(np.array([to_phi(stel.varphi, stel.nfp, stel.curvature)]))
+    B0 = 1/stel.B0**2
+    eta = stel.etabar*np.sqrt(2)*B0**0.25
+    #
+    r_factor = np.sqrt(2/stel.Bbar)
+    # X, Y, Z -----------------------------------
+    X1 = ChiPhiFunc(np.array([
+        to_phi(stel.varphi, stel.nfp, stel.X1s), # sin coeff is zero
+        to_phi(stel.varphi, stel.nfp, stel.X1c),
+    ]), fourier_mode = True)*r_factor
+    X2 = ChiPhiFunc(np.array([
+        to_phi(stel.varphi, stel.nfp, stel.X2s),
+        to_phi(stel.varphi, stel.nfp, stel.X20),
+        to_phi(stel.varphi, stel.nfp, stel.X2c)
+    ]), fourier_mode = True)*r_factor**2
+    X3 = ChiPhiFunc(np.array([
+        to_phi(stel.varphi, stel.nfp, stel.X3s3),
+        to_phi(stel.varphi, stel.nfp, stel.X3s1),
+        to_phi(stel.varphi, stel.nfp, stel.X3c1),
+        to_phi(stel.varphi, stel.nfp, stel.X3c3)*r_factor**3
+    ]), fourier_mode = True)
+    X_coef_cp = ChiPhiEpsFunc([0, X1, X2])
+    Y1 = ChiPhiFunc(np.array([
+        to_phi(stel.varphi, stel.nfp, stel.Y1s), # sin coeff is zero
+        to_phi(stel.varphi, stel.nfp, stel.Y1c),
+    ]), fourier_mode = True)*r_factor
+    Y2 = ChiPhiFunc(np.array([
+        to_phi(stel.varphi, stel.nfp, stel.Y2s),
+        to_phi(stel.varphi, stel.nfp, stel.Y20),
+        to_phi(stel.varphi, stel.nfp, stel.Y2c)
+    ]), fourier_mode = True)*r_factor**2
+    Y3 = ChiPhiFunc(np.array([
+        to_phi(stel.varphi, stel.nfp, stel.Y3s3),
+        to_phi(stel.varphi, stel.nfp, stel.Y3s1),
+        to_phi(stel.varphi, stel.nfp, stel.Y3c1),
+        to_phi(stel.varphi, stel.nfp, stel.Y3c3)
+    ]), fourier_mode = True)*r_factor**3
+    Y_coef_cp = ChiPhiEpsFunc([0, Y1, Y2])
+    Z2 = ChiPhiFunc(np.array([
+        to_phi(stel.varphi, stel.nfp, stel.Z2s),
+        to_phi(stel.varphi, stel.nfp, stel.Z20),
+        to_phi(stel.varphi, stel.nfp, stel.Z2c)
+    ]), fourier_mode = True)*r_factor**2
+    Z3 = ChiPhiFunc(np.array([
+        to_phi(stel.varphi, stel.nfp, stel.Z3s3),
+        to_phi(stel.varphi, stel.nfp, stel.Z3s1),
+        to_phi(stel.varphi, stel.nfp, stel.Z3c1),
+        to_phi(stel.varphi, stel.nfp, stel.Z3c3)
+    ]), fourier_mode = True)*r_factor**3
+    Z_coef_cp = ChiPhiEpsFunc([0, 0, Z2])
+    # B components
+
+
+    Btc20 = 2*stel.I2/stel.B0
+    B_theta_coef_cp = ChiPhiEpsFunc([0, 0, ChiPhiFunc(np.array([
+        to_phi(stel.varphi, stel.nfp, Btc20)
+    ]))])
+
+    B_psi_coef_cp = ChiPhiEpsFunc([0])
+
+    B1c = -2*B0*eta
+    B1 = ChiPhiFunc(np.array([
+        np.zeros(len_phi),
+        to_phi(stel.varphi, stel.nfp, B1c)
+    ]))
+    B20 = (0.75*stel.etabar**2/np.sqrt(B0) - stel.B20)*4*B0**2
+    B2c = (0.75*stel.etabar**2/np.sqrt(B0) - stel.B2c)*4*B0**2
+    B2s = -4*stel.B2s*B0**2
+    B2 = ChiPhiFunc(np.array([
+        to_phi(stel.varphi, stel.nfp, B2s),
+        to_phi(stel.varphi, stel.nfp, B20),
+        to_phi(stel.varphi, stel.nfp, B2c)
+    ]))
+    B_denom_coef_c = ChiPhiEpsFunc([B0, B1, ChiPhiFunc(np.array([B20]))])
+
+    Ba0 = np.array([to_phi(stel.varphi, stel.nfp, stel.G0)])
+    Ba1 = np.array([to_phi(stel.varphi, stel.nfp, 2/stel.B0*(stel.G2 + stel.iotaN*stel.I2))])
+    B_alpha_coef = ChiPhiEpsFunc([ChiPhiFunc(Ba0), ChiPhiFunc(Ba1)])
+
+    # X_coef_cp.mask(2), Done
+    # Y_coef_cp.mask(2), Done
+    # Z_coef_cp.mask(2), Done
+    # B_psi_coef_cp.mask(0), Done
+    # B_theta_coef_cp.mask(2), Done
+    # B_denom_coef_c.mask(2), Done
+    # B_alpha_coef.mask(1), Done
+    # kap_p, dl_p, tau_p, Done
+    # iota_coef.mask(0), eta, Done
+    equilibrium_out = Equilibrium.from_known(X_coef_cp,
+        Y_coef_cp,
+        Z_coef_cp,
+        B_psi_coef_cp,
+        B_theta_coef_cp,
+        B_denom_coef_c,
+        B_alpha_coef,
+        kap_p, dl_p, tau_p,
+        iota_coef, eta,
+        ChiPhiEpsFunc([0,0,0]), # no pressure or delta
+        ChiPhiEpsFunc([0,0,0]))
+
+    return(equilibrium_out, Y3)

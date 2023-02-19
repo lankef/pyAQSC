@@ -696,6 +696,7 @@ class Equilibrium:
         eta = self.constant['eta']
 
         n=n_eval
+        n_unknown = n_eval-1
 
         J = MHD_parsed.validate_J(n,
             X_coef_cp,
@@ -732,7 +733,32 @@ class Equilibrium:
             B_alpha_coef, B_denom_coef_c,
             p_perp_coef_cp, Delta_coef_cp,
             iota_coef)
-        return(J, Cb, Ck, Ct, I, II, III, E6)
+        D2 = MHD_parsed.validate_D2(
+            n, X_coef_cp, Y_coef_cp, Z_coef_cp,
+            B_denom_coef_c, B_alpha_coef,
+            B_psi_coef_cp, B_theta_coef_cp,
+            kap_p, dl_p, tau_p, iota_coef
+        )
+        D3 = MHD_parsed.validate_D3(
+            n, X_coef_cp, Y_coef_cp, Z_coef_cp,
+            B_denom_coef_c, B_alpha_coef,
+            B_psi_coef_cp, B_theta_coef_cp,
+            kap_p, dl_p, tau_p, iota_coef
+        )
+        D23 = MHD_parsed.validate_D23(
+            n, X_coef_cp, Y_coef_cp, Z_coef_cp,
+            B_denom_coef_c, B_alpha_coef,
+            B_psi_coef_cp, B_theta_coef_cp,
+            kap_p, dl_p, tau_p, iota_coef
+        )
+        kt = MHD_parsed.validate_kt(
+            n, X_coef_cp, Y_coef_cp, Z_coef_cp,
+            B_denom_coef_c, B_alpha_coef,
+            B_psi_coef_cp, B_theta_coef_cp,
+            kap_p, dl_p, tau_p, iota_coef
+        )
+
+        return(J, Cb, Ck, Ct, I, II, III, E6, D2, D3, D23, kt)
 
     ''' Looped coefficients '''
     # The looped equation contains some complicated constants with simple n_eval
@@ -1132,6 +1158,7 @@ class Equilibrium:
         tau_p = self.constant['tau_p']
         eta = self.constant['eta']
         iota_coef.append(iota_new)
+        print('iota 1',iota_coef[1])
         B_denom_coef_c.append(B_denom_nm1)
         B_denom_coef_c.append(B_denom_n)
         B_alpha_coef.append(B_alpha_nb2)
@@ -1205,6 +1232,7 @@ class Equilibrium:
             iota_coef=iota_coef, no_iota_masking = True)
         filter_record_noise_and_append('Delta_coef_cp', Deltanm1_with_iota)
 
+        # print('iota 1 right before loop',iota_coef[1])
         solution_nm1_known_iota = looped_solver.iterate_looped(
             n_unknown = n_eval-1,
             max_freq = 500,
@@ -1223,7 +1251,7 @@ class Equilibrium:
             dl_p = dl_p,
             eta = eta,
             iota_coef = iota_coef,
-            looped_coef_lambdas = self.looped_coef_lambdas
+            looped_coef_lambdas = self.looped_coef_lambdas,
         )
         filter_record_noise_and_append('B_theta_coef_cp', solution_nm1_known_iota['B_theta_n'])
         # Don't record noise yet. This "partial" solution will be fed into
@@ -1308,3 +1336,4 @@ class Equilibrium:
 
         print("Time elapsed(s):",(time.time() - start_time))
         self.check_order_consistency()
+        return(solution_nm1_known_iota)
