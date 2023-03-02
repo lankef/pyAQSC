@@ -109,3 +109,25 @@ def int_chi(y):
         return(0)
     else:
         raise TypeError('Illegal int_chi argument: ' + str(y))
+
+# Faster. In this case, tensordot is faster than einsum.
+def einsum_ijkl_jmln_to_imkn(array_A, array_B):
+    if len(array_A.shape)!=4 or len(array_B.shape)!=4:
+        raise ValueError('Both input need to be 4d arrays')
+    # ikjl
+    A_transposed = np.transpose(array_A, (0,2,1,3))
+    # jlmn
+    B_transposed = np.transpose(array_B, (0,2,1,3))
+    # ikmn
+    array_out = np.tensordot(A_transposed, B_transposed)
+    return(np.transpose(array_out, (0,2,1,3)))
+
+# Slower than Einsum ijkl, jl -> ik. For reference only.
+def einsum_ijkl_jl_to_ik(array_A, array_B):
+    if len(array_A.shape)!=4 or len(array_B.shape)!=2:
+        raise ValueError('Both input need to be 4d arrays')
+    # ikjl
+    A_transposed = np.transpose(array_A, (0,2,1,3))
+    # ikmn
+    array_out = np.tensordot(A_transposed, array_B)
+    return(array_out)

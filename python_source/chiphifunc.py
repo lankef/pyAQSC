@@ -4,6 +4,7 @@ import warnings
 import scipy.signal
 import scipy.fftpack
 import math # factorial in dphi_direct
+from math_utilities import *
 from matplotlib import pyplot as plt
 
 
@@ -44,7 +45,8 @@ low_pass_freq=50
 # Default diff and integration modes can be modified.
 diff_mode = 'fft' # available: pseudo_spectral, finite_difference, fft, spline
 integral_mode = 'fft' # avalable: spline, simpson, fft
-two_pi_integral_mode = 'spline' # available: spline, simpson
+# Note: simpson's and spline does not produce self consistent Delta in
+two_pi_integral_mode = 'fft' # available: spline, simpson, fft
 
 # Threshold for p amplitude to use asymptotic expansion for y'+py=f
 asymptotic_threshold = 30
@@ -1050,6 +1052,9 @@ def integrate_phi_simpson(content, dx = 'default', periodic = False):
 def integrate_phi_spline(content, dx = 'default', periodic=False,
     diff=False, diff_order=None):
 
+    print('This is  the naive implementation. Please implement '
+    'periodic spline with scipy.interpolate.splrep')
+
     len_chi = content.shape[0]
     len_phi = content.shape[1]
     if dx == 'include_2pi':
@@ -1387,6 +1392,8 @@ def finite_diff_matrix(stencil, n_dim):
 ''' IV.1 Solving the periodic linear PDE (a + b * dphi + c * dchi) y = f(phi, chi) '''
 # Solves simple linear first order ODE systems in batch:
 # (coeff + coeff_phi d/dphi) y = f. ( y' + p_eff*y = f_eff )
+# SPECIAL BEHAVIOR:
+# when the equation system has an odd number of equations,
 # (Dchi = +- m * 1j)
 # All inputs are content matrices.
 # p and f are assumed periodic.
@@ -1419,7 +1426,8 @@ def finite_diff_matrix(stencil, n_dim):
 # a content along axis=1
 # Initial condition for y
 def solve_integration_factor(coeff, coeff_dp, f, \
-    integral_mode='auto', asymptotic_order=asymptotic_order, masking = True):
+    integral_mode='auto', asymptotic_order=asymptotic_order,
+    masking = True, fft_max_freq=None):
 
     len_phi = f.shape[1]
     len_chi = f.shape[0]
@@ -1466,7 +1474,8 @@ def solve_integration_factor(coeff, coeff_dp, f, \
                     np.array([coeff_dp_1d]),
                     np.array([f_1d]),
                     integral_mode=integral_mode,
-                    asymptotic_order = asymptotic_order)
+                    asymptotic_order = asymptotic_order,
+                    fft_max_freq=fft_max_freq)
             out_list = Parallel(n_jobs=n_jobs, backend=backend, require=require)(
                 delayed(solve_1d)(p_eff[i], 1, f_eff[i], modes[i])\
                 for i in range(len_chi)
@@ -1477,6 +1486,12 @@ def solve_integration_factor(coeff, coeff_dp, f, \
         integral_mode = modes[0]
 
     print('integral_mode is', integral_mode)
+    print(
+        'WARNING: spline and simpson produces slightly non-periodic Delta. '\
+        'This inconsistency is shown by masking p in Delta and adding '\
+        '-B_denom_coef_c * p_perp_coef_cp[n]. Why is this is still not understood yet.'
+    )
+
     if integral_mode == 'asymptotic':
         ai = f_eff/p_eff # f/p
         integration_factor = ai.copy()
@@ -1533,43 +1548,29 @@ def solve_integration_factor(coeff, coeff_dp, f, \
 
         Ci = (int2 - int1)/(I_neg_1-I_neg_2)
         out = (Ci[:, None]*exp_negphi_double+int_factor_over_I_double)[:, :len_phi]
-        # Plotting
-        # for i in range(len_chi):
-        #     plt.title('Integrating factor '+str(i))
-        #     plt.plot(exp_negphi_double[i])
-        #     plt.show()
-        #     plt.title('1/I '+str(i))
-        #     plt.plot(int_factor_over_I_double[i])
-        #     plt.show()
-
-        # # Optimizing for variance... Produces non-smooth
-        # for i in range(len_chi):
-        #     def cost(A):
-        #         u = A[0]
-        #         v = A[1]
-        #         ans = (u+1j*v)*exp_negphi_double[i]+int_factor_over_I_double[i]
-        #         var = ans.var()
-        #         BC = np.abs(ans[0] - ans[999])#ans[loc_BC1[i]] - ans[loc_BC2[i]]
-        #         plt.plot(ans, alpha = 0.1)
-        #         plt.title(var)
-        #         return(var + BC)
-        #         # return(np.sum(np.abs(int_factor * extra * (u+1j*v))))
-        #     plt.ylim(-5,5)
-        #     plt.show()
-        #     optimized = scipy.optimize.minimize(cost, x0 = [np.real(C0_guess), np.imag(C0_guess)])
-        #     A = optimized.x
-        #     out[i] = ((A[0]+1j*A[1])*exp_negphi_double[i]+int_factor_over_I_double[i])[:len_phi]
 
         return(out*f_eff_scaling)
 
     elif integral_mode == 'fft':
-        p_fft = np.fft.fft(p_eff, axis = 1)
-        f_fft = np.fft.fft(f_eff, axis = 1)
-        diff_matrix = fft_dphi_op(len_phi)
+        if fft_max_freq is None:
+            raise AttributeError('fft_max_freq must be provided!')
+        target_length = fft_max_freq*2
+        p_fft = fft_filter(np.fft.fft(p_eff, axis = 1), target_length, axis=1)
+        f_fft = fft_filter(np.fft.fft(f_eff, axis = 1), target_length, axis=1)
+
+        # Find comps with p=0
+        remove_zero = np.all(p_fft==0, axis=1)
+        diff_matrix_single, diff_matrix = fft_dphi_op(target_length, remove_zero)
         conv_matrix = fft_conv_op_batch(p_fft)
-        inv_dxpp = np.linalg.inv(diff_matrix[None, :, :] + conv_matrix)
+        inv_dxpp = np.linalg.inv(diff_matrix + conv_matrix)
+        # for now ignore p=0 comps.
+        inv_dxpp[remove_zero,:,:] = 0
         sln_fft = (inv_dxpp@f_fft[:,:,None])[:,:,0]
-        sln = np.fft.ifft(sln_fft, axis = 1)
+        sln = np.fft.ifft(fft_pad(sln_fft, len_phi, axis = 1), axis = 1)
+        # Calculating zero comps
+        if np.any(remove_zero):
+            zero_comps = ChiPhiFunc(f_eff[remove_zero]).integrate_phi(periodic=False).filter('low_pass', fft_max_freq)
+            sln[remove_zero] = zero_comps.content
         return(sln*f_eff_scaling)
 
     else:
@@ -1620,11 +1621,20 @@ def solve_integration_factor(coeff, coeff_dp, f, \
         out = out[:,:-1]
         return(out*f_eff_scaling)
 
-# a dphi operator acting on the fft of
-# a content along axis=1
-def fft_dphi_op(len_phi):
+# A stack of dphi operators acting on the fft of
+# a content along axis=1. Shape is [len_phi, len_phi, len_chi].
+# Only used in solve_integration_factor.
+# remove_zero is a list of booleans that when true, replaces the [0,0] element
+# in the corresponding row of fft_freq
+# with np.inf to accomodate the special cases where
+# the ODE looks like y'=f.
+def fft_dphi_op(len_phi, remove_zero = np.array([False])):
+    len_chi = len(remove_zero)
     fft_freq = np.fft.fftfreq(len_phi)*len_phi
-    return(np.identity(len_phi) * 1j * fft_freq)
+    matrix = np.identity(len_phi) * 1j * fft_freq
+    tiled_matrix = np.tile(matrix[:,:], (len_chi, 1, 1))
+    tiled_matrix[remove_zero,:,:]=np.nan
+    return(matrix, tiled_matrix)
 
 # A convolution operator acting convolving
 # a fft of len_phi with source.
@@ -1658,7 +1668,8 @@ def fft_conv_op_batch(source):
 # -- Output --
 # y is a ChiPhiFunc's content
 def solve_integration_factor_chi(coeff, coeff_dp, coeff_dc, f, \
-    integral_mode=two_pi_integral_mode, asymptotic_order=asymptotic_order):
+    integral_mode=two_pi_integral_mode,
+    asymptotic_order=asymptotic_order, fft_max_freq=None):
 
     len_chi = f.shape[0]
     len_phi = f.shape[1]
@@ -1673,7 +1684,8 @@ def solve_integration_factor_chi(coeff, coeff_dp, coeff_dc, f, \
     return(
         solve_integration_factor(coeff_eff, 1, f_eff, \
             integral_mode=integral_mode,
-            asymptotic_order=asymptotic_order)
+            asymptotic_order=asymptotic_order,
+            fft_max_freq=fft_max_freq)
     )
 
 # For solving the periodic linear 1st order ODE (dphi+iota*dchi) y = f(phi, chi)
@@ -1685,11 +1697,13 @@ def solve_integration_factor_chi(coeff, coeff_dp, coeff_dc, f, \
 # -- Output --
 # y is a ChiPhiFunc's content
 def solve_dphi_iota_dchi(iota, f, \
-    integral_mode=two_pi_integral_mode, asymptotic_order=asymptotic_order):
+    integral_mode=two_pi_integral_mode,
+    asymptotic_order=asymptotic_order, fft_max_freq=None):
     return(
         solve_integration_factor_chi(0, 1, iota, f, \
             integral_mode=integral_mode,
-            asymptotic_order=asymptotic_order)
+            asymptotic_order=asymptotic_order,
+            fft_max_freq=fft_max_freq)
         )
 
 # Whenever the real value of a phi function crosses
@@ -1729,3 +1743,41 @@ def find_segments(content_in):
         # close the last, unclosed segment
     list_segment_end.append([list_segment_start[-1][0], len_phi-1])
     return(np.array(list_segment_start), np.array(list_segment_end))
+
+''' V. utilities '''
+
+''' V.1. Low-pass filter for simplifying tensor to invert '''
+# Shorten an array in FFT representation to leave only target_length elements.
+# by removing the highest frequency modes. The resulting array can be IFFT'ed.
+def fft_filter(fft_in, target_length, axis):
+    if target_length>fft_in.shape[axis]:
+        raise ValueError('target_length should be smaller than the'\
+                        'length of fft_in along axis.')
+    elif target_length==fft_in.shape[axis]:
+        return(fft_in)
+    # FFT of an array contains mode amplitude in the order given by
+    # fftfreq(length)*length. For example, for length=7,
+    # [ 0.,  1.,  2.,  3., -3., -2., -1.]
+    left = fft_in.take(indices=range(0, (target_length+1)//2), axis=axis)
+    right = fft_in.take(indices=range(-(target_length//2), 0), axis=axis)
+    return(np.concatenate((left, right), axis=axis)*target_length/fft_in.shape[axis])
+
+# Pad an array in FFT representation to target_length elements.
+# by adding zeroes as highest frequency modes.
+# The resulting array can be IFFT'ed.
+def fft_pad(fft_in, target_length, axis):
+    if target_length<fft_in.shape[axis]:
+        raise ValueError('target_length should be larger than the'\
+                        'length of fft_in along axis.')
+    elif target_length==fft_in.shape[axis]:
+        return(fft_in)
+    new_shape = list(fft_in.shape)
+    original_length = new_shape[axis]
+    new_shape[axis] = target_length - original_length
+    center_array = np.zeros(new_shape)
+    # FFT of an array contains mode amplitude in the order given by
+    # fftfreq(length)*length. For example, for length=7,
+    # [ 0.,  1.,  2.,  3., -3., -2., -1.]
+    left = fft_in.take(indices=range(0, (original_length+1)//2), axis=axis)
+    right = fft_in.take(indices=range(-(original_length//2), 0), axis=axis)
+    return(np.concatenate((left, center_array, right), axis=axis)*target_length/fft_in.shape[axis])
