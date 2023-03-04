@@ -190,7 +190,7 @@ class ChiPhiFunc:
             raise ValueError('ChiPhiFunc content must be 2d arrays.')
         # for definind special instances that are similar to nan, except yields 0 when *0.
         # copies and force types for numba
-        if config.check_nan_content:
+        if check_nan_content:
             if np.any(np.isnan(content)):
                 raise ValueError('ChiPhiFunc content contains nan element!')
         self.content = np.complex128(content)

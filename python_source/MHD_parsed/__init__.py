@@ -10,5 +10,4 @@ from .looped_Y_coefs import *
 from .looped_B_theta_coefs import *
 from .looped_B_psi_coefs_D3 import *
 from .looped_B_psi_coefs_full import *
-from .looped_B_psi_lambdas_full import *
 from .validate import *

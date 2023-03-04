@@ -7,6 +7,7 @@ from chiphifunc import *
 from chiphiepsfunc import *
 from math_utilities import *
 from looped_coef_lambdas import *
+from looped_B_psi_lambdas_full import *
 import looped_solver
 import numpy as np
 from matplotlib import pyplot as plt
@@ -796,7 +797,7 @@ class Equilibrium:
     def prepare_lambdas(self, magnetic_only):
         if not magnetic_only:
             self.looped_coef_lambdas = eval_looped_coef_lambdas(self)
-            self.looped_B_psi_lambdas = MHD_parsed.eval_B_psi_lambdas_full(
+            self.looped_B_psi_lambdas = eval_B_psi_lambdas_full(
                 self.unknown['X_coef_cp'],
                 self.unknown['Y_coef_cp'],
                 self.unknown['Delta_coef_cp'],
