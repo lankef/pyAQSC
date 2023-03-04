@@ -329,7 +329,7 @@ def generate_RHS(
 # len_tensor: the number of phi modes kept in the tensor.
 # For avoiding singular tensor.
 def generate_tensor_operator(
-    n_unknown, max_freq,
+    n_unknown,
     X_coef_cp, Y_coef_cp, Z_coef_cp,
     p_perp_coef_cp, Delta_coef_cp,
     B_psi_coef_cp, B_theta_coef_cp,
@@ -337,8 +337,20 @@ def generate_tensor_operator(
     kap_p, tau_p, dl_p,
     eta, iota_coef,
     O_einv, vector_free_coef,
-    looped_coef_lambdas
+    looped_coef_lambdas,
+    looped_B_psi_lambdas,
+    max_freq, # Maximum number of frequencies to consider
+    # Filter off-diagonal comps of the linear diff operator before inverting
+    max_k_diff_pre_inv = None,
+    # Filter off-diagonal comps of the linear diff operator after inverting
+    max_k_diff_post_inv = None,
+
 ):
+    # Default: not filtering off-diagonal components.
+    if max_k_diff_pre_inv is None:
+        max_k_diff_pre_inv = max_freq*2+1
+    if max_k_diff_post_inv is None:
+        max_k_diff_post_inv = max_freq*2+1
     # An internal method taking care of some dupicant code
     def to_tensor_fft_op(ChiPhiFunc_in):
         tensor_coef = np.expand_dims(ChiPhiFunc_in.content, axis=1)
@@ -357,15 +369,12 @@ def generate_tensor_operator(
     # a, a, a            a, 0, 0
     # b, b, b instead of 0, b, 0
     # c, c, c            0, 0, c.
-    fft_freq = np.fft.fftfreq(len_tensor)*len_tensor
-    dphi_slice = (np.full((len_tensor,len_tensor), 1) * 1j * fft_freq)
-    dphi_array_single_elem = np.tile(dphi_slice, [1,1,1,1])
-    dphi_array_single_row = np.tile(dphi_slice, [n_unknown,1,1,1])
+    fft_freq = jit_fftfreq_int(len_tensor)
+    dphi_array = np.ones((len_tensor,len_tensor)) * 1j * fft_freq
 
     # This "dphi_array" is exclusively for B_theta.
     # At even orders, there are (n_unknown+1) - 1 components.
     # At odd orders, there are (n_unknown+1) components.
-    dphi_array = np.tile(dphi_slice, [1,1,1,1])
     # dchi_matrix = dchi_op(n_eval-2, False)
 
 
@@ -387,7 +396,11 @@ def generate_tensor_operator(
     # Default parameters are used to generate operators
     # acting on B_theta[n_unknown].
     # B_theta[n_unknown] has n_unknown-1 non-zero components.
-    def to_tensor_fft_op_multi_dim(ChiPhiFunc_in, dphi, dchi, num_mode=n_unknown-1, cap_axis0=n_unknown):
+    def to_tensor_fft_op_multi_dim(
+        ChiPhiFunc_in, dphi, dchi,
+        num_mode=n_unknown-1, cap_axis0=n_unknown,
+        len_tensor=len_tensor,
+        dphi_array=dphi_array):
         if ChiPhiFunc_in == 0:
             return(0)
         tensor_coef_nD = conv_tensor(ChiPhiFunc_in.content, num_mode)
@@ -430,7 +443,6 @@ def generate_tensor_operator(
         if dphi!=0:
             if dphi<0:
                 raise ValueError('dphi must be positive')
-            dphi_array = np.tile(dphi_slice, [1,1,1,1])
             tensor_fft_op_B_theta = tensor_fft_op_B_theta*(dphi_array**dphi)
         return(tensor_fft_op_B_theta)
 
@@ -478,8 +490,8 @@ def generate_tensor_operator(
         +coef_dphi_dphi_dchi_Y * ChiPhiFunc(vector_free_coef_short).dchi()
     ).cap_m(n_eval-2)
     tensor_fft_op_Y_n0_dphi_0 = to_tensor_fft_op(coef_Y_n0_dphi_0)
-    tensor_fft_op_Y_n0_dphi_1 = to_tensor_fft_op(coef_Y_n0_dphi_1)*dphi_array_single_row
-    tensor_fft_op_Y_n0_dphi_2 = to_tensor_fft_op(coef_Y_n0_dphi_2)*dphi_array_single_row**2
+    tensor_fft_op_Y_n0_dphi_1 = to_tensor_fft_op(coef_Y_n0_dphi_1)*dphi_array
+    tensor_fft_op_Y_n0_dphi_2 = to_tensor_fft_op(coef_Y_n0_dphi_2)*dphi_array**2
     full_tensor_fft_op_Y_n0 = (
         tensor_fft_op_Y_n0_dphi_0
         +tensor_fft_op_Y_n0_dphi_1
@@ -495,18 +507,6 @@ def generate_tensor_operator(
     # This is calculated at all orders, because
     # B_psi[n,m>0] contains B_theta[n]. This is needed at
     # even n or n>2. Since n starts at 2, this means all n.
-    looped_B_psi_coefs = MHD_parsed.eval_B_psi_coefs_full(
-        n_eval=n_eval,
-        X_coef_cp=X_coef_cp,
-        Y_coef_cp=Y_coef_cp,
-        Delta_coef_cp=Delta_coef_cp,
-        B_alpha_coef=B_alpha_coef,
-        B_denom_coef_c=B_denom_coef_c,
-        dl_p=dl_p,
-        tau_p=tau_p,
-        kap_p=kap_p,
-        iota_coef=iota_coef,
-        to_tensor_fft_op_multi_dim=to_tensor_fft_op_multi_dim)
 
     if n_unknown>2:
         ''' B_theta in B_psi terms of Y'''
@@ -545,22 +545,22 @@ def generate_tensor_operator(
         # arrays.
         tensor_fft_op_B_psi_dphi_0_dchi_1_in_Y_RHS = \
             to_tensor_fft_op_multi_dim(
-                looped_B_psi_coefs['coef_B_psi_dphi_0_dchi_1_in_Y_RHS'],
+                looped_B_psi_lambdas['coef_B_psi_dphi_0_dchi_1_in_Y_RHS'](n_eval),
                 dphi=0, dchi=1
             )
         tensor_fft_op_B_psi_dphi_0_dchi_2_in_Y_RHS = \
             to_tensor_fft_op_multi_dim(
-                looped_B_psi_coefs['coef_B_psi_dphi_0_dchi_2_in_Y_RHS'],
+                looped_B_psi_lambdas['coef_B_psi_dphi_0_dchi_2_in_Y_RHS'](n_eval),
                 dphi=0, dchi=2
             )
         tensor_fft_op_B_psi_dphi_1_dchi_0_in_Y_RHS = \
             to_tensor_fft_op_multi_dim(
-                looped_B_psi_coefs['coef_B_psi_dphi_1_dchi_0_in_Y_RHS'],
+                looped_B_psi_lambdas['coef_B_psi_dphi_1_dchi_0_in_Y_RHS'](n_eval),
                 dphi=1, dchi=0
             )
         tensor_fft_op_B_psi_dphi_1_dchi_1_in_Y_RHS = \
             to_tensor_fft_op_multi_dim(
-                looped_B_psi_coefs['coef_B_psi_dphi_1_dchi_1_in_Y_RHS'],
+                looped_B_psi_lambdas['coef_B_psi_dphi_1_dchi_1_in_Y_RHS'](n_eval),
                 dphi=1, dchi=1
             )
         # This is the differential operator acting on B_psi in Y_RHS
@@ -713,9 +713,7 @@ def generate_tensor_operator(
 
         ''' B_theta dependence carried by B_psi in terms other than Y '''
         tensor_fft_op_B_theta_in_all_but_Y = \
-            looped_B_psi_coefs['tensor_fft_op_B_psi_in_all_but_Y']*n_unknown/2/dchi_temp_B_theta
-        tensor_fft_op_B_theta_in_all_but_Y = \
-            looped_B_psi_coefs['tensor_fft_op_B_psi_in_all_but_Y']*n_unknown/2/dchi_temp_B_theta
+            looped_B_psi_lambdas['tensor_fft_op_B_psi_in_all_but_Y'](n_eval, to_tensor_fft_op_multi_dim)*n_unknown/2/dchi_temp_B_theta
         # The shape of these tensors should be (n_unknown, n_unknown-1, len_chi, len_chi)
         # for n_unknown >2, B_theta would be an unknown.
 
@@ -744,7 +742,7 @@ def generate_tensor_operator(
         coef_B_psi_dphi_1_in_Y_var = ChiPhiFunc(np.einsum(
             'ijk,jk->ik',
             O_einv,
-            looped_B_psi_coefs['coef_B_psi_dphi_1_dchi_0_in_Y_RHS'].pad_chi(n_eval+1).content
+            looped_B_psi_lambdas['coef_B_psi_dphi_1_dchi_0_in_Y_RHS'](n_eval).pad_chi(n_eval+1).content
         ))
         out_dict_tensor['coef_B_psi_dphi_1_in_Y_var'] = coef_B_psi_dphi_1_in_Y_var
         coef_B_psi_dphi_1_in_Y = (
@@ -771,9 +769,9 @@ def generate_tensor_operator(
         ).cap_m(n_eval-2)
 
         ''' Merging B_psi coeffs '''
-        coef_B_psi_dphi_1_dchi_0_all_but_Y = looped_B_psi_coefs['coef_B_psi_dphi_1_dchi_0_all_but_Y']
-        coef_B_psi_dphi_2_dchi_0_all_but_Y = looped_B_psi_coefs['coef_B_psi_dphi_2_dchi_0_all_but_Y']
-        coef_B_psi_dphi_3_dchi_0_all_but_Y = looped_B_psi_coefs['coef_B_psi_dphi_3_dchi_0_all_but_Y']
+        coef_B_psi_dphi_1_dchi_0_all_but_Y = looped_B_psi_lambdas['coef_B_psi_dphi_1_dchi_0_all_but_Y'](n_eval)
+        coef_B_psi_dphi_2_dchi_0_all_but_Y = looped_B_psi_lambdas['coef_B_psi_dphi_2_dchi_0_all_but_Y'](n_eval)
+        coef_B_psi_dphi_3_dchi_0_all_but_Y = looped_B_psi_lambdas['coef_B_psi_dphi_3_dchi_0_all_but_Y'](n_eval)
         coef_B_psi_dphi_1 = (
             coef_B_psi_dphi_1_in_Y
             +coef_B_psi_dphi_1_dchi_0_all_but_Y
@@ -787,8 +785,8 @@ def generate_tensor_operator(
             +coef_B_psi_dphi_3_dchi_0_all_but_Y
         ).cap_m(n_eval-2)
         tensor_fft_op_B_psi_dphi_1 = to_tensor_fft_op(coef_B_psi_dphi_1)
-        tensor_fft_op_B_psi_dphi_2 = to_tensor_fft_op(coef_B_psi_dphi_2)*dphi_array_single_row**1
-        tensor_fft_op_B_psi_dphi_3 = to_tensor_fft_op(coef_B_psi_dphi_3)*dphi_array_single_row**2
+        tensor_fft_op_B_psi_dphi_2 = to_tensor_fft_op(coef_B_psi_dphi_2)*dphi_array**1
+        tensor_fft_op_B_psi_dphi_3 = to_tensor_fft_op(coef_B_psi_dphi_3)*dphi_array**2
         full_tensor_fft_op_dphi_B_psi = (
             tensor_fft_op_B_psi_dphi_1
             +tensor_fft_op_B_psi_dphi_2
@@ -976,7 +974,7 @@ def generate_tensor_operator(
         fin_coef_Yn1p = coef_Yn1p + coef_Yn1n*coef_Yn1p_in_Yn1n + coef_dp_Yn1n*coef_Yn1p_in_Yn1n.dphi()
         fin_coef_dp_Yn1p = coef_dp_Yn1p + coef_dp_Yn1n*coef_Yn1p_in_Yn1n
         elem_fft_op_Yn1p = to_tensor_fft_op(fin_coef_Yn1p)
-        elem_fft_op_dp_Yn1p = to_tensor_fft_op(fin_coef_dp_Yn1p)*dphi_array_single_row
+        elem_fft_op_dp_Yn1p = to_tensor_fft_op(fin_coef_dp_Yn1p)*dphi_array
         ''' B_theta[n] and B_theta[n+1,0] coefficient in D3 '''
         ones = ChiPhiFunc(np.ones((1, len_tensor),np.complex128))
         coef_B_theta_n_1p = phi_avg((-B_alpha_coef[0]*B_denom_coef_c[1][-1]))*ones
@@ -1046,9 +1044,13 @@ def generate_tensor_operator(
         full_tensor_fft_op = np.concatenate((full_tensor_fft_op, D3_comp_fft_op), axis=0)
 
     filtered_looped_fft_operator = np.transpose(full_tensor_fft_op, (0,2,1,3))
+
+    # Filter off-diagonal elements in the linear differential operator.
+    filter_operator(filtered_looped_fft_operator, max_k_diff_pre_inv)
     # Finding the inverse differential operator
     filtered_inv_looped_fft_operator = np.linalg.tensorinv(filtered_looped_fft_operator)
-
+    # Filter off-diagonal elements in the inverted linear differential operator.
+    filter_operator(filtered_inv_looped_fft_operator, max_k_diff_post_inv)
     # (n_unknown(+1), len_tensor, n_unknown(+1), len_tensor)
     out_dict_tensor['filtered_looped_fft_operator']= filtered_looped_fft_operator
     out_dict_tensor['filtered_inv_looped_fft_operator']= filtered_inv_looped_fft_operator
@@ -1121,7 +1123,7 @@ def solve(n_unknown, target_len_phi,
 # B_psi_nm2 (even order only)
 # vec_free
 def iterate_looped(
-    n_unknown, max_freq, target_len_phi,
+    n_unknown, target_len_phi,
     X_coef_cp, Y_coef_cp, Z_coef_cp,
     p_perp_coef_cp, Delta_coef_cp,
     B_psi_coef_cp, B_theta_coef_cp,
@@ -1130,6 +1132,10 @@ def iterate_looped(
     eta, iota_coef,
     # lambda for the coefficient of the scalar free parameter in RHS
     looped_coef_lambdas,
+    looped_B_psi_lambdas,
+    max_freq,
+    max_k_diff_pre_inv,
+    max_k_diff_post_inv
 ):
     if target_len_phi<max_freq*2:
         raise ValueError('target_len_phi must >= max_freq*2.')
@@ -1160,7 +1166,6 @@ def iterate_looped(
     filtered_RHS_0_offset = out_dict_RHS['filtered_RHS_0_offset']
     out_dict_tensor = generate_tensor_operator(
         n_unknown = n_unknown,
-        max_freq = max_freq,
         X_coef_cp = X_coef_cp,
         Y_coef_cp = Y_coef_cp,
         Z_coef_cp = Z_coef_cp,
@@ -1177,7 +1182,11 @@ def iterate_looped(
         iota_coef = iota_coef,
         O_einv = O_einv,
         vector_free_coef = vector_free_coef,
-        looped_coef_lambdas = looped_coef_lambdas
+        looped_coef_lambdas = looped_coef_lambdas,
+        looped_B_psi_lambdas = looped_B_psi_lambdas,
+        max_freq = max_freq,
+        max_k_diff_pre_inv = max_k_diff_pre_inv,
+        max_k_diff_post_inv = max_k_diff_post_inv,
     )
     filtered_inv_looped_fft_operator =  out_dict_tensor['filtered_inv_looped_fft_operator']
 
@@ -1363,6 +1372,28 @@ def iterate_looped(
 
 
 ''' V. Utilities '''
+# The diff in the mode numbers coupled by two elements.
+# For filtering off-diagonal components of the matrix.
+def mode_difference_matrix(len_phi):
+    fft_freq_int = jit_fftfreq_int(len_phi)
+    diff_fft_freq = np.abs(
+        fft_freq_int[:,None] - fft_freq_int
+    )
+    return(diff_fft_freq)
+
+# Set all elements of a fft_op that couples two phi modes
+# with mode number difference larger than crit_diff to 0.
+# Edits the original array.
+def filter_operator(operator, max_k_diff):
+    len_phi = operator.shape[1]
+    if max_k_diff >= len_phi:
+        print('off-diagonal filtering skipped')
+        return()
+    operator = np.transpose(operator, (0,2,1,3))
+    mode_diff_mat = mode_difference_matrix(len_phi)
+    operator[:,:,mode_diff_mat>max_k_diff] = 0
+    operator = np.transpose(operator, (0,2,1,3))
+
 
 # Cyclic import
 import recursion_relations

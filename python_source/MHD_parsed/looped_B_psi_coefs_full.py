@@ -3,6 +3,8 @@ from math import floor, ceil
 from math_utilities import *
 import chiphifunc
 
+# Now replaced by looped_B_psi_lambdas_full.py, which is hand-edited to
+# calculate large portions of the parameters at the first order.
 def eval_B_psi_coefs_full(n_eval, X_coef_cp, Y_coef_cp,
     Delta_coef_cp, B_alpha_coef, B_denom_coef_c,
     dl_p, tau_p, kap_p, iota_coef, to_tensor_fft_op_multi_dim):

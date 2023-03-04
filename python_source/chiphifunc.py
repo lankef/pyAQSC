@@ -6,23 +6,30 @@ import scipy.fftpack
 import math # factorial in dphi_direct
 from math_utilities import *
 from matplotlib import pyplot as plt
-
-
 # Numba doesn't support scipy methods. Therefore, scipy integrals are sped up
 # with joblib.
 import scipy.integrate
 import scipy.interpolate
 from joblib import Parallel, delayed
 from functools import lru_cache # import functools for caching
+from numba import jit, njit, prange
+from numba.types import Tuple
+# import jit value types. Bizzarely using int32 causes typing issues
+# in solve_underdet_degen with njit(parallel=True) because
+# it seem to insist prange(...shape[0]) is int64, even when int64 is not imported.
+from numba import complex128, int64, float64, boolean
+# Configurations
+import config
 
-# When True, throws error if a content array contains nan
-# during the initialization of a ChiPhiFunc
+# The 'pseudo_spectral' derivative operator uses pyQSC.
+if config.use_pyQSC:
+    from qsc import spectral_diff_matrix
+
+''' Debug options and loading configs '''
+# When True, throws error if a power-fourier series coefficient (ChiPhiFunc)
+# contains np.nan.
 check_nan_content = True
 
-# Filtering need to be used with caution since there's no explicit regularity
-# constraint for phi dependence.
-
-# For error throwing.
 # integrate_chi() should not be run on a ChiPhiFunc with a chi-independent component,
 # because this produces a non-periodic function. However, zero-checking the
 # component is not feasible, because cancellation is often not exact in numerical
@@ -30,58 +37,34 @@ check_nan_content = True
 # component is greater than this noise_level_int
 # The typing is for numba.
 noise_level_int = np.float64(1e-5)
-# Sometimes extra components have to be cut away in the RHS of ynp1 solve.
-# since cancellation sometimes happen and won't be exact. This decides how much
-# max extra component is okay to cut.
-noise_order_solve = np.float64(7)
 
 # tolerance on how periodic I(phi) is during integration factor.
-# When I(phi) is periodic, any C1 can satisfy the periodic BC.
+# When I(phi) is periodic, any C1 can satisfy the periodic BC,
+# The assiciated error is thrown by comparing the difference
+# between the integration factor's first and last element to
+# this variable.
 noise_level_periodic = 1e-10
 
-# Default frequency for the low pass filtering
-low_pass_freq=50
-
-# Default diff and integration modes can be modified.
-diff_mode = 'fft' # available: pseudo_spectral, finite_difference, fft, spline
-integral_mode = 'fft' # avalable: spline, simpson, fft
-# Note: simpson's and spline does not produce self consistent Delta in
-two_pi_integral_mode = 'fft' # available: spline, simpson, fft
-
-# Threshold for p amplitude to use asymptotic expansion for y'+py=f
-asymptotic_threshold = 30
+# Loading configurations
+diff_mode = config.diff_mode
+integral_mode = config.integral_mode
+two_pi_integral_mode = config.two_pi_integral_mode
 # Maximum allowed asymptotic series order for y'+py=f
-asymptotic_order = 6
-
-# Debugging variables.
-# When debug_mode is true, content of all new ChiPhiFunc's are tracked.
-# Enable and access by debug_mode and debug_max_value.
-debug_mode = False
-
+asymptotic_order = config.asymptotic_order
+# Debug mode
+debug_mode = config.debug_mode
 # Tracks the max and avg values of intermediate results. Compare with output to
 # identify rounding errors.
 debug_max_value = []
 debug_avg_value = []
-
-# Tracks the difference between the power of 10 of the 2 arguments in a '+' operation
-# to identify rounding errors.
-debug_pow_diff_add = []
-
 # Joblib settings
-import multiprocessing
-
-print('Detected', multiprocessing.cpu_count(), 'CPU\'s. Setting n_jobs to #CPU/2.')
-n_jobs = multiprocessing.cpu_count()//2
-backend = 'threading' # scipy.integrate is based on a compiled
+n_jobs = config.n_jobs_chiphifunc
+# scipy.integrate is based on compiled codes. 'threading' is the best backend.
+backend = config.backend_chiphifunc
+# If set to ‘sharedmem’, the selected backend will be single-host and
+# thread-based even if the user asked for a non-thread based backend
+# with parallel_backend.
 require = None
-
-
-from numba import jit, njit, prange
-from numba.types import Tuple
-# import jit value types. Bizzarely using int32 causes typing issues
-# in solve_underdet_degen with njit(parallel=True) because
-# it seem to insist prange(...shape[0]) is int64, even when int64 is not imported.
-from numba import complex128, int64, float64, boolean
 
 ''' I. Representing functions of chi and phi (ChiPhiFunc subclasses) '''
 # Represents a function of chi and phi.
@@ -176,6 +159,23 @@ def phi_avg(in_quant):
         raise TypeError('phi_avg input can only be a scalar or a ChiPhiFunc. '\
         'Actual type is' + str(type(in_quant)))
 
+# Numba ver of np.fft.fftfreq. Used in fft_conv_tensor_batch.
+@njit(int64[:](int64))
+def jit_fftfreq_int(int_in):
+    fftfreq_out = np.zeros(int_in, dtype = np.int64)
+    half = int_in//2
+    if int_in%2==0:
+        fftfreq_out[:half] = np.arange(0,half)
+        fftfreq_out[half:] = np.arange(-half,0)
+    else:
+        fftfreq_out[:half+1] = np.arange(0,half+1)
+        fftfreq_out[half+1:] = np.arange(-half,0)
+    return(fftfreq_out)
+
+@njit(complex128[:](int64))
+def jit_fftfreq(int_in):
+    return(jit_fftfreq_int(int_in)/(int_in+0j))
+
 ''' I.1 Grid implementation '''
 # ChiPhiFunc represents a function of chi and phi in even/odd fourier series in
 # chi and on grid points located at (0, ... 2pi(n-1)/n) in phi.
@@ -190,7 +190,7 @@ class ChiPhiFunc:
             raise ValueError('ChiPhiFunc content must be 2d arrays.')
         # for definind special instances that are similar to nan, except yields 0 when *0.
         # copies and force types for numba
-        if check_nan_content:
+        if config.check_nan_content:
             if np.any(np.isnan(content)):
                 raise ValueError('ChiPhiFunc content contains nan element!')
         self.content = np.complex128(content)
@@ -326,7 +326,7 @@ class ChiPhiFunc:
                        'Therefore, ChiPhiFunc@B is not supported.')
 
     # self^n, based on self.pow().
-    @lru_cache(maxsize=1000)
+    @lru_cache(maxsize=config.max_size)
     def __pow__(self, other):
         if not np.isscalar(other):
             raise TypeError('**\'s other argument must be a non-negative scalar integer.')
@@ -342,7 +342,7 @@ class ChiPhiFunc:
     # Then do pointwise product.
     # -- Input: self and another ChiPhiFunc
     # -- Output: a new ChiPhiFunc
-    @lru_cache(maxsize=1000)
+    @lru_cache(maxsize=config.max_size)
     def multiply(self, other, div = False):
         # mul_grid_jit(a, b) never modifies the original. Skip copying.
         a, b = self.stretch_phi_to_match(other, always_copy=False)
@@ -468,7 +468,7 @@ class ChiPhiFunc:
 
     ''' I.1.3 Filters and phi regularity '''
     # A multi-mode filter
-    def filter(self, mode='low_pass', arg=low_pass_freq):
+    def filter(self, mode, arg):
         # A simple filter calculating a 3-element rolling average:
         # [..., a, b, c, ...] = [..., 0.25a+0.5b+0.25c, ...]
         if mode == 'roll_avg':
@@ -481,7 +481,9 @@ class ChiPhiFunc:
         else:
             raise AttributeError('ChiPhiFunc.filter: mode not recognized.')
 
-    def noise_filter(self, mode='low_pass', arg=low_pass_freq):
+    # Measure the "noise" in a ChiPhiFunc by comparing it to the result of
+    # a low-pass filter
+    def noise_filter(self, mode, arg):
         return(self-self.filter(mode=mode, arg=arg))
 
     ''' I.1.4 Properties '''
@@ -927,85 +929,6 @@ class ChiPhiFunc:
 
         return(O_matrices, O_einv, -vector_free_coef)
 
-    # Solve an under-determined degenerate system equivalent to
-    # chiphifunc_A(chi, phi) * y_{n+1}(chi, phi) = chiphifunc_rhs{n}(chi, phi).
-    # Necessary because the equation for Yn's outmost components exactly cancel.
-    # Assumes that Yn0 or Yn1s (not Yn1p!) is known.
-    # -- Input --
-    # chiphifunc_A (must be provided), chiphifunc_B, chiphifunc_rhs: ChiPhiFunc,
-    # chiphifunc_B can be nan.
-    # rank_rhs: int, 'n' in the equation above
-    # i_free: int, index of free var in va,
-    # Yn_free: Yn0 or Yn1p, depending on rank_rhs.
-    # ChiPhiFunc with a single row, value of free component.
-    # def solve_A_B_dchi_y(chiphifunc_A, chiphifunc_B, chiphifunc_rhs, rank_rhs, Yn_free):
-    #     # Checking input types and stretching RHS.
-    #     if not (type(chiphifunc_A) is ChiPhiFunc\
-    #         and type(chiphifunc_B) is ChiPhiFunc):
-    #         raise TypeError('All chiphifunc_A, chiphifunc_B, chiphifunc_rhs'\
-    #                         ' should be ChiPhiFunc. The actual types are:'
-    #                         +str(type(chiphifunc_A))+', '
-    #                         +str(type(chiphifunc_B))+', '
-    #                         +str(type(chiphifunc_rhs)))
-    #
-    #     if not (chiphifunc_A.get_shape()[1]==chiphifunc_B.get_shape()[1]
-    #         and chiphifunc_A.get_shape()[1]==chiphifunc_rhs.get_shape()[1]):
-    #         raise ValueError('All inputs need to have the same number of phi grids.')
-
-
-        # chiphifunc_A_content, chiphifunc_rhs_content = chiphifunc_A.stretch_phi_to_match(chiphifunc_rhs)
-        # chiphifunc_A = ChiPhiFunc(chiphifunc_A_content)
-        # len_chi = chiphifunc_rhs.get_shape()[0]
-        #
-        # # Calculating the inverted matrices
-        # i_free = (rank_rhs+1)//2 # location of Yn0 or Yn1p
-        # O_matrices, O_einv, vector_free_coef = ChiPhiFunc.get_O_O_einv_from_A_B(chiphifunc_A, chiphifunc_B, i_free, rank_rhs)
-        #
-        # # Converting constant Yn_free to ChiPhiFunc
-        # if type(Yn_free) is not ChiPhiFunc:
-        #     if np.isscalar(Yn_free):
-        #         Yn_free_content = np.full((1,chiphifunc_A_content.shape[1]),Yn_free,dtype=np.complex128)
-        #     else:
-        #         raise TypeError('ChiPhiFunc.solve_underdetermined: '\
-        #                         'Yn_free is not scalar ChiPhiFunc. '\
-        #                         'The actual type is: '+str(type(Yn_free)))
-        # else:
-        #     Yn_free_content = Yn_free.content
-        # # Center-pad chiphifunc_rhs if it's too short
-        # #          [0  ]
-        # # [RHS] => [RHS]
-        # #          [0  ]
-        # if chiphifunc_A.get_shape()[0] + rank_rhs != len_chi:
-        #     chiphifunc_rhs_content = ChiPhiFunc.add_jit(\
-        #         chiphifunc_rhs_content,\
-        #         np.zeros((chiphifunc_A.get_shape()[0]+rank_rhs, chiphifunc_rhs.get_shape()[1]), dtype=np.complex128),\
-        #         1 # Sign is 1
-        #     )
-        #
-        # if chiphifunc_rhs_content.shape[0]%2!=0: # at odd orders (ODE exists)
-        #     # The rest of the procedure is carried out normally with
-        #     # i_free pointing at Yn1p. The resulting Yn should be
-        #     # Yn = (A_einv@np.ascontiguousarray(chiphifunc_rhs) - Yn1p * vector_free_coef)[:n_dim]
-        #     # where vector_free_coef is a vector. This gives Yn1n = Yn1n and
-        #     #
-        #     # Yn1n = Yn[i_1n] = (A_einv@chiphifunc_rhs - Yn1p * vector_free_coef)[i_1n]
-        #     # = A_einv[i_1n]@chiphifunc_rhs - Yn1p * vector_free_coef[i_1n]
-        #     #
-        #     # Therefore,
-        #     #                                           Yn1n + Yn1p = Yn_free is equivalent to
-        #     # A_einv[i_1n]@chiphifunc_rhs - Yn1p * vector_free_coef[i_1n] + Yn1p = Yn_free
-        #     # A_einv[i_1n]@chiphifunc_rhs - Yn1p * (vector_free_coef[i_1n]-1) = Yn_free
-        #     # A_einv[i_1n]@chiphifunc_rhs - Yn_free = Yn1p * (vector_free_coef[i_1n]-1)
-        #     # (A_einv[i_1n]@chiphifunc_rhs - Yn_free)/(vector_free_coef[i_1n]-1) = Yn1p
-        #     # i_1n is shifted by the padding
-        #     i_1n = i_free-1 # Index of Yn1n (or if n is even, Yn2_n)
-        #     vec_free = (np.einsum('ik,ik->k',O_einv[i_1n],chiphifunc_rhs_content) - Yn_free_content)/(vector_free_coef[i_1n]-1)
-        # else:
-        #     vec_free = Yn_free_content
-        #
-        # Yn = (np.einsum('ijk,jk->ik',O_einv,chiphifunc_rhs_content) - vec_free * vector_free_coef)
-        # return(ChiPhiFunc(Yn))
-
 ''' I.2 Utilities '''
 # Integrates a function on a grid using Simpson's method.
 # Produces a content where values along axis 1 is the input content's
@@ -1101,7 +1024,8 @@ def integrate_phi_spline(content, dx = 'default', periodic=False,
 # -- Input: len_chi: length of Chi series.
 # -- Output: 2d matrix.
 def dphi_op_pseudospectral(n_phi):
-    from qsc import spectral_diff_matrix
+    if not config.use_pyQSC:
+        raise AttributeError('pyQSC is needed to calculate pseudo spectral phi derivatives.')
     out = spectral_diff_matrix(n_phi, xmin=0, xmax=2*np.pi)
     return(out)
 
@@ -1110,7 +1034,7 @@ def low_pass_direct(content, freq):
     len_phi = content.shape[1]
     if freq*2>=len_phi:
         return(np.copy(content))
-    W = np.abs(np.fft.fftfreq(len_phi))
+    W = np.abs(jit_fftfreq(len_phi))
     f_signal = np.fft.fft(content, axis = 1)
 
     # If our original signal time was in seconds, this is now in Hz
@@ -1302,6 +1226,26 @@ def tensor_inv_square_excluding_col(in_matrices, ind_col):
 #     return(solve_degenerate_underdetermined_jit(A, B_cont@vb_cont, i_free, Yn_free))
 
 ''' III.3 Convolution operator generator and ChiPhiFunc.content numba wrapper '''
+# Equivalent to np.fft.fftfreq
+@njit(float64[:](int64))
+def jit_fftfreq(int_in):
+    return(jit_fftfreq_int(int_in)*1.0/int_in)
+
+# Equivalent to the int version of np.fft.fftfreq. fftfreq*length is prone to
+# rounding error and is not supported by numba.
+@njit(int64[:](int64))
+def jit_fftfreq_int(int_in):
+    fftfreq_out = np.zeros(int_in, dtype=np.int64)
+    half = int_in//2
+    if int_in%2==0:
+        fftfreq_out[:half] = np.arange(0,half)
+        fftfreq_out[half:] = np.arange(-half,0)
+    else:
+        fftfreq_out[:half+1] = np.arange(0,half+1)
+        fftfreq_out[half+1:] = np.arange(-half,0)
+    return(fftfreq_out)
+
+
 # Generate convolution operator from a for an n_dim vector.
 # Can't be compiled for parallel beacuase vec and out_transposed's sizes dont match?
 @njit(complex128[:,:](complex128[:], int64))
@@ -1324,29 +1268,51 @@ def conv_tensor(content, n_dim):
         out[i:i+len_chi, i, :] = content
     return(out)
 
-# A convolution operator acting convolving
-# a fft of len_phi with a source tensor (O_einv).
-# see paper note for correct format of this matrix
-# Sadly jit doesn't support np.fft.
-# source has shape [n_a, n_b, n_phi]
-# returns [n_a, n_b, n_phi_row, n_phi_col]
+# Generates a 4D convolution operator in the phi axis for a 3d "tensor coef"
+# (see looped_solver for explanation)
+@njit(complex128[:,:,:,:](complex128[:,:,:]))
 def fft_conv_tensor_batch(source):
     len_a = source.shape[0]
     len_b = source.shape[1]
     len_phi = source.shape[2]
+    roll = jit_fftfreq_int(len_phi)
     out = np.zeros((len_a, len_b, len_phi, len_phi), dtype = np.complex128)
-    # How much to roll source
-    roll = (np.fft.fftfreq(len_phi)*len_phi).astype(np.int64)
     # Where does 0 elem start/end
     split = (len_phi+1)//2
     split_b = np.roll(np.arange(len_phi%2, len_phi+len_phi%2, dtype = np.int64),split)
-    for i in range(len_phi):
+    for i in prange(len_phi):
         index = roll[i]
-        out[:, :, i, :] = np.roll(source, index, axis = 2)
+        # Equivalent to
+        # out[:, :, i, :] = np.roll(source, index, axis = 2)
+        if index >= 0:
+            out[:, :, i, index:] = source[:, :, :len_phi - index]
+            out[:, :, i, :index] = source[:, :, len_phi - index:]
+        else:
+            out[:, :, i, index:] = source[:, :, :-index]
+            out[:, :, i, :index] = source[:, :, -index:]
         split_start = min(split, split_b[i])
         split_end = max(split, split_b[i])
         out[:, :, i, split_start:split_end] = 0
     return(np.transpose(out, (0,1,3,2))/len_phi)
+
+# Doesn't actually work that well.
+# def fft_conv_tensor_batch_orig(source):
+#     len_a = source.shape[0]
+#     len_b = source.shape[1]
+#     len_phi = source.shape[2]
+#     out = np.zeros((len_a, len_b, len_phi, len_phi), dtype = np.complex128)
+#     # How much to roll source
+#     roll = (np.fft.fftfreq(len_phi)*len_phi).astype(np.int64)
+#     # Where does 0 elem start/end
+#     split = (len_phi+1)//2
+#     split_b = np.roll(np.arange(len_phi%2, len_phi+len_phi%2, dtype = np.int64),split)
+#     for i in range(len_phi):
+#         index = roll[i]
+#         out[:, :, i, :] = np.roll(source, index, axis = 2)
+#         split_start = min(split, split_b[i])
+#         split_end = max(split, split_b[i])
+#         out[:, :, i, split_start:split_end] = 0
+#     return(np.transpose(out, (0,1,3,2))/len_phi)
 
 # The first finite differene implementation
 @njit(complex128[:,:](complex128[:], int64))
@@ -1435,12 +1401,10 @@ def solve_integration_factor(coeff, coeff_dp, f, \
     # Rescale the eq into y'+py=f
     f_eff = f/coeff_dp
     p_eff = coeff/coeff_dp
-
     f_eff_scaling = np.average(np.abs(f_eff))
     f_eff = f_eff/f_eff_scaling
-
-    print('solve_integration_factor: average p_eff:', np.average(np.abs(p_eff)))
-    print('solve_integration_factor: average f_eff:', f_eff_scaling)
+    # print('solve_integration_factor: average p_eff:', np.average(np.abs(p_eff)))
+    # print('solve_integration_factor: average f_eff:', f_eff_scaling)
 
     # Make f_eff and p_eff both shaped like f
     if np.isscalar(p_eff):
@@ -1459,7 +1423,7 @@ def solve_integration_factor(coeff, coeff_dp, f, \
         for i in range(f.shape[0]):
             if np.average(np.abs(np.real(p_eff[i])))<8:
                 modes.append('spline')
-            elif np.average(np.abs(np.real(p_eff[i])))>25:
+            elif np.average(np.abs(np.real(p_eff[i])))>config.asymptotic_threshold:
                 modes.append('asymptotic')
             else:
                 modes.append('double_spline')
@@ -1630,7 +1594,7 @@ def solve_integration_factor(coeff, coeff_dp, f, \
 # the ODE looks like y'=f.
 def fft_dphi_op(len_phi, remove_zero = np.array([False])):
     len_chi = len(remove_zero)
-    fft_freq = np.fft.fftfreq(len_phi)*len_phi
+    fft_freq = jit_fftfreq_int(len_phi)
     matrix = np.identity(len_phi) * 1j * fft_freq
     tiled_matrix = np.tile(matrix[:,:], (len_chi, 1, 1))
     tiled_matrix[remove_zero,:,:]=np.nan
@@ -1647,7 +1611,7 @@ def fft_conv_op_batch(source):
     len_phi = source.shape[1]
     out = np.zeros((len_chi, len_phi, len_phi), dtype = np.complex128)
     # How much to roll source
-    roll = (np.fft.fftfreq(len_phi)*len_phi).astype(np.int64)
+    roll = jit_fftfreq_int(len_phi)
     # Where does 0 elem start/end
     split = (len_phi+1)//2
     split_b = np.roll(np.arange(len_phi%2, len_phi+len_phi%2, dtype = np.int64),split)

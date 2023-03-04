@@ -8,7 +8,7 @@ from .eval_II_center import *
 from .eval_D3_RHS_m_LHS import *
 from .looped_Y_coefs import *
 from .looped_B_theta_coefs import *
-from .looped_B_psi_coefs import *
 from .looped_B_psi_coefs_D3 import *
 from .looped_B_psi_coefs_full import *
+from .looped_B_psi_lambdas_full import *
 from .validate import *

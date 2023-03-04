@@ -513,6 +513,7 @@ class Equilibrium:
         self.check_order_consistency()
 
         # Some coeffs are really long. We only calc them once.
+        # Very little speed improvement compared to eval_B_psi_coefs_full.
         self.prepare_lambdas(magnetic_only)
 
     def from_known(
@@ -795,6 +796,17 @@ class Equilibrium:
     def prepare_lambdas(self, magnetic_only):
         if not magnetic_only:
             self.looped_coef_lambdas = eval_looped_coef_lambdas(self)
+            self.looped_B_psi_lambdas = MHD_parsed.eval_B_psi_lambdas_full(
+                self.unknown['X_coef_cp'],
+                self.unknown['Y_coef_cp'],
+                self.unknown['Delta_coef_cp'],
+                self.constant['B_alpha_coef'],
+                self.constant['B_denom_coef_c'],
+                self.constant['dl_p'],
+                self.constant['tau_p'],
+                self.constant['kap_p'],
+                self.unknown['iota_coef']
+            )
         return()
 
     # The looped equation uses some very long coefficients with simple n dependence.
@@ -1126,7 +1138,10 @@ class Equilibrium:
         iota_new,
         n_eval=None, filter=False,
         filter_mode='low_pass', filter_arg=100,
-        loop_max_freq=500):
+        loop_max_freq=(500,500),
+        max_k_diff_pre_inv=(1000,1000),
+        max_k_diff_post_inv=(1000,1000)
+        ):
 
         # If no order is supplied, then iterate to the next order. the Equilibrium
         # will be edited directly.
@@ -1188,7 +1203,6 @@ class Equilibrium:
         tau_p = self.constant['tau_p']
         eta = self.constant['eta']
         iota_coef.append(iota_new)
-        print('iota 1',iota_coef[1])
         B_denom_coef_c.append(B_denom_nm1)
         B_denom_coef_c.append(B_denom_n)
         B_alpha_coef.append(B_alpha_nb2)
@@ -1205,7 +1219,6 @@ class Equilibrium:
         # print('iota 1 right before loop',iota_coef[1])
         solution_nm1_known_iota = looped_solver.iterate_looped(
             n_unknown = n_eval-1,
-            max_freq = loop_max_freq,
             target_len_phi = 1000,
             X_coef_cp = X_coef_cp,
             Y_coef_cp = Y_coef_cp,
@@ -1222,6 +1235,10 @@ class Equilibrium:
             eta = eta,
             iota_coef = iota_coef,
             looped_coef_lambdas = self.looped_coef_lambdas,
+            looped_B_psi_lambdas = self.looped_B_psi_lambdas,
+            max_freq = loop_max_freq[0],
+            max_k_diff_pre_inv = max_k_diff_pre_inv[0],
+            max_k_diff_post_inv = max_k_diff_post_inv[0],
         )
         filter_record_noise_and_append('B_theta_coef_cp', solution_nm1_known_iota['B_theta_n'])
         filter_record_noise_and_append('B_psi_coef_cp', solution_nm1_known_iota['B_psi_nm2'])
@@ -1269,23 +1286,27 @@ class Equilibrium:
         B_psi_coef_cp.append(B_psi_nm2)
 
         solution_n = looped_solver.iterate_looped(
-            n_unknown=n_eval, max_freq=loop_max_freq,
-            target_len_phi=1000,
-            X_coef_cp=X_coef_cp,
-            Y_coef_cp=Y_coef_cp,
-            Z_coef_cp=Z_coef_cp,
-            p_perp_coef_cp=p_perp_coef_cp,
-            Delta_coef_cp=Delta_coef_cp,
-            B_psi_coef_cp=B_psi_coef_cp,
-            B_theta_coef_cp=B_theta_coef_cp,
-            B_alpha_coef=B_alpha_coef,
-            B_denom_coef_c=B_denom_coef_c,
-            kap_p=kap_p,
-            tau_p=tau_p,
-            dl_p=dl_p,
-            eta=eta,
-            iota_coef=iota_coef,
-            looped_coef_lambdas = self.looped_coef_lambdas
+            n_unknown = n_eval,
+            target_len_phi = 1000,
+            X_coef_cp = X_coef_cp,
+            Y_coef_cp = Y_coef_cp,
+            Z_coef_cp = Z_coef_cp,
+            p_perp_coef_cp = p_perp_coef_cp,
+            Delta_coef_cp = Delta_coef_cp,
+            B_psi_coef_cp = B_psi_coef_cp,
+            B_theta_coef_cp = B_theta_coef_cp,
+            B_alpha_coef = B_alpha_coef,
+            B_denom_coef_c = B_denom_coef_c,
+            kap_p = kap_p,
+            tau_p = tau_p,
+            dl_p = dl_p,
+            eta = eta,
+            iota_coef = iota_coef,
+            looped_coef_lambdas = self.looped_coef_lambdas,
+            looped_B_psi_lambdas = self.looped_B_psi_lambdas,
+            max_freq = loop_max_freq[1],
+            max_k_diff_pre_inv = max_k_diff_pre_inv[1],
+            max_k_diff_post_inv = max_k_diff_post_inv[1],
         )
         # Partial solutions for these variables were appended to their
         # ChiPhiEpsFunc's for iterate_looped. Now remove them, re-append
@@ -1309,4 +1330,4 @@ class Equilibrium:
 
         print("Time elapsed(s):",(time.time() - start_time))
         self.check_order_consistency()
-        return(solution_nm1_known_iota)
+        return(solution_nm1_known_iota, solution_n)

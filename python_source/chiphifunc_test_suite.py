@@ -1,5 +1,3 @@
-# This file implements and tests recursion relations
-from qsc import Qsc
 import numpy as np
 import timeit
 import scipy.signal
@@ -13,10 +11,15 @@ from chiphifunc import *
 from chiphiepsfunc import *
 from recursion_relations import *
 from math_utilities import is_seq,py_sum,is_integer,diff
+import config
+
+# Detect whether pyQSC is enabled.
+if config.use_pyQSC:
+    from qsc import Qsc
 
 # Size of the chi and phi grid used for evaluation
-n_grid_phi = 1000
-n_grid_chi = 500
+n_grid_phi = config.n_grid_phi
+n_grid_chi = config.n_grid_chi
 points = np.linspace(0, 2*np.pi*(1-1/n_grid_phi), n_grid_phi)
 chi = np.linspace(0, 2*np.pi*(1-1/n_grid_chi), n_grid_chi)
 phi = points
@@ -174,7 +177,7 @@ def cumulative_error(chiphifunc_in, callable_chiphifunc, callable_array, num_ste
 # Outputs Matt Landreman's format:
 # rc = [const, <coeff of mode=i*nfp>]
 # rs = [0,     <coeff of mode=i*nfp>]
-def eduardo_to_matt(in_array, nfp):
+def rodriguez_to_landreman(in_array, nfp):
     num_modes = in_array[0]
     cos_modes = {}
     sin_modes = {}
@@ -218,7 +221,10 @@ def eduardo_to_matt(in_array, nfp):
 # X22c.dat		Y20.dat		Yc1.dat		Z33c.dat
 # X22s.dat		Y22c.dat	Ys1.dat		Z33s.dat
 def read_first_three_orders(path, R_array, Z_array, numerical_mode = False):
-
+    if not config.use_pyQSC:
+        raise AttributeError(
+            'use_pyQSC must be enabled to use test datasets from Eduardo Rodriguez.'
+        )
     # The last elements in all data files repeat the first elements. the
     # [:-1] removes it.
 
@@ -385,8 +391,8 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False):
 
     # Not an actual representation in pyQSC.
     # only for calculating axis length.
-    rc, rs = eduardo_to_matt(R_array, nfp)
-    zc, zs = eduardo_to_matt(Z_array, nfp)
+    rc, rs = rodriguez_to_landreman(R_array, nfp)
+    zc, zs = rodriguez_to_landreman(Z_array, nfp)
     stel = Qsc(rc=rc, rs=rs, zc=zc, zs=zs, nfp=nfp)
     dl_p = stel.axis_length/(2*np.pi)
     print('Axis shape:')
@@ -437,129 +443,11 @@ def chiphifunc_debug_plot():
     chiphifunc.debug_max_value = []
     chiphifunc.debug_avg_value = []
 
-def import_from_stel(stel = Qsc.from_paper('r2 section 5.2')):
-    # Spline fit and interpolate to certain elements
-    # Or if the item is scalar, creates a filled 1d array of
-    # len_phi
-    def to_phi(varphi, nfp, x, len_phi=len_phi):
-        if np.isscalar(x):
-            return(np.full((len_phi), x))
-        else:
-            interp_array = x
-            interp_array = np.tile(interp_array,nfp+1)
-            phis = np.array([])
-            for i in range(nfp+1):
-                phis = np.append(phis,varphi+np.pi*2/nfp*i)
-            f = interp1d(phis, interp_array, kind='cubic')
-            return(f(np.linspace(0,np.pi*2*(len_phi-1)/len_phi, len_phi)))
-
-    dl_p = stel.abs_G0_over_B0
-    iota = stel.iotaN
-    iota_coef = ChiPhiEpsFunc([iota])
-    tau_p = ChiPhiFuncGrid(np.array([to_phi(stel.varphi, stel.nfp, -stel.torsion)]))
-    kap_p = ChiPhiFuncGrid(np.array([to_phi(stel.varphi, stel.nfp, stel.curvature)]))
-    B0 = 1/stel.B0**2
-    eta = stel.etabar*np.sqrt(2)*B0**0.25
-    #
-    r_factor = np.sqrt(2/stel.Bbar)
-    # X, Y, Z -----------------------------------
-    X1 = ChiPhiFuncGrid(np.array([
-        to_phi(stel.varphi, stel.nfp, stel.X1s), # sin coeff is zero
-        to_phi(stel.varphi, stel.nfp, stel.X1c),
-    ]), fourier_mode = True)*r_factor
-    X2 = ChiPhiFuncGrid(np.array([
-        to_phi(stel.varphi, stel.nfp, stel.X2s),
-        to_phi(stel.varphi, stel.nfp, stel.X20),
-        to_phi(stel.varphi, stel.nfp, stel.X2c)
-    ]), fourier_mode = True)*r_factor**2
-    X3 = ChiPhiFuncGrid(np.array([
-        to_phi(stel.varphi, stel.nfp, stel.X3s3),
-        to_phi(stel.varphi, stel.nfp, stel.X3s1),
-        to_phi(stel.varphi, stel.nfp, stel.X3c1),
-        to_phi(stel.varphi, stel.nfp, stel.X3c3)*r_factor**3
-    ]), fourier_mode = True)
-    X_coef_cp = ChiPhiEpsFunc([0, X1, X2])
-    Y1 = ChiPhiFuncGrid(np.array([
-        to_phi(stel.varphi, stel.nfp, stel.Y1s), # sin coeff is zero
-        to_phi(stel.varphi, stel.nfp, stel.Y1c),
-    ]), fourier_mode = True)*r_factor
-    Y2 = ChiPhiFuncGrid(np.array([
-        to_phi(stel.varphi, stel.nfp, stel.Y2s),
-        to_phi(stel.varphi, stel.nfp, stel.Y20),
-        to_phi(stel.varphi, stel.nfp, stel.Y2c)
-    ]), fourier_mode = True)*r_factor**2
-    Y3 = ChiPhiFuncGrid(np.array([
-        to_phi(stel.varphi, stel.nfp, stel.Y3s3),
-        to_phi(stel.varphi, stel.nfp, stel.Y3s1),
-        to_phi(stel.varphi, stel.nfp, stel.Y3c1),
-        to_phi(stel.varphi, stel.nfp, stel.Y3c3)
-    ]), fourier_mode = True)*r_factor**3
-    Y_coef_cp = ChiPhiEpsFunc([0, Y1, Y2])
-    Z2 = ChiPhiFuncGrid(np.array([
-        to_phi(stel.varphi, stel.nfp, stel.Z2s),
-        to_phi(stel.varphi, stel.nfp, stel.Z20),
-        to_phi(stel.varphi, stel.nfp, stel.Z2c)
-    ]), fourier_mode = True)*r_factor**2
-    Z3 = ChiPhiFuncGrid(np.array([
-        to_phi(stel.varphi, stel.nfp, stel.Z3s3),
-        to_phi(stel.varphi, stel.nfp, stel.Z3s1),
-        to_phi(stel.varphi, stel.nfp, stel.Z3c1),
-        to_phi(stel.varphi, stel.nfp, stel.Z3c3)
-    ]), fourier_mode = True)*r_factor**3
-    Z_coef_cp = ChiPhiEpsFunc([0, 0, Z2])
-    # B components
-
-
-    Btc20 = 2*stel.I2/stel.B0
-    B_theta_coef_cp = ChiPhiEpsFunc([0, 0, ChiPhiFuncGrid(np.array([
-        to_phi(stel.varphi, stel.nfp, Btc20)
-    ]))])
-
-    B_psi_coef_cp = ChiPhiEpsFunc([0])
-
-    B1c = -2*B0*eta
-    B1 = ChiPhiFuncGrid(np.array([
-        np.zeros(len_phi),
-        to_phi(stel.varphi, stel.nfp, B1c)
-    ]))
-    B20 = (0.75*stel.etabar**2/np.sqrt(B0) - stel.B20)*4*B0**2
-    B2c = (0.75*stel.etabar**2/np.sqrt(B0) - stel.B2c)*4*B0**2
-    B2s = -4*stel.B2s*B0**2
-    B2 = ChiPhiFuncGrid(np.array([
-        to_phi(stel.varphi, stel.nfp, B2s),
-        to_phi(stel.varphi, stel.nfp, B20),
-        to_phi(stel.varphi, stel.nfp, B2c)
-    ]))
-    B_denom_coef_c = ChiPhiEpsFunc([B0, B1, ChiPhiFuncGrid(np.array([B20]))])
-
-    Ba0 = np.array([to_phi(stel.varphi, stel.nfp, stel.G0)])
-    Ba1 = np.array([to_phi(stel.varphi, stel.nfp, 2/stel.B0*(stel.G2 + stel.iotaN*stel.I2))])
-    B_alpha_coef = ChiPhiEpsFunc([ChiPhiFuncGrid(Ba0), ChiPhiFuncGrid(Ba1)])
-
-    # X_coef_cp.mask(2), Done
-    # Y_coef_cp.mask(2), Done
-    # Z_coef_cp.mask(2), Done
-    # B_psi_coef_cp.mask(0), Done
-    # B_theta_coef_cp.mask(2), Done
-    # B_denom_coef_c.mask(2), Done
-    # B_alpha_coef.mask(1), Done
-    # kap_p, dl_p, tau_p, Done
-    # iota_coef.mask(0), eta, Done
-    equilibrium_out = Equilibrium.from_known(X_coef_cp,
-        Y_coef_cp,
-        Z_coef_cp,
-        B_psi_coef_cp,
-        B_theta_coef_cp,
-        B_denom_coef_c,
-        B_alpha_coef,
-        kap_p, dl_p, tau_p,
-        iota_coef, eta,
-        ChiPhiEpsFunc([0,0,0]), # no pressure or delta
-        ChiPhiEpsFunc([0,0,0]))
-
-    return(equilibrium_out, Y3)
-
 def import_from_stel(stel = Qsc.from_paper('r2 section 5.2'), len_phi=1000):
+    if not config.use_pyQSC:
+        raise AttributeError(
+            'use_pyQSC must be enabled to use test datasets from qyPSC.'
+        )
     # Spline fit and interpolate to certain elements
     # Or if the item is scalar, creates a filled 1d array of
     # len_phi
