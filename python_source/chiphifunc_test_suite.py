@@ -9,7 +9,7 @@ from scipy.interpolate import interp1d
 # for importing parsed codes
 from chiphifunc import *
 from chiphiepsfunc import *
-from recursion_relations import *
+from equilibrium import *
 from math_utilities import is_seq,py_sum,is_integer,diff
 import config
 

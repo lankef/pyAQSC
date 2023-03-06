@@ -45,6 +45,10 @@ run the main code, but contains source expressions much of code is parsed from.
 │   └── test_cases/                         -> Test cases for Maxima scripts.
 └── python_source/                          -> Python source for the main code.
     ├── config.py                           -> Configurations. (numerical, run-time, ...)
+    ├── equilibrium.py                      -> Contains the Equilibrium object that manages
+    │                                          the iteration of an equilibrium represented
+    │                                          by near axis expansion. Also contains wrappers
+    │                                          for methods in parsed/ and MHD_parsed/.
     ├── chiphiepsfunc.py                    -> A list-like data structure for storing power coeffs.
     ├── chiphifunc.py                       -> A data structure representing f(chi,phi)
     │                                          as chi Fourier coeffs on phi grids, implementation
@@ -52,10 +56,6 @@ run the main code, but contains source expressions much of code is parsed from.
     ├── chiphifunc_test_suite.py            -> A test suite for chiphifunc and plotting.
     ├── math_utilities.py                   -> More numerical operations needed to run
     │                                          python methods in python_source/parsed/
-    ├── recursion_relations.py              -> Contains the Equilibrium object that manages
-    │                                          the iteration of an equilibrium represented
-    │                                          by near axis expansion. Also contains wrappers
-    │                                          for methods in parsed/ and MHD_parsed/.
     ├── looped_solver.py                    -> Solver for the "looped equation" [2, 3]
     ├── looped_B_psi_lambdas_full.py        -> Hand-calculated B_psi coefficients in the
     │                                          looped equation. Stored as lambda(order).

@@ -1,26 +1,26 @@
 import numpy as np
 from math import floor, ceil
 from math_utilities import *
-from recursion_relations import *
+from equilibrium import *
 from chiphifunc import *
 
 
-def eval_looped_coef_lambdas(equilibrium):
-    # Creating new ChiPhiEpsFunc's for the resulting Equilibrium
-    X_coef_cp = equilibrium.unknown['X_coef_cp']
-    Y_coef_cp = equilibrium.unknown['Y_coef_cp']
-    Z_coef_cp = equilibrium.unknown['Z_coef_cp']
-    B_theta_coef_cp = equilibrium.unknown['B_theta_coef_cp']
-    B_psi_coef_cp = equilibrium.unknown['B_psi_coef_cp']
-    iota_coef = equilibrium.unknown['iota_coef']
-    p_perp_coef_cp = equilibrium.unknown['p_perp_coef_cp']
-    Delta_coef_cp = equilibrium.unknown['Delta_coef_cp']
-    B_denom_coef_c = equilibrium.constant['B_denom_coef_c']
-    B_alpha_coef = equilibrium.constant['B_alpha_coef']
-    kap_p = equilibrium.constant['kap_p']
-    dl_p = equilibrium.constant['dl_p']
-    tau_p = equilibrium.constant['tau_p']
-    eta = equilibrium.constant['eta']
+def eval_looped_coef_lambdas(equilibrium_in):
+    # Creating new ChiPhiEpsFunc's for the resulting equilibrium_in
+    X_coef_cp = equilibrium_in.unknown['X_coef_cp']
+    Y_coef_cp = equilibrium_in.unknown['Y_coef_cp']
+    Z_coef_cp = equilibrium_in.unknown['Z_coef_cp']
+    B_theta_coef_cp = equilibrium_in.unknown['B_theta_coef_cp']
+    B_psi_coef_cp = equilibrium_in.unknown['B_psi_coef_cp']
+    iota_coef = equilibrium_in.unknown['iota_coef']
+    p_perp_coef_cp = equilibrium_in.unknown['p_perp_coef_cp']
+    Delta_coef_cp = equilibrium_in.unknown['Delta_coef_cp']
+    B_denom_coef_c = equilibrium_in.constant['B_denom_coef_c']
+    B_alpha_coef = equilibrium_in.constant['B_alpha_coef']
+    kap_p = equilibrium_in.constant['kap_p']
+    dl_p = equilibrium_in.constant['dl_p']
+    tau_p = equilibrium_in.constant['tau_p']
+    eta = equilibrium_in.constant['eta']
 
     ''' Coefficients for B_psi0 in X, Z, p, Delta, Y TERMS '''
     # For solving the looped equations
