@@ -27,6 +27,7 @@ import time
 # All iterate_<variable name> functions evaluate said variable at order n_eval.
 # See overleaf (will be offline later) document which variables are needed and
 # which orders are needed.
+# not nfp-dependent
 def iterate_Xn_cp(n_eval,
     X_coef_cp,
     Y_coef_cp,
@@ -47,7 +48,7 @@ def iterate_Xn_cp(n_eval,
 
 
 # O_matrices, O_einv, vector_free_coef only uses B_alpha_coef and X_coef_cp
-def iterate_Yn_cp_operators(n_eval, X_coef_cp, B_alpha_coef):
+def iterate_Yn_cp_operators(n_eval, X_coef_cp, B_alpha_coef): # nfp-dependent only in output
 
     # Getting coeffs
     # Both uses B_alpha0 and X1 only
@@ -56,11 +57,12 @@ def iterate_Yn_cp_operators(n_eval, X_coef_cp, B_alpha_coef):
 
     # Calculating the inverted matrices
     i_free = (n_eval+1)//2 # We'll always use Yn0 or Yn1p as the free var.
-    O_matrices, O_einv, vector_free_coef = ChiPhiFunc.get_O_O_einv_from_A_B(chiphifunc_A, chiphifunc_B, i_free, n_eval)
-    return(O_matrices, O_einv, vector_free_coef)
+    O_matrices, O_einv, vector_free_coef, nfp = ChiPhiFunc.get_O_O_einv_from_A_B(chiphifunc_A, chiphifunc_B, i_free, n_eval)
+    return(O_matrices, O_einv, vector_free_coef, nfp)
 
 
 # O_matrices, O_einv, vector_free_coef only uses B_alpha_coef and X_coef_cp
+# nfp-dependent!!
 def iterate_Yn_cp_RHS(n_eval,
     X_coef_cp,
     Y_coef_cp,
@@ -71,7 +73,7 @@ def iterate_Yn_cp_RHS(n_eval,
     B_denom_coef_c,
     kap_p, dl_p, tau_p, eta,
     iota_coef,
-    max_freq = None):
+    max_freq = None): # nfp-dependent!!
 
     # Getting coeffs
     # Both uses B_alpha0 and X1 only
@@ -112,7 +114,7 @@ def iterate_Yn_cp_RHS(n_eval,
             1 # Sign is 1
         )
     if max_freq is not None:
-        chiphifunc_rhs_content = ChiPhiFunc(chiphifunc_rhs_content).filter('low_pass', max_freq).content
+        chiphifunc_rhs_content = ChiPhiFunc(chiphifunc_rhs_content, chiphifunc_rhs.nfp).filter('low_pass', max_freq).content
 
     return(chiphifunc_rhs_content)
 
@@ -123,6 +125,7 @@ def iterate_Yn_cp_RHS(n_eval,
 # X_{n}, Y_{n-1}, Z_{n-1},
 # B_{\theta n-1}, B_{\psi  n-3},
 # \iota_{(n-3)/2 or (n-4)/2}, B_{\alpha  (n-1)/2 or (n-2)/2}
+# nfp-dependent!!
 def iterate_Yn_cp_magnetic(n_eval,
     X_coef_cp,
     Y_coef_cp,
@@ -165,7 +168,7 @@ def iterate_Yn_cp_magnetic(n_eval,
             B_theta_coef_cp=B_theta_coef_cp,
             Yn1s_p=Yn1s_p)
 
-    O_matrices, O_einv, vector_free_coef = \
+    O_matrices, O_einv, vector_free_coef, Y_nfp = \
         iterate_Yn_cp_operators(n_eval,
             X_coef_cp=X_coef_cp,
             B_alpha_coef=B_alpha_coef)
@@ -226,13 +229,14 @@ def iterate_Yn_cp_magnetic(n_eval,
     Yn = np.einsum('ijk,jk->ik',O_einv,chiphifunc_rhs_content) + vec_free * vector_free_coef
     # print('Yn:')
     # print(Yn)
-    return(ChiPhiFunc(Yn))
+    return(ChiPhiFunc(Yn, Y_nfp))
 
 
 # Evaluates iota_{(n-1)/2}.
 # Requires:
 # \Lambda_n (X_{n-1}, Y_{n-1}, Z_{n}, \iota_{(n-3)/2}),
 # B_{\theta n}, B_0, B_{\alpha 0}$
+# not nfp-dependent
 def iterate_iota_nm1b2(sigma_tilde_n0, n_eval,
     X_coef_cp, Y_coef_cp, Z_coef_cp,\
                tau_p, dl_p, kap_p,\
@@ -255,9 +259,9 @@ def iterate_iota_nm1b2(sigma_tilde_n0, n_eval,
     iota_0 = iota_coef[0]
 
     # Evaluates exp(2*iota_bar_0*integral_of_sigma_to_phi').
-    exponent = 2*iota_0*sigma_p.integrate_phi(periodic = False)
+    exponent = 2*iota_0*sigma_p.integrate_phi(periodic = False, zero_avg=False)
     exp_factor = exponent.exp()
-    exponent_2pi = 2*iota_0*sigma_p.integrate_phi(periodic = True)
+    exponent_2pi = 2*iota_0*sigma_p.integrate_phi(periodic = True, zero_avg=None)
     if isinstance(exponent_2pi,ChiPhiFunc):
         exp_factor_2pi = exponent_2pi.exp() # the result was a float
     else:
@@ -279,10 +283,10 @@ def iterate_iota_nm1b2(sigma_tilde_n0, n_eval,
         B_theta_n0 = B_theta_coef_cp[n_eval]
 
     # The denominator,
-    denom = (exp_factor*(1+sigma_p**2+(eta/kap_p)**4/4/B0)).integrate_phi(periodic = True)
+    denom = (exp_factor*(1+sigma_p**2+(eta/kap_p)**4/4/B0)).integrate_phi(periodic = True, zero_avg=None)
 
     return(
-        ((exp_factor*(Lambda_n_p_tilde+2*B_alpha0*B0*B_theta_n0/(Y11s_p**2))).integrate_phi(periodic = True)
+        ((exp_factor*(Lambda_n_p_tilde+2*B_alpha0*B0*B_theta_n0/(Y11s_p**2))).integrate_phi(periodic = True, zero_avg=None)
         + sigma_tilde_n0*(1-exp_factor_2pi))/denom
     )
 
@@ -294,6 +298,7 @@ def iterate_iota_nm1b2(sigma_tilde_n0, n_eval,
 # B_{\alpha (n-2)/2 \text{ or } (n-3)/2},
 # \iota_{(n-2)/2 \text{ or } (n-3)/2}
 # \kappa, \frac{dl}{d\phi}, \tau
+# not nfp-dependent
 def iterate_Zn_cp(
     n_eval,
     X_coef_cp, Y_coef_cp, Z_coef_cp,
@@ -314,6 +319,7 @@ def iterate_Zn_cp(
         iota_coef = iota_coef
     ).cap_m(n_eval))
 
+# not nfp-dependent
 def iterate_Yn1s_p(n_eval,
     X_coef_cp, Y_coef_cp, Z_coef_cp,
     B_psi_coef_cp, B_theta_coef_cp,
@@ -355,7 +361,7 @@ def iterate_Yn1c_p(sigma_tilde_n0,\
     sigma_p = Y11c_p/Y11s_p # Definition. On pg 4 below (6)
     Lambda_n_p_eval = Lambda_n_p(Yn1s_p, Y11s_p, Y11c_p, X11c_p, iota_0, tau_p, dl_p, sigma_p, Xi_n_p_no_iota_mask)
 
-    exponent = 2*iota_0*sigma_p.integrate_phi(periodic = False)
+    exponent = 2*iota_0*sigma_p.integrate_phi(periodic = False, zero_avg=False)
     exp_factor = exponent.exp()
     exp_factor_neg = (-exponent).exp()
 
@@ -376,7 +382,7 @@ def iterate_Yn1c_p(sigma_tilde_n0,\
         +(\
             exp_factor\
             *(Lambda_n_p_eval+2*B_alpha0*B0*B_theta_np10/(Y11s_p**2))\
-        ).integrate_phi(periodic=False)\
+        ).integrate_phi(periodic=False, zero_avg=False)\
     )
 
     return((sigma_tilde_n*Y11s_p), Lambda_n_p_eval)
@@ -389,6 +395,7 @@ def iterate_Yn1c_p(sigma_tilde_n0,\
 
 # Evaluates \Lambda_n. Used in Yn and iota_(n-1)/2
 # Must be evaluated with iota_{(n-1)/2} = 0 to get lambda_tilde
+# not nfp-dependent
 def Lambda_n_p(Yn1s_p, Y11s_p, Y11c_p, X11c_p, iota_0, tau_p, dl_p, sigma_p, Xi_n_p):
     return(
         (diff(Yn1s_p,'phi',1)*sigma_p/Y11s_p
@@ -403,6 +410,7 @@ def Lambda_n_p(Yn1s_p, Y11s_p, Y11c_p, X11c_p, iota_0, tau_p, dl_p, sigma_p, Xi_
 # X_{n-1}, Y_{n-1}, Z_{n-1},
 # B_{\theta n-1}, B_0,
 # B_{\alpha 0}, \bar{\iota}_{(n-2)/2 or (n-3)/2}$
+# not nfp-dependent
 def iterate_dc_B_psi_nm2(
     n_eval,
     X_coef_cp, Y_coef_cp, Z_coef_cp,
@@ -428,6 +436,7 @@ def iterate_dc_B_psi_nm2(
 
 # Uses B_theta [n-2], B_[psi n-2], B_alpha first-order terms, B_denom[n],
 # p_[perp n-1], Delta_[n-1],iota_[(n-3)/2 (n-2)/2]
+# not nfp-dependent
 def iterate_p_perp_n(n_eval,
     B_theta_coef_cp,
     B_psi_coef_cp,
@@ -453,7 +462,7 @@ def iterate_p_perp_n(n_eval,
 # component of the FFT of Delta[n,0]. At odd orders, this is iota[(n-1)/2].
 # This method always ensures zero avg(Delta[n,0]), and will by default
 # set iota[(n-1)/2] to zero, but has the option to use known iota for debugging.
-
+# nfp-dependent!!
 def iterate_delta_n_0_offset(n_eval,
     B_denom_coef_c,
     p_perp_coef_cp,
@@ -461,7 +470,7 @@ def iterate_delta_n_0_offset(n_eval,
     iota_coef,
     integral_mode,
     fft_max_freq=None,
-    no_iota_masking = False):
+    no_iota_masking = False): # nfp-dependent!!
 
     # At even orders, the free parameter is Delta_offset (the average of Delta n0)
     if n_eval%2==0:
@@ -490,12 +499,12 @@ def iterate_delta_n_0_offset(n_eval,
     # This average is a free parameter, because the center component of
     # the ODE is dphi x = f.
     content = solve_dphi_iota_dchi(
-        iota=iota_coef[0],
-        f=Delta_n_inhomog_component.content,
+        iota=iota_coef[0]/Delta_n_inhomog_component.nfp,
+        f=Delta_n_inhomog_component.content/Delta_n_inhomog_component.nfp,
         integral_mode=integral_mode,
         fft_max_freq=fft_max_freq
     )
-    Delta_out = ChiPhiFunc(content).cap_m(n_eval)
+    Delta_out = ChiPhiFunc(content, Delta_n_inhomog_component.nfp).cap_m(n_eval)
     if n_eval%2==0:
         Delta_out -= np.average(Delta_out.get_constant().content)
     return(Delta_out)
@@ -505,10 +514,12 @@ def iterate_delta_n_0_offset(n_eval,
 # A container for all equilibrium quantities.
 # All coef inputs must be ChiPhiEpsFunc's.
 class Equilibrium:
-    def __init__(self, unknown, constant, noise, magnetic_only):
-        self.noise=noise
-        self.unknown=unknown
-        self.constant=constant
+    # nfp-dependent!!
+    def __init__(self, unknown, constant, noise, magnetic_only, nfp):
+        self.noise = noise
+        self.unknown = unknown
+        self.constant = constant
+        self.nfp = nfp
 
         # Check if every term is on the same order
         self.check_order_consistency()
@@ -517,6 +528,7 @@ class Equilibrium:
         # Very little speed improvement compared to eval_B_psi_coefs_full.
         self.prepare_lambdas(magnetic_only)
 
+    # nfp-dependent!!
     def from_known(
         X_coef_cp,
         Y_coef_cp,
@@ -575,7 +587,7 @@ class Equilibrium:
                 noise[key]['p_perp_coef_cp'] = ChiPhiEpsFunc.zeros_like(unknown['p_perp_coef_cp'])
                 noise[key]['Delta_coef_cp'] = ChiPhiEpsFunc.zeros_like(unknown['Delta_coef_cp'])
 
-        return(Equilibrium(unknown, constant, noise, magnetic_only))
+        return(Equilibrium(unknown, constant, noise, magnetic_only, X_coef_cp.nfp))
 
     def save_self(self, file_name):
 
@@ -608,38 +620,45 @@ class Equilibrium:
             'unknown':unknown_to_content_list,\
             'noise':noise_to_content_list,\
             'constant':const_to_content_list,\
+            'nfp':self.nfp
         }
         np.savez(file_name, big_dict)
 
+    # nfp-dependent!!
     def load(filename):
         npzfile = np.load(filename, allow_pickle=True)
         big_dict = npzfile['arr_0'].item()
         raw_unknown = big_dict['unknown']
         raw_constant = big_dict['constant']
         raw_noise = big_dict['noise']
+        nfp = big_dict['nfp']
+        print('nfp', nfp)
 
         unknown = {}
         for key in raw_unknown.keys():
-            unknown[key] = ChiPhiEpsFunc.from_content_list(raw_unknown[key])
+            if key == 'iota_coef':
+                unknown[key] = ChiPhiEpsFunc.from_content_list(raw_unknown[key], 0)
+            else:
+                unknown[key] = ChiPhiEpsFunc.from_content_list(raw_unknown[key], nfp)
 
         noise = {}
         for keya in raw_noise.keys():
             noise[keya]={}
             for keyb in raw_noise[keya].keys():
                 noise[keya][keyb] \
-                    = ChiPhiEpsFunc.from_content_list(raw_noise[keya][keyb])
+                    = ChiPhiEpsFunc.from_content_list(raw_noise[keya][keyb], nfp)
 
         constant={}
         constant['B_denom_coef_c']\
-            = ChiPhiEpsFunc.from_content_list(raw_constant['B_denom_coef_c'])
+            = ChiPhiEpsFunc.from_content_list(raw_constant['B_denom_coef_c'], 0)
         constant['B_alpha_coef']\
-            = ChiPhiEpsFunc.from_content_list(raw_constant['B_alpha_coef'])
+            = ChiPhiEpsFunc.from_content_list(raw_constant['B_alpha_coef'], 0)
         constant['kap_p']\
-            = ChiPhiFunc(raw_constant['kap_p'])
+            = ChiPhiFunc(raw_constant['kap_p'], nfp)
         constant['dl_p']\
             = raw_constant['dl_p']
         constant['tau_p']\
-            = ChiPhiFunc(raw_constant['tau_p'])
+            = ChiPhiFunc(raw_constant['tau_p'], nfp)
         constant['eta']\
             = raw_constant['eta']
 
@@ -647,11 +666,13 @@ class Equilibrium:
 
     # Order consistency check --------------------------------------------------
     # Get the current order of an equilibrium
+    # not nfp-dependent
     def get_order(self):
         self.check_order_consistency()
         return(self.unknown['X_coef_cp'].get_order())
 
     # Check of all terms are on consistent orders
+    # nfp=dependent!!
     def check_order_consistency(self):
 
         # An internal method for error throwing. Checks if all variables are
@@ -664,6 +685,13 @@ class Equilibrium:
                     + str(n_current)
                     + ', while required order is: '
                     + str(n_req))
+            if ChiPhiEpsFunc.nfp!=0 and ChiPhiEpsFunc!=self.nfp:
+                raise AttributeError(name_in_error_msg
+                    + ' has nfp: '
+                    + str(ChiPhiEpsFunc.nfp)
+                    + ', while required nfp is: '
+                    + str(self.nfp))
+
 
         n = self.unknown['X_coef_cp'].get_order()
         if n%2==1:
@@ -688,10 +716,13 @@ class Equilibrium:
             check_order_individial(self.noise[key]['p_perp_coef_cp'], 'p_perp_coef_cp', n)
             check_order_individial(self.noise[key]['Delta_coef_cp'], 'Delta_coef_cp', n)
 
-    def check_governing_equations(self, n_eval=None):
-        if n_eval is None:
-            n_eval = self.get_order()
-        elif n_eval>self.get_order():
+    # Checks the accuracy of iteration at order n_unknown by substituting
+    # results into the original form of the governing equations.
+    # not nfp-dependent
+    def check_governing_equations(self, n_unknown):
+        if n_unknown is None:
+            n_unknown = self.get_order()
+        elif n_unknown>self.get_order():
             raise ValueError('Validation order should be <= than the current order')
 
         X_coef_cp = self.unknown['X_coef_cp']
@@ -709,71 +740,49 @@ class Equilibrium:
         tau_p = self.constant['tau_p']
         eta = self.constant['eta']
 
-        n=n_eval
-        n_unknown = n_eval-1
-
-        J = MHD_parsed.validate_J(n,
+        J = MHD_parsed.validate_J(n_unknown,
+            X_coef_cp,
+            Y_coef_cp,
+            Z_coef_cp,
+            B_denom_coef_c, B_alpha_coef,
+            kap_p, dl_p, tau_p, iota_coef)
+        J.display_content()
+        Cb = MHD_parsed.validate_Cb(n_unknown-1,
             X_coef_cp,
             Y_coef_cp, Z_coef_cp,
             B_denom_coef_c, B_alpha_coef,
+            B_psi_coef_cp, B_theta_coef_cp,
             kap_p, dl_p, tau_p, iota_coef)
-        Cb = MHD_parsed.validate_Cb(n,
-            X_coef_cp,
-            Y_coef_cp, Z_coef_cp,
+        Cb.display_content()
+        Ck = MHD_parsed.validate_Ck(n_unknown-1, X_coef_cp, Y_coef_cp, Z_coef_cp,
             B_denom_coef_c, B_alpha_coef,
             B_psi_coef_cp, B_theta_coef_cp,
             kap_p, dl_p, tau_p, iota_coef)
-        Ck = MHD_parsed.validate_Ck(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
+        Ck.display_content()
+        Ct = MHD_parsed.validate_Ct(n_unknown-1, X_coef_cp, Y_coef_cp, Z_coef_cp,
             B_denom_coef_c, B_alpha_coef,
             B_psi_coef_cp, B_theta_coef_cp,
             kap_p, dl_p, tau_p, iota_coef)
-        Ct = MHD_parsed.validate_Ct(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
-            B_denom_coef_c, B_alpha_coef,
-            B_psi_coef_cp, B_theta_coef_cp,
-            kap_p, dl_p, tau_p, iota_coef)
-        I = MHD_parsed.validate_I(n, B_denom_coef_c,
+        Ct.display_content()
+        I = MHD_parsed.validate_I(n_unknown, B_denom_coef_c,
             p_perp_coef_cp, Delta_coef_cp,
             iota_coef)
-        II = MHD_parsed.validate_II(n,
+        I.display_content()
+        # II 4 not satisfied.
+        II = MHD_parsed.validate_II(n_unknown,
             B_theta_coef_cp, B_alpha_coef, B_denom_coef_c,
             p_perp_coef_cp, Delta_coef_cp, iota_coef)
-        III = MHD_parsed.validate_III(n,
+        II.display_content()
+        III = MHD_parsed.validate_III(n_unknown-2,
             B_theta_coef_cp, B_psi_coef_cp,
             B_alpha_coef, B_denom_coef_c,
             p_perp_coef_cp, Delta_coef_cp,
             iota_coef)
-        E6 = MHD_parsed.validate_E6(n,
-            B_theta_coef_cp, B_psi_coef_cp,
-            B_alpha_coef, B_denom_coef_c,
-            p_perp_coef_cp, Delta_coef_cp,
-            iota_coef)
-        D2 = MHD_parsed.validate_D2(
-            n, X_coef_cp, Y_coef_cp, Z_coef_cp,
-            B_denom_coef_c, B_alpha_coef,
-            B_psi_coef_cp, B_theta_coef_cp,
-            kap_p, dl_p, tau_p, iota_coef
-        )
-        D3 = MHD_parsed.validate_D3(
-            n, X_coef_cp, Y_coef_cp, Z_coef_cp,
-            B_denom_coef_c, B_alpha_coef,
-            B_psi_coef_cp, B_theta_coef_cp,
-            kap_p, dl_p, tau_p, iota_coef
-        )
-        D23 = MHD_parsed.validate_D23(
-            n, X_coef_cp, Y_coef_cp, Z_coef_cp,
-            B_denom_coef_c, B_alpha_coef,
-            B_psi_coef_cp, B_theta_coef_cp,
-            kap_p, dl_p, tau_p, iota_coef
-        )
-        kt = MHD_parsed.validate_kt(
-            n, X_coef_cp, Y_coef_cp, Z_coef_cp,
-            B_denom_coef_c, B_alpha_coef,
-            B_psi_coef_cp, B_theta_coef_cp,
-            kap_p, dl_p, tau_p, iota_coef
-        )
+        III.display_content()
+        return(J, Cb, Ck, Ct, I, II, III)
 
-        return(J, Cb, Ck, Ct, I, II, III, E6, D2, D3, D23, kt)
     ''' Display '''
+    # not nfp-dependent
     def display_order(self, n):
         if n<2:
             raise ValueError('Can only display order n>1')
@@ -794,6 +803,7 @@ class Equilibrium:
     # dependence. This methods evaluates their n_eval independent components, and
     # generates a set of lambda functions that evaluates these coefficients
     # at order n. See looped_lambdas.py for more details.
+    # not nfp-dependent
     def prepare_lambdas(self, magnetic_only):
         if not magnetic_only:
             self.looped_coef_lambdas = eval_looped_coef_lambdas(self)
@@ -821,6 +831,7 @@ class Equilibrium:
     # Calculates Xn, Yn, Zn, B_psin-2 for 2 orders from lower order values.
     # B_theta, B_psi_nm30, Y_free_nm1 are all free.
     # n_eval must be even.
+    # not nfp-dependent
     def iterate_2_magnetic_only(self,
         B_theta_nm1, B_theta_n,
         B_psi_nm20,
@@ -1220,6 +1231,7 @@ class Equilibrium:
         # print('iota 1 right before loop',iota_coef[1])
         solution_nm1_known_iota = looped_solver.iterate_looped(
             n_unknown = n_eval-1,
+            nfp=self.nfp,
             target_len_phi = 1000,
             X_coef_cp = X_coef_cp,
             Y_coef_cp = Y_coef_cp,
@@ -1288,6 +1300,7 @@ class Equilibrium:
 
         solution_n = looped_solver.iterate_looped(
             n_unknown = n_eval,
+            nfp=self.nfp,
             target_len_phi = 1000,
             X_coef_cp = X_coef_cp,
             Y_coef_cp = Y_coef_cp,
