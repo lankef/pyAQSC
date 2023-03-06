@@ -37,7 +37,7 @@ def generate_RHS(
     ''' O_einv and vec_free for Y. Y is unknown at all orders '''
     # but solved from different equations (II tilde/D3) at each (even/odd) order.
     O_matrices, O_einv, vector_free_coef, Y_nfp = \
-        recursion_relations.iterate_Yn_cp_operators(
+        equilibrium.iterate_Yn_cp_operators(
             n_eval=n_unknown,
             X_coef_cp=X_coef_cp,
             B_alpha_coef=B_alpha_coef
@@ -45,7 +45,7 @@ def generate_RHS(
     out_dict_RHS['O_einv'] = O_einv
     out_dict_RHS['vector_free_coef'] = vector_free_coef
     ''' B_psi without B_theta_n and (if even order) no m=0 component '''
-    B_psi_nm2_no_unknown = recursion_relations.iterate_dc_B_psi_nm2(
+    B_psi_nm2_no_unknown = equilibrium.iterate_dc_B_psi_nm2(
         n_eval=n_unknown,
         X_coef_cp=X_coef_cp,
         Y_coef_cp=Y_coef_cp,
@@ -71,14 +71,14 @@ def generate_RHS(
         B_theta_coef_cp_0_only.append(B_theta_n_0_only)
         # # Used to calculate B_theta_n
         ''' Z and p, contains B_psi, unknown at even orders '''
-        Zn_no_B_psi = recursion_relations.iterate_Zn_cp(
+        Zn_no_B_psi = equilibrium.iterate_Zn_cp(
             n_unknown,
             X_coef_cp, Y_coef_cp, Z_coef_cp,
             B_theta_coef_cp, B_psi_coef_cp_no_unknown,
             B_alpha_coef,
             kap_p, dl_p, tau_p,
             iota_coef).filter('low_pass',max_freq)
-        pn_no_B_psi = recursion_relations.iterate_p_perp_n(
+        pn_no_B_psi = equilibrium.iterate_p_perp_n(
             n_eval=n_unknown,
             B_theta_coef_cp=B_theta_coef_cp,
             B_psi_coef_cp=B_psi_coef_cp_no_unknown,
@@ -92,7 +92,7 @@ def generate_RHS(
         Z_coef_cp_no_unknown = Z_coef_cp.mask(n_eval-2)
         Z_coef_cp_no_unknown.append(Zn_no_B_psi)
         ''' X and Delta, contains B_psi, unknown at even orders '''
-        Xn_no_B_psi = recursion_relations.iterate_Xn_cp(n_unknown,
+        Xn_no_B_psi = equilibrium.iterate_Xn_cp(n_unknown,
             X_coef_cp,
             Y_coef_cp,
             Z_coef_cp_no_unknown,
@@ -100,7 +100,7 @@ def generate_RHS(
             B_alpha_coef,
             kap_p, dl_p, tau_p,
             iota_coef).filter('low_pass',max_freq)
-        Deltan_no_B_psi = recursion_relations.iterate_delta_n_0_offset(n_eval=n_unknown,
+        Deltan_no_B_psi = equilibrium.iterate_delta_n_0_offset(n_eval=n_unknown,
             B_denom_coef_c=B_denom_coef_c,
             p_perp_coef_cp=p_perp_coef_cp_no_unknown,
             Delta_coef_cp=Delta_coef_cp,
@@ -120,7 +120,7 @@ def generate_RHS(
     else:
         B_theta_coef_cp_0_only = B_theta_coef_cp.mask(n_unknown-1).zero_append()
 
-        Zn_no_B_theta = recursion_relations.iterate_Zn_cp(n_eval=n_unknown,
+        Zn_no_B_theta = equilibrium.iterate_Zn_cp(n_eval=n_unknown,
             X_coef_cp=X_coef_cp,
             Y_coef_cp=Y_coef_cp,
             Z_coef_cp=Z_coef_cp,
@@ -135,7 +135,7 @@ def generate_RHS(
         Z_coef_cp_no_unknown=Z_coef_cp.mask(n_unknown-1)
         Z_coef_cp_no_unknown.append(Zn_no_B_theta)
 
-        Xn_no_B_theta = recursion_relations.iterate_Xn_cp(n_eval=n_unknown,
+        Xn_no_B_theta = equilibrium.iterate_Xn_cp(n_eval=n_unknown,
             X_coef_cp=X_coef_cp,
             Y_coef_cp=Y_coef_cp,
             Z_coef_cp=Z_coef_cp_no_unknown,
@@ -148,7 +148,7 @@ def generate_RHS(
             ).filter('low_pass',max_freq)
         X_coef_cp_no_unknown=X_coef_cp.mask(n_unknown-1)
         X_coef_cp_no_unknown.append(Xn_no_B_theta)
-        pn_no_B_theta = recursion_relations.iterate_p_perp_n(
+        pn_no_B_theta = equilibrium.iterate_p_perp_n(
             n_eval=n_unknown,
             B_theta_coef_cp=B_theta_coef_cp,
             B_psi_coef_cp=B_psi_coef_cp_no_unknown,
@@ -164,7 +164,7 @@ def generate_RHS(
         #     p_perp_coef_cp=p_perp_coef_cp,
         #     Delta_coef_cp=Delta_coef_cp,
         #     iota_coef=iota_coef, no_iota_masking = False)
-        Deltan_with_iota_no_B_theta = recursion_relations.iterate_delta_n_0_offset(n_eval=n_unknown,
+        Deltan_with_iota_no_B_theta = equilibrium.iterate_delta_n_0_offset(n_eval=n_unknown,
             B_denom_coef_c=B_denom_coef_c,
             p_perp_coef_cp=p_perp_coef_cp_no_unknown,
             Delta_coef_cp=Delta_coef_cp,
@@ -181,7 +181,7 @@ def generate_RHS(
         out_dict_RHS['Deltan_no_B_theta']=Deltan_with_iota_no_B_theta
 
     ''' Y, unknown at all orders and contains B_psi. '''
-    Yn_rhs_content_no_unknown = recursion_relations.iterate_Yn_cp_RHS(n_eval=n_unknown,
+    Yn_rhs_content_no_unknown = equilibrium.iterate_Yn_cp_RHS(n_eval=n_unknown,
         X_coef_cp=X_coef_cp_no_unknown,
         Y_coef_cp=Y_coef_cp,
         Z_coef_cp=Z_coef_cp,
@@ -1059,7 +1059,7 @@ def generate_tensor_operator(
 # target_len_phi: target phi length of the solution
 # coef_iota_nm1b2_in_Delta: Coefficient of iota (n-1)/2 in Delta. Is a constant
 # in the Equilibrium object. Needed for odd orders.
-def solve(n_unknown, target_len_phi,
+def solve(n_unknown, nfp, target_len_phi,
     filtered_inv_looped_fft_operator, filtered_RHS_0_offset,
     coef_Delta_offset = 0
     ):
@@ -1207,6 +1207,7 @@ def iterate_looped(
         coef_Delta_offset = looped_coef_lambdas['lambda_coef_delta'](n_unknown+1)
         solve_result = solve(
             n_unknown=n_unknown,
+            nfp=nfp,
             target_len_phi=target_len_phi,
             filtered_inv_looped_fft_operator=filtered_inv_looped_fft_operator,
             filtered_RHS_0_offset=filtered_RHS_0_offset,
@@ -1313,6 +1314,7 @@ def iterate_looped(
     else:
         solve_result = solve(
             n_unknown=n_unknown,
+            nfp=nfp,
             target_len_phi=target_len_phi,
             filtered_inv_looped_fft_operator=filtered_inv_looped_fft_operator,
             filtered_RHS_0_offset=filtered_RHS_0_offset,
@@ -1411,4 +1413,4 @@ def filter_operator(operator, max_k_diff):
 
 
 # Cyclic import
-import recursion_relations
+import equilibrium

@@ -239,7 +239,13 @@ def rodriguez_to_landreman(in_array, nfp):
     #
     # rc = [const, <coeff of mode=i*nfp>]
     # rs = [0,     <coeff of mode=i*nfp>]
-    max_i = max(sin_modes.keys())//nfp
+    if np.any(np.array(list(sin_modes.keys()))%nfp!=0) or np.any(np.array(list(cos_modes.keys()))%nfp!=0):
+        print('sin_modes.keys()')
+        print(sin_modes.keys())
+        print('cos_modes.keys()')
+        print(cos_modes.keys())
+        raise ValueError('Mode incompatible with nfp detected.')
+    max_i = int(max(sin_modes.keys())//nfp)
     for i in range(max_i):
         mode_num = (i+1)*nfp
         if mode_num in cos_modes.keys():
@@ -278,15 +284,17 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
 
     # The last elements in all data files repeat the first elements. the
     # [:-1] removes it.
-    if len(d0)%nfp!=0:
-        print('Grid number isn\'t exact multiple of nfp.')
 
     def divide_by_nfp(in_array, nfp):
         return(in_array[:len(in_array)//nfp])
 
     # Delta --------------------------------------
     d0 = divide_by_nfp(np.loadtxt(path+'d0.dat')[:-1], nfp)
+    if len(d0)%nfp!=0:
+        print('Grid number isn\'t exact multiple of nfp.')
+
     Delta_0 = ChiPhiFunc(np.array([d0]), nfp)
+
 
     d11c = divide_by_nfp(np.loadtxt(path+'d11c.dat')[:-1], nfp)
     d11s = divide_by_nfp(np.loadtxt(path+'d11s.dat')[:-1], nfp)
@@ -421,8 +429,8 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
 
     # Constants
     B_alpha_e = ChiPhiEpsFunc([Ba0, Ba1], nfp=0)
-    kap_p = ChiPhiFunc(np.array([divide_by_nfp(np.loadtxt(path+'kappa.dat')[:-1], nfp)]))
-    tau_p = ChiPhiFunc(np.array([divide_by_nfp(np.loadtxt(path+'tau.dat')[:-1], nfp)]))
+    kap_p = ChiPhiFunc(np.array([divide_by_nfp(np.loadtxt(path+'kappa.dat')[:-1], nfp)]), nfp)
+    tau_p = ChiPhiFunc(np.array([divide_by_nfp(np.loadtxt(path+'tau.dat')[:-1], nfp)]), nfp)
 
     B2 = ChiPhiFunc(np.array([
         [np.average(B22s)],
@@ -439,7 +447,7 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
     # half of the 2-part paper
     B_denom_coef_c = ChiPhiEpsFunc([1, phi_avg(-X1*2*kap_p), B2, B3], nfp=0)
 
-    iota_e = ChiPhiEpsFunc(list(np.loadtxt(path+'outputs.dat')))
+    iota_e = ChiPhiEpsFunc(list(np.loadtxt(path+'outputs.dat')), nfp=0)
 
     # Not an actual representation in pyQSC.
     # only for calculating axis length.

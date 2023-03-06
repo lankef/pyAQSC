@@ -196,7 +196,7 @@ def phi_avg(in_quant):
         new_content = np.array([
             np.mean(in_quant.content,axis=1)
         ]).T
-        return(ChiPhiFunc(new_content), 0)
+        return(ChiPhiFunc(new_content,0))
     elif np.isscalar(in_quant):
         return(in_quant)
     else:
@@ -1004,12 +1004,12 @@ def low_pass_direct(content, freq):
     len_phi = content.shape[1]
     if freq*2>=len_phi:
         return(np.copy(content))
-    W = np.abs(jit_fftfreq(len_phi))
+    W = np.abs(jit_fftfreq_int(len_phi))
     f_signal = np.fft.fft(content, axis = 1)
 
     # If our original signal time was in seconds, this is now in Hz
     cut_f_signal = f_signal.copy()
-    cut_f_signal[:,(W>freq/len_phi)] = 0
+    cut_f_signal[:,(W>freq)] = 0
 
     return(np.fft.ifft(cut_f_signal, axis=1)) # not nfp-dependent
 
@@ -1385,7 +1385,8 @@ def solve_integration_factor(coeff, coeff_dp, f, \
         # These components are just phi integrals of f.
         # NOTE: BC is set to ZERO AVERAGE!
         if np.any(remove_zero):
-            zero_comps = ChiPhiFunc(f_eff[remove_zero]).integrate_phi(periodic=False, zero_avg=True).filter('low_pass', fft_max_freq)
+            # nfp is not treated here.
+            zero_comps = ChiPhiFunc(f_eff[remove_zero], nfp=1).integrate_phi(periodic=False, zero_avg=True).filter('low_pass', fft_max_freq)
             sln[remove_zero] = zero_comps.content
         return(sln*f_eff_scaling)
 

@@ -277,7 +277,7 @@ def eval_looped_coef_lambdas(equilibrium_in):
         iota_coef[0],
         coef_iota_nb2_in_RHS_Delta.content,
         fft_max_freq=100
-    ))
+    ), coef_iota_nb2_in_RHS_Delta.nfp)
     lambda_coef_iota = lambda n_eval : (
         (
             coef_iota_const_a*(2*n_eval-3)

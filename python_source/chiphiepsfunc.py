@@ -24,6 +24,8 @@ class ChiPhiEpsFunc:
     def check_nfp(self, item):
         if not np.isscalar(item):
             if item.nfp!=0 and item.nfp!=self.nfp:
+                print('item.nfp', item.nfp)
+                print('self.nfp', self.nfp)
                 raise ValueError('A ChiPhiEpsFunc must contain ChiPhiFunc\'s with '\
                 'nfp = ChiPhiEpsFunc.nfp or 0.') # nfp-dependent!!
 
@@ -77,16 +79,16 @@ class ChiPhiEpsFunc:
 
     # Make a list with order+1 zero elements
     # not nfp-dependent
-    def zeros_to_order(order):
+    def zeros_to_order(order, nfp=0):
         new_list = []
         for i in range(order+1):
             new_list.append(0)
-        return(ChiPhiEpsFunc(new_list, 0))
+        return(ChiPhiEpsFunc(new_list, nfp))
 
     # Make a list with order+1 zero elements
     # not nfp-dependent
-    def zeros_like(chiphiepsfunc_in):
-        return(ChiPhiEpsFunc.zeros_to_order(chiphiepsfunc_in.get_order()))
+    def zeros_like(chiphiepsfunc_in, nfp=0):
+        return(ChiPhiEpsFunc.zeros_to_order(chiphiepsfunc_in.get_order(), nfp))
 
     # Converting to a list of arrays. For saving and loading.
     # see recursion_relation.py.

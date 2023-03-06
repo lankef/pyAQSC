@@ -550,6 +550,8 @@ class Equilibrium:
         unknown = {}
         constant = {}
 
+        nfp = X_coef_cp.nfp
+
         unknown['X_coef_cp'] = X_coef_cp
         unknown['Y_coef_cp'] = Y_coef_cp
         unknown['Z_coef_cp'] = Z_coef_cp
@@ -579,15 +581,15 @@ class Equilibrium:
             # Tracks different types of noise
             noise['filter'] = {}
             for key in noise.keys():
-                noise[key]['X_coef_cp'] = ChiPhiEpsFunc.zeros_like(X_coef_cp)
-                noise[key]['Y_coef_cp'] = ChiPhiEpsFunc.zeros_like(Y_coef_cp)
-                noise[key]['Z_coef_cp'] = ChiPhiEpsFunc.zeros_like(Z_coef_cp)
-                noise[key]['B_psi_coef_cp'] = ChiPhiEpsFunc.zeros_like(B_psi_coef_cp)
-                noise[key]['B_theta_coef_cp'] = ChiPhiEpsFunc.zeros_like(B_theta_coef_cp)
-                noise[key]['p_perp_coef_cp'] = ChiPhiEpsFunc.zeros_like(unknown['p_perp_coef_cp'])
-                noise[key]['Delta_coef_cp'] = ChiPhiEpsFunc.zeros_like(unknown['Delta_coef_cp'])
+                noise[key]['X_coef_cp'] = ChiPhiEpsFunc.zeros_like(X_coef_cp, nfp)
+                noise[key]['Y_coef_cp'] = ChiPhiEpsFunc.zeros_like(Y_coef_cp, nfp)
+                noise[key]['Z_coef_cp'] = ChiPhiEpsFunc.zeros_like(Z_coef_cp, nfp)
+                noise[key]['B_psi_coef_cp'] = ChiPhiEpsFunc.zeros_like(B_psi_coef_cp, nfp)
+                noise[key]['B_theta_coef_cp'] = ChiPhiEpsFunc.zeros_like(B_theta_coef_cp, nfp)
+                noise[key]['p_perp_coef_cp'] = ChiPhiEpsFunc.zeros_like(unknown['p_perp_coef_cp'], nfp)
+                noise[key]['Delta_coef_cp'] = ChiPhiEpsFunc.zeros_like(unknown['Delta_coef_cp'], nfp)
 
-        return(Equilibrium(unknown, constant, noise, magnetic_only, X_coef_cp.nfp))
+        return(Equilibrium(unknown, constant, noise, magnetic_only, nfp))
 
     def save_self(self, file_name):
 
@@ -685,7 +687,7 @@ class Equilibrium:
                     + str(n_current)
                     + ', while required order is: '
                     + str(n_req))
-            if ChiPhiEpsFunc.nfp!=0 and ChiPhiEpsFunc!=self.nfp:
+            if ChiPhiEpsFunc.nfp!=0 and ChiPhiEpsFunc.nfp!=self.nfp:
                 raise AttributeError(name_in_error_msg
                     + ' has nfp: '
                     + str(ChiPhiEpsFunc.nfp)
