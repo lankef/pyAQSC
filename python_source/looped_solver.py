@@ -36,7 +36,7 @@ def generate_RHS(
     out_dict_RHS = {}
     ''' O_einv and vec_free for Y. Y is unknown at all orders '''
     # but solved from different equations (II tilde/D3) at each (even/odd) order.
-    O_matrices, O_einv, vector_free_coef = \
+    O_matrices, O_einv, vector_free_coef, Y_nfp = \
         recursion_relations.iterate_Yn_cp_operators(
             n_eval=n_unknown,
             X_coef_cp=X_coef_cp,
@@ -195,7 +195,7 @@ def generate_RHS(
         eta=eta,
         iota_coef=iota_coef,
         max_freq=max_freq)
-    new_Y_n_no_unknown = ChiPhiFunc(np.einsum('ijk,jk->ik',O_einv,Yn_rhs_content_no_unknown))
+    new_Y_n_no_unknown = ChiPhiFunc(np.einsum('ijk,jk->ik',O_einv,Yn_rhs_content_no_unknown), Y_nfp)
     Y_coef_cp_no_unknown = Y_coef_cp.mask(n_eval-2)
     Y_coef_cp_no_unknown.append(new_Y_n_no_unknown)
     out_dict_RHS['Yn_rhs_content_no_unknown']=Yn_rhs_content_no_unknown
@@ -288,12 +288,12 @@ def generate_RHS(
         looped_content, II_content = \
             looped_RHS_0_offset.stretch_phi_to_match(II_RHS_no_unknown, always_copy=False)
         looped_content[n_unknown//2] = II_content[0]
-        looped_RHS_0_offset = ChiPhiFunc(looped_content)
+        looped_RHS_0_offset = ChiPhiFunc(looped_content, looped_RHS_0_offset.nfp)
 
         looped_content, D3_RHS_content = \
             looped_RHS_0_offset.stretch_phi_to_match(D3_RHS_no_unknown, always_copy=False)
         looped_content = np.concatenate((looped_content, D3_RHS_content), axis=0)
-        looped_RHS_0_offset = ChiPhiFunc(looped_content)
+        looped_RHS_0_offset = ChiPhiFunc(looped_content, looped_RHS_0_offset.nfp)
 
     out_dict_RHS['filtered_RHS_0_offset'] = fft_filter(looped_RHS_0_offset.fft().content, max_freq*2, axis=1)
 
@@ -330,6 +330,7 @@ def generate_RHS(
 # For avoiding singular tensor.
 def generate_tensor_operator(
     n_unknown,
+    nfp,
     X_coef_cp, Y_coef_cp, Z_coef_cp,
     p_perp_coef_cp, Delta_coef_cp,
     B_psi_coef_cp, B_theta_coef_cp,
@@ -352,6 +353,7 @@ def generate_tensor_operator(
     if max_k_diff_post_inv is None:
         max_k_diff_post_inv = max_freq*2+1
     # An internal method taking care of some dupicant code
+    # not nfp_dependent
     def to_tensor_fft_op(ChiPhiFunc_in):
         tensor_coef = np.expand_dims(ChiPhiFunc_in.content, axis=1)
         tensor_fft_coef = fft_filter(np.fft.fft(tensor_coef, axis = 2), len_tensor, axis=2)
@@ -370,13 +372,7 @@ def generate_tensor_operator(
     # b, b, b instead of 0, b, 0
     # c, c, c            0, 0, c.
     fft_freq = jit_fftfreq_int(len_tensor)
-    dphi_array = np.ones((len_tensor,len_tensor)) * 1j * fft_freq
-
-    # This "dphi_array" is exclusively for B_theta.
-    # At even orders, there are (n_unknown+1) - 1 components.
-    # At odd orders, there are (n_unknown+1) components.
-    # dchi_matrix = dchi_op(n_eval-2, False)
-
+    dphi_array = np.ones((len_tensor,len_tensor)) * 1j * fft_freq * nfp
 
     # (n, n-2, len_tensor, len_tensor), acting on the FFT of
     # [
@@ -475,19 +471,19 @@ def generate_tensor_operator(
     # but this is known to work at the moment. TODO: re-write as linear operations.
     vector_free_coef_short = np.fft.ifft(fft_filter(np.fft.fft(vector_free_coef, axis = 1), len_tensor, axis=1), axis=1)
     coef_Y_n0_dphi_0 = (
-        coef_Y * ChiPhiFunc(vector_free_coef_short)
-        +coef_dchi_Y * ChiPhiFunc(vector_free_coef_short).dchi()
-        +coef_dchi_dchi_Y * ChiPhiFunc(vector_free_coef_short).dchi().dchi()
-        +coef_dchi_dchi_dchi_Y * ChiPhiFunc(vector_free_coef_short).dchi().dchi().dchi()
+        coef_Y * ChiPhiFunc(vector_free_coef_short, nfp)
+        +coef_dchi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi()
+        +coef_dchi_dchi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi().dchi()
+        +coef_dchi_dchi_dchi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi().dchi().dchi()
     ).cap_m(n_eval-2).filter('low_pass',max_freq)
     coef_Y_n0_dphi_1 = (
-        coef_dphi_Y * ChiPhiFunc(vector_free_coef_short)
-        +coef_dchi_dphi_Y * ChiPhiFunc(vector_free_coef_short).dchi()
-        +coef_dchi_dchi_dphi_Y * ChiPhiFunc(vector_free_coef_short).dchi().dchi()
+        coef_dphi_Y * ChiPhiFunc(vector_free_coef_short, nfp)
+        +coef_dchi_dphi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi()
+        +coef_dchi_dchi_dphi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi().dchi()
     ).cap_m(n_eval-2)
     coef_Y_n0_dphi_2 = (
-        coef_dphi_dphi_Y * ChiPhiFunc(vector_free_coef_short)
-        +coef_dphi_dphi_dchi_Y * ChiPhiFunc(vector_free_coef_short).dchi()
+        coef_dphi_dphi_Y * ChiPhiFunc(vector_free_coef_short, nfp)
+        +coef_dphi_dphi_dchi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi()
     ).cap_m(n_eval-2)
     tensor_fft_op_Y_n0_dphi_0 = to_tensor_fft_op(coef_Y_n0_dphi_0)
     tensor_fft_op_Y_n0_dphi_1 = to_tensor_fft_op(coef_Y_n0_dphi_1)*dphi_array
@@ -743,7 +739,7 @@ def generate_tensor_operator(
             'ijk,jk->ik',
             O_einv,
             looped_B_psi_lambdas['coef_B_psi_dphi_1_dchi_0_in_Y_RHS'](n_eval).pad_chi(n_eval+1).content
-        ))
+        ), nfp)
         out_dict_tensor['coef_B_psi_dphi_1_in_Y_var'] = coef_B_psi_dphi_1_in_Y_var
         coef_B_psi_dphi_1_in_Y = (
             coef_Y*coef_B_psi_dphi_1_in_Y_var
@@ -970,13 +966,13 @@ def generate_tensor_operator(
             +2*iota_coef[0]*Y_coef_cp[1][1])
         coef_dp_Yn1n = (
             1j*Y_coef_cp[1][1])
-        coef_Yn1p_in_Yn1n = ChiPhiFunc(vector_free_coef)[-1]
+        coef_Yn1p_in_Yn1n = ChiPhiFunc(vector_free_coef, nfp)[-1]
         fin_coef_Yn1p = coef_Yn1p + coef_Yn1n*coef_Yn1p_in_Yn1n + coef_dp_Yn1n*coef_Yn1p_in_Yn1n.dphi()
         fin_coef_dp_Yn1p = coef_dp_Yn1p + coef_dp_Yn1n*coef_Yn1p_in_Yn1n
         elem_fft_op_Yn1p = to_tensor_fft_op(fin_coef_Yn1p)
         elem_fft_op_dp_Yn1p = to_tensor_fft_op(fin_coef_dp_Yn1p)*dphi_array
         ''' B_theta[n] and B_theta[n+1,0] coefficient in D3 '''
-        ones = ChiPhiFunc(np.ones((1, len_tensor),np.complex128))
+        ones = ChiPhiFunc(np.ones((1, len_tensor),np.complex128), nfp)
         coef_B_theta_n_1p = phi_avg((-B_alpha_coef[0]*B_denom_coef_c[1][-1]))*ones
         coef_B_theta_n_1n = phi_avg((-B_alpha_coef[0]*B_denom_coef_c[1][1]))*ones
         coef_B_theta_np1_0 = phi_avg(-B_alpha_coef[0]*B_denom_coef_c[0])*ones
@@ -1081,7 +1077,13 @@ def solve(n_unknown, target_len_phi,
     # Making a blank ChiPhiFunc with the correct shape. The free parameter's
     # contribution only has 2 chi components, and will cause errors when
     # n_unknown>2.
-    Delta_offset_unit_contribution = ChiPhiFunc(np.zeros((filtered_inv_looped_fft_operator.shape[0], filtered_inv_looped_fft_operator.shape[1])))
+    Delta_offset_unit_contribution = ChiPhiFunc(
+        np.zeros((
+            filtered_inv_looped_fft_operator.shape[0],
+            filtered_inv_looped_fft_operator.shape[1]
+        )),
+        nfp
+    )
     # How much a Delta_offset of 1 shift -filtered_solution[-1,0]
     # This has shape (2, len_tensor)
     Delta_offset_unit_contribution += coef_Delta_offset
@@ -1101,7 +1103,13 @@ def solve(n_unknown, target_len_phi,
         # Making a blank ChiPhiFunc with the correct shape. The free parameter's
         # contribution only has 2 chi components, and will cause errors when
         # n_unknown>2.
-        Delta_offset_correction = ChiPhiFunc(np.zeros((filtered_inv_looped_fft_operator.shape[0], filtered_inv_looped_fft_operator.shape[1])))
+        Delta_offset_correction = ChiPhiFunc(
+            np.zeros((
+                filtered_inv_looped_fft_operator.shape[0],
+                filtered_inv_looped_fft_operator.shape[1]
+            )),
+            nfp
+        )
         Delta_offset_correction += Delta_offset_unit_contribution*Delta_offset
         # Adding the free parameter's contributions to the solution
         filtered_solution += np.tensordot(filtered_inv_looped_fft_operator, Delta_offset_correction.fft().content, 2)
@@ -1123,7 +1131,9 @@ def solve(n_unknown, target_len_phi,
 # B_psi_nm2 (even order only)
 # vec_free
 def iterate_looped(
-    n_unknown, target_len_phi,
+    n_unknown,
+    nfp,
+    target_len_phi,
     X_coef_cp, Y_coef_cp, Z_coef_cp,
     p_perp_coef_cp, Delta_coef_cp,
     B_psi_coef_cp, B_theta_coef_cp,
@@ -1166,6 +1176,7 @@ def iterate_looped(
     filtered_RHS_0_offset = out_dict_RHS['filtered_RHS_0_offset']
     out_dict_tensor = generate_tensor_operator(
         n_unknown = n_unknown,
+        nfp = nfp,
         X_coef_cp = X_coef_cp,
         Y_coef_cp = Y_coef_cp,
         Z_coef_cp = Z_coef_cp,
@@ -1204,8 +1215,8 @@ def iterate_looped(
         solution = solve_result['solution']
 
         # B_psi0
-        dphi_B_psi_nm2_0 = ChiPhiFunc(np.array([solution[-1]]))
-        B_psi_nm2_0 = dphi_B_psi_nm2_0.integrate_phi(periodic=False)
+        dphi_B_psi_nm2_0 = ChiPhiFunc(np.array([solution[-1]]), nfp)
+        B_psi_nm2_0 = dphi_B_psi_nm2_0.integrate_phi(periodic=False, zero_avg=True)
         B_psi_nm2 = out_dict_RHS['B_psi_nm2_no_unknown'] + B_psi_nm2_0
 
         # Calculating Yn
@@ -1216,7 +1227,8 @@ def iterate_looped(
             (
                 np.einsum('ijk,jk->ik',O_einv,out_dict_RHS['Yn_rhs_content_no_unknown'])
                 + vec_free * vector_free_coef
-            )
+            ),
+            nfp
         ) + coef_B_psi_dphi_1_in_Y_var*dphi_B_psi_nm2_0
 
         # Calculating Xn, Zn, pn, Delta_n
@@ -1246,7 +1258,7 @@ def iterate_looped(
             B_theta_n_no_center_content = np.zeros((n_unknown-1, target_len_phi), np.complex128)
             B_theta_n_no_center_content[:n_unknown//2-1] = solution[:n_unknown//2-1]
             B_theta_n_no_center_content[n_unknown//2:] = solution[n_unknown//2-1:-2]
-            B_theta_n = ChiPhiFunc(B_theta_n_no_center_content) + B_theta_coef_cp[n_unknown][0]
+            B_theta_n = ChiPhiFunc(B_theta_n_no_center_content, nfp) + B_theta_coef_cp[n_unknown][0]
 
             B_theta_in_B_psi = n_unknown/2*B_theta_n.integrate_chi(ignore_mode_0=True)
             B_theta_in_B_psi_fft_short=fft_filter(B_theta_in_B_psi.fft().content, max_freq*2, axis=1)
@@ -1260,7 +1272,8 @@ def iterate_looped(
                     ),
                     target_len_phi,
                     axis=1
-                )
+                ),
+                nfp
             ).ifft()
             Yn += Yn_B_theta_terms
 
@@ -1306,7 +1319,7 @@ def iterate_looped(
         )
         solution = solve_result['solution']
 
-        B_theta_n = ChiPhiFunc(solution[:-2])
+        B_theta_n = ChiPhiFunc(solution[:-2], nfp)
         B_theta_in_B_psi = n_unknown/2*B_theta_n.integrate_chi(ignore_mode_0=True)
         B_theta_in_B_psi_fft_short=fft_filter(B_theta_in_B_psi.fft().content, max_freq*2, axis=1)
 
@@ -1323,11 +1336,13 @@ def iterate_looped(
                 ),
                 target_len_phi,
                 axis=1
-            )
+            ),
+            nfp
         ).ifft()
         Yn = ChiPhiFunc(
             np.einsum('ijk,jk->ik',O_einv,out_dict_RHS['Yn_rhs_content_no_unknown'])
-            + vec_free * vector_free_coef
+            + vec_free * vector_free_coef,
+            nfp
         ) + Yn_B_theta_terms
 
         Zn = (
@@ -1354,7 +1369,7 @@ def iterate_looped(
         )
         return({
             'B_theta_n': B_theta_n,
-            'B_theta_np10': ChiPhiFunc(np.array([solution[-1]])),
+            'B_theta_np10': ChiPhiFunc(np.array([solution[-1]]), nfp),
             # These filters are here because dphi and B_theta_in_B_psi still produce error
             'B_psi_nm2': B_psi_nm2.filter('low_pass',max_freq),
             'Yn': Yn.filter('low_pass',max_freq),
