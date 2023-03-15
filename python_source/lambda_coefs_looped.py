@@ -5,7 +5,7 @@ from equilibrium import *
 from chiphifunc import *
 
 
-def eval_looped_coef_lambdas(equilibrium_in):
+def eval_lambda_coefs_looped(equilibrium_in):
     # Creating new ChiPhiEpsFunc's for the resulting equilibrium_in
     X_coef_cp = equilibrium_in.unknown['X_coef_cp']
     Y_coef_cp = equilibrium_in.unknown['Y_coef_cp']

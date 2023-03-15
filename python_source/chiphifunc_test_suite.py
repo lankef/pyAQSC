@@ -151,8 +151,8 @@ def compare_chiphifunc(A, B, fourier_mode=False, simple_mode=True, colormap_mode
     A = ChiPhiFunc(A_content, nfp)
     B = ChiPhiFunc(B_content, nfp)
     shape = (max(A.get_shape()[0], B.get_shape()[0]),max(A.get_shape()[1],B.get_shape()[1]))
-    A_content_padded = np.zeros(shape)
-    B_content_padded = np.zeros(shape)
+    A_content_padded = np.zeros(shape, np.complex128)
+    B_content_padded = np.zeros(shape, np.complex128)
 
     a_pad_row = (shape[0] - A.get_shape()[0])//2
     a_pad_col = (shape[1] - A.get_shape()[1])//2
@@ -277,21 +277,24 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
 
 
     nfp_read, Xi_0, eta, B20, B22c, B22s, B31c, B31s, B33c, B33s, Ba0, Ba1 = np.loadtxt(path+'inputs.dat')
+    print('Configuration has',nfp_read,'field periods.')
     if nfp_enabled:
         nfp=int(nfp_read)
     else:
         nfp=1
 
-    # The last elements in all data files repeat the first elements. the
-    # [:-1] removes it.
-
+    # The last element should already been removed.
     def divide_by_nfp(in_array, nfp):
         return(in_array[:len(in_array)//nfp])
 
     # Delta --------------------------------------
-    d0 = divide_by_nfp(np.loadtxt(path+'d0.dat')[:-1], nfp)
-    if len(d0)%nfp!=0:
-        print('Grid number isn\'t exact multiple of nfp.')
+    # The last elements in all data files repeat the first elements. the
+    # [:-1] removes it.
+    d0_raw = np.loadtxt(path+'d0.dat')[:-1]
+    if len(d0_raw)%nfp!=0:
+        print('Grid number:', len(d0), ' isn\'t exact multiple of nfp:', nfp)
+
+    d0 = divide_by_nfp(d0_raw, nfp)
 
     Delta_0 = ChiPhiFunc(np.array([d0]), nfp)
 
@@ -451,9 +454,9 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
 
     # Not an actual representation in pyQSC.
     # only for calculating axis length.
-    rc, rs = rodriguez_to_landreman(R_array, nfp_read)
-    zc, zs = rodriguez_to_landreman(Z_array, nfp_read)
-    stel = Qsc(rc=rc, rs=rs, zc=zc, zs=zs, nfp=nfp_read)
+    rc, rs = rodriguez_to_landreman(R_array, 1)# should be 1?
+    zc, zs = rodriguez_to_landreman(Z_array, 1)
+    stel = Qsc(rc=rc, rs=rs, zc=zc, zs=zs, nfp=1)
     dl_p = stel.axis_length/(2*np.pi)
     print('Axis shape:')
     stel.plot_axis(frenet=False)
@@ -467,7 +470,7 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
         evaluate_ChiPhiEpsFunc(Z_coef_cp),
         evaluate_ChiPhiEpsFunc(iota_e),
         dl_p,
-        nfp_read,
+        int(nfp_read),
         Xi_0,
         eta,
         evaluate_ChiPhiEpsFunc(B_denom_coef_c),
@@ -481,7 +484,7 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
         Delta_coef_cp, p_perp_coef_cp,
         X_coef_cp, Y_coef_cp, Z_coef_cp,
         iota_e, dl_p,
-        nfp_read, Xi_0, eta,
+        int(nfp_read), Xi_0, eta,
         B_denom_coef_c,
         B_alpha_e,
         kap_p, tau_p

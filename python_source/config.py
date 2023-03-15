@@ -11,13 +11,14 @@ use_pyQSC = True
 ''' Numerical settings (chiphifunc.py) '''
 # Default numerical methods -----
 diff_mode = 'fft' # available: pseudo_spectral, finite_difference, fft, spline
-integral_mode = 'fft' # avalable: spline, simpson, fft
-two_pi_integral_mode = 'fft' # available: spline, simpson, fft
+integral_mode = 'fft' # avalable: b_spline, cubic_spline, simpson, fft
+two_pi_integral_mode = 'simpson' # available: b_spline, cubic_spline, simpson, fft
 # Asymptotic series settings -----
 # solve_integration_factor() can automatically switch to using asymptotic
 # series for solving y'+py=f under integration_mode='auto' when the
 # average amplitude of p is greater than a threshold set by this value.
-asymptotic_threshold = 30
+# 20 is a good empirical value found in the ODE section of 'ChiPhiFunc test suite.ipynb'
+asymptotic_threshold = 20
 # When solving y'+py=f with an asymptotic series, stop at this order if the
 # optimal truncation is not yet reached.
 asymptotic_order = 6
@@ -36,7 +37,6 @@ n_jobs_chiphifunc = multiprocessing.cpu_count()//2 # for integration factor
 n_jobs_math_utilities = multiprocessing.cpu_count()//2 # for summations
 backend_chiphifunc = 'threading'
 backend_math_utilities = 'threading'
-
 
 ''' Plotting and output settings (for chiphifunc_test_suite.py) '''
 # Number of grid points when:

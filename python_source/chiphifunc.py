@@ -479,22 +479,27 @@ class ChiPhiFunc:
         if mode == 'fft':
             if periodic:
                 raise AttributeError('It is not advised to integrate over 2pi with spectral method.')
-            def integral(i_chi):
-                out = scipy.fftpack.diff(self.content[i_chi], order=-1)
-                return(out)
-            out_list = Parallel(n_jobs=n_jobs, backend=backend, require=require)(
-                delayed(integral)(i_chi) for i_chi in range(len(self.content))
-            )
-            out_content = np.array(out_list)/self.nfp
+            # def integral(i_chi):
+            #     out = scipy.fftpack.diff(self.content[i_chi], order=-1)
+            #     return(out)
+            # out_list = Parallel(n_jobs=n_jobs, backend=backend, require=require)(
+            #     delayed(integral)(i_chi) for i_chi in range(len(self.content))
+            # )
+            content_fft = np.fft.fft(self.content, axis=1)
+            fft_freq_temp = np.fft.fftfreq(len_phi)*len_phi*1j
+            fft_freq_temp[0] = np.inf
+            out_content_fft = content_fft/fft_freq_temp[None, :]/self.nfp
+            out_content = np.fft.ifft(out_content_fft,axis=1)
             # The fft.diff integral assumes zero average.
             if not zero_avg:
                 out_content -= out_content[:,0][:,None]
+                out_content += phis[None, :]*content_fft[:,0][:, None]/self.nfp/len_phi
             return(ChiPhiFunc(out_content, self.nfp))
 
         elif mode == 'simpson':
             new_content = integrate_phi_simpson(self.content, periodic = periodic)
-        elif mode == 'spline':
-            new_content = integrate_phi_spline(self.content, periodic = periodic)
+        elif mode[-6:] == 'spline':
+            new_content = integrate_phi_spline(self.content, mode, periodic = periodic)
         else:
             raise AttributeError('integrate_phi mode not recognized')
         if zero_avg:
@@ -912,18 +917,13 @@ class ChiPhiFunc:
 def integrate_phi_simpson(content, dx = 'default', periodic = False):
     len_chi = content.shape[0]
     len_phi = content.shape[1]
-    if dx == 'include_2pi':
-        dx = 2*np.pi/(len_phi-1)
-    elif dx == 'default':
+    if dx == 'default':
         dx = 2*np.pi/len_phi
     if periodic:
         # The result of the integral is an 1d array of chi coeffs.
         # This integrates the full period, and needs to be wrapped.
         # the periodic=False option does not integrate the full period and
         # does not wrap.
-
-        if dx == 'default':
-            dx = 2*np.pi/(len_phi-1)
         new_content = scipy.integrate.simpson(\
             wrap_grid_content_jit(content),\
             dx=dx,\
@@ -940,31 +940,42 @@ def integrate_phi_simpson(content, dx = 'default', periodic = False):
 
 # Implementation of spline-based integrate_phi using Parallel.
 # nfp dependence is NOT HANDLED HERE.
-def integrate_phi_spline(content, dx = 'default', periodic=False,
+# mode can be 'b_spline' or 'cubic_spline'
+def integrate_phi_spline(content, mode, dx = 'default', periodic=False,
     diff=False, diff_order=None):
-
-    print('This is  the naive implementation. Please implement '
-    'periodic spline with scipy.interpolate.splrep')
 
     len_chi = content.shape[0]
     len_phi = content.shape[1]
-    if dx == 'include_2pi':
-        dx = 2*np.pi/(len_phi-1)
-    elif dx == 'default':
-        dx = 2*np.pi/len_phi
-        # purely real.
+    # if dx == 'default':
+    #     dx = 2*np.pi/len_phi
+    #     # purely real.
 
-    phis = np.linspace(0, dx*(len_phi-1), len_phi)
+    content_looped = wrap_grid_content_jit(content)
+    # Separating real and imag components
+    content_re = np.real(content_looped)
+    content_im = np.imag(content_looped)
+    content_looped = np.concatenate((content_re, content_im), axis=0)
+    phis = np.linspace(0, np.pi*2, len_phi+1)
 
     def generate_and_integrate_spline(i_chi):
-        new_spline = scipy.interpolate.make_interp_spline(phis, content[i_chi])
-        if diff:
-            return(scipy.interpolate.splder(new_spline, n=diff_order))
-        return(scipy.interpolate.splantider(new_spline))
+        if mode == 'b_spline':
+            new_spline = scipy.interpolate.make_interp_spline(phis, content_looped[i_chi], bc_type = 'periodic')
+            if diff:
+                return(scipy.interpolate.splder(new_spline, n=diff_order))
+            print('Waring! B-spline antiderivative is known to produce a small constant offset to the result.')
+            return(scipy.interpolate.splantider(new_spline))
+        elif mode == 'cubic_spline':
+            new_spline = scipy.interpolate.CubicSpline(phis, content_looped[i_chi], bc_type = 'periodic')
+            if diff:
+                return(new_spline.derivative(diff_order))
+            return(new_spline.antiderivative())
+        else:
+            raise AttributeError('Spline mode \''+str(mode)+'\' is not recognized.')
+
 
     # A list of integrated splines
     integrate_spline_list = Parallel(n_jobs=n_jobs, backend=backend, require=require)(
-        delayed(generate_and_integrate_spline)(i_chi) for i_chi in range(len_chi)
+        delayed(generate_and_integrate_spline)(i_chi) for i_chi in range(len_chi*2)
     )
 
     if periodic:
@@ -972,20 +983,21 @@ def integrate_phi_spline(content, dx = 'default', periodic=False,
         # This integrates the full period, and needs to be wrapped.
         # the periodic=False option does not integrate the full period and
         # does not wrap.
-        if dx == 'default':
-            dx = 2*np.pi/(len_phi-1)
         evaluate_spline_2pi = lambda spline: spline(2*np.pi)
         out_list = Parallel(n_jobs=n_jobs, backend=backend, require=require)(
             delayed(evaluate_spline_2pi)(spline) for spline in integrate_spline_list
         )
-        return(np.array([out_list]).T)
+        out_list = np.array(out_list)
+        out_list = out_list[:len_chi]+1j*out_list[len_chi:]
+        return(out_list[:, None])
     else:
         evaluate_spline = lambda spline, phis : spline(phis)
         out_list = Parallel(n_jobs=n_jobs, backend=backend, require=require)(
-            delayed(evaluate_spline)(spline, phis) for spline in integrate_spline_list
+            delayed(evaluate_spline)(spline, phis[:-1]) for spline in integrate_spline_list
         )
-
-        return(np.array(out_list)) # not nfp-dependent
+        out_list = np.array(out_list)
+        out_list = out_list[:len_chi]+1j*out_list[len_chi:]
+        return(out_list) # not nfp-dependent
 
 # Generate phi differential operator diff_matrix. diff_matrix@f.content = dchi(f).content
 # invert = True generates anti-derivative operator. Cached for each new Chi length.
@@ -1040,12 +1052,12 @@ def dphi_direct(content, order=1, mode='default'): # not nfp-dependent
         return(np.gradient(content, axis=1, edge_order=2)\
         /(np.pi*2/content.shape[1]))
 
-    if mode=='spline':
+    if mode[-6:]=='spline':
         if order>0:
-            out = integrate_phi_spline(content, periodic=False,
+            out = integrate_phi_spline(content, mode, periodic=False,
                 diff=True, diff_order=order)
         if order<0:
-            out = integrate_phi_spline(content, periodic=False,
+            out = integrate_phi_spline(content, mode, periodic=False,
                 diff=False, diff_order=-order)
         return(out)
 
@@ -1191,12 +1203,6 @@ def batch_matrix_inv_excluding_col(in_matrices, ind_col):
     padded[rows_to_remove:-rows_to_remove, rows_to_remove:-rows_to_remove,:] = sqinv
     return(padded[n_clip:-n_clip]) # not nfp-dependent
 
-# @njit(complex128[:](complex128[:,:], complex128[:,:], complex128[:], int64, complex128))
-# def solve_degenerate_underdetermined_jit(A, B, vb, i_free, Yn_free):
-#     B_cont = np.ascontiguousarray(B)
-#     vb_cont = np.ascontiguousarray(vb)
-#     return(solve_degenerate_underdetermined_jit(A, B_cont@vb_cont, i_free, Yn_free))
-
 ''' III.3 Convolution operator generator and ChiPhiFunc.content numba wrapper '''
 # Generate convolution operator from a for an n_dim vector.
 # Can't be compiled for parallel beacuase vec and out_transposed's sizes dont match?
@@ -1266,13 +1272,15 @@ def fft_conv_tensor_batch(source):
 
 ''' IV.1 Solving the periodic linear PDE (a + b * dphi + c * dchi) y = f(phi, chi) '''
 # Solves simple linear first order ODE systems in batch:
-# (coeff + coeff_phi d/dphi) y = f. ( y' + p_eff*y = f_eff )
+# (coeff_phi d/dphi + coeff) y = f. ( y' + p_eff*y = f_eff )
 # (Dchi = +- m * 1j)
 # All inputs are content matrices.
-# p and f are assumed periodic.
+# coeff and coeff_dp are assumed periodic.
 # P is preferrably non-resonant for small p amplitude.
 # All coeffs' CONTENTS are point-wise multiplied to f, dpf or dcf's content.
-
+# -----
+# To apply nfp, use coeff, coeff_dp, f
+# -----
 # The asymptotic mode ASSUMES coeff/coeff_dp is non-zero.
 # It works better when the amplitude of coeff/coeff_dp > ~17.
 # where the regular method diverges because of very large
@@ -1286,7 +1294,7 @@ def fft_conv_tensor_batch(source):
 # nfp dependence NOT HANDLED HERE!
 def solve_integration_factor(coeff, coeff_dp, f, \
     integral_mode='auto', asymptotic_order=asymptotic_order,
-    masking = True, fft_max_freq=None): # not nfp-dependent
+    fft_max_freq=None): # not nfp-dependent
 
     len_phi = f.shape[1]
     len_chi = f.shape[0]
@@ -1314,12 +1322,13 @@ def solve_integration_factor(coeff, coeff_dp, f, \
     if integral_mode == 'auto':
         modes = []
         for i in range(f.shape[0]):
-            if np.average(np.abs(np.real(p_eff[i])))<config.asymptotic_threshold:
+            p_amp = np.average(np.abs(np.real(p_eff[i])))
+            if p_amp<config.asymptotic_threshold:
                 modes.append('fft')
             else:
+                print('p amplitude in y\'+py=f is', p_amp, ', asymptotic mode is used.')
                 modes.append('asymptotic')
 
-        print('Modes:',modes)
         # Each component needs different modes
         if not np.all(np.array(modes) == modes[0]):
             print('solve_integration_factor: not all components use the same '\
@@ -1337,16 +1346,8 @@ def solve_integration_factor(coeff, coeff_dp, f, \
                 for i in range(len_chi)
             )
             return(np.array(out_list)[:,0,:]*f_eff_scaling)
-        # Batch solve the whole group of equations
-        # with asymptotic series if all of them has large amplitudes
+        # All the equations uses the same mode.
         integral_mode = modes[0]
-
-    print('integral_mode is', integral_mode)
-    print(
-        'WARNING: spline and simpson produces slightly non-periodic Delta. '\
-        'This inconsistency is shown by masking p in Delta and adding '\
-        '-B_denom_coef_c * p_perp_coef_cp[n]. Why is this is still not understood yet.'
-    )
 
     if integral_mode == 'asymptotic':
         ai = f_eff/p_eff # f/p
@@ -1380,6 +1381,9 @@ def solve_integration_factor(coeff, coeff_dp, f, \
         # for now ignore p=0 comps.
         inv_dxpp[remove_zero,:,:] = 0
         sln_fft = (inv_dxpp@f_fft[:,:,None])[:,:,0]
+        # RHS_with_sln_fft = ((diff_matrix + conv_matrix)@sln_fft[:,:,None])[:,:,0]
+        # print('Recovering RHS? - RHS is recovered. Maybe the operator is incorrect.')
+        # ChiPhiFunc(RHS_with_sln_fft,1).ifft().display_content()
         sln = np.fft.ifft(fft_pad(sln_fft, len_phi, axis = 1), axis = 1)
         # Calculating components with p=0 (now the ODE is y'=f)
         # These components are just phi integrals of f.
@@ -1391,52 +1395,52 @@ def solve_integration_factor(coeff, coeff_dp, f, \
         return(sln*f_eff_scaling)
 
     else:
-        f_looped = wrap_grid_content_jit(f_eff)
-        p_looped = wrap_grid_content_jit(p_eff)
-
-        # The integrand of the integration factor (I = exp(int_p))
-        if integral_mode == 'simpson':
-            int_p = integrate_phi_simpson(p_looped, periodic=False, dx = effective_dx)
-        elif integral_mode == 'spline' or integral_mode == 'asymptotic' or integral_mode == 'piecewise' :
-            int_p = integrate_phi_spline(p_looped, periodic=False, dx = effective_dx)
-        else:
-            raise AttributeError('integral_mode not recognized.')
-        # Solving with intermediate p by integrating factor
-        int_p_2pi = np.array([int_p[:,-1]]).T
-        exp_neg2pi = np.exp(-int_p_2pi)
-        exp_phi = np.exp(int_p)
-        exp_negphi = np.exp(-int_p)
-        integrand = f_looped*exp_phi
-
-        # Here integration_factor_2pi can no longer be evaluated by
-        # integrate_phi_simpson(periodic=True), because the integrand
-        # is not generally periodic.
-        if integral_mode == 'simpson':
-            integration_factor = integrate_phi_simpson(integrand, periodic=False, dx = effective_dx)
-            integration_factor_2pi = np.array([integration_factor[:,-1]]).T
-        elif integral_mode == 'spline':
-            integration_factor = integrate_phi_spline(integrand, periodic=False, dx = effective_dx)
-            integration_factor_2pi = np.array([integration_factor[:,-1]]).T
-        else:
-            raise AttributeError('integral_mode not recognized.')
-            # The integration constant. Derived from the periodic boundary condition.
-
-        integration_factor = integration_factor*exp_negphi
-        integration_factor_2pi = integration_factor_2pi*exp_neg2pi
-
-        # If the integral of p is periodic, I is periodic.
-        # The BVP cannot get solved.
-        if np.average(np.abs(int_p[:,0] - int_p[:,-1])) < np.max(f_looped)*noise_level_periodic:
-            print('I(phi) is periodic. Cannot yield an unique solution using only periodic BC.')
-            print('returning integration factor.')
-            c1=0
-        else:
-            # exp_neg2pi may contain 1's.
-            exp_neg2pi[exp_neg2pi == 1] = np.inf
-            c1=integration_factor_2pi/(1-exp_neg2pi)
-        out = c1*exp_negphi+integration_factor
-        out = out[:,:-1]
-        return(out*f_eff_scaling)
+        raise AttributeError('ODE solver mode not recognized')
+        ''' Integration factor is now depreciated. It underperforms FFT and is unstable. '''
+        # # The integrand of the integration factor (I = exp(int_p))
+        # if integral_mode == 'simpson':
+        #     int_p = integrate_phi_simpson(p_eff, periodic=False, dx = effective_dx)
+        #     int_p_2pi = integrate_phi_simpson(p_eff, periodic=True, dx = effective_dx)
+        # elif integral_mode[-6:] == 'spline' or integral_mode == 'asymptotic' :
+        #     int_p = integrate_phi_spline(p_eff, integral_mode, periodic=False, dx = effective_dx)
+        #     int_p_2pi = integrate_phi_spline(p_eff, integral_mode, periodic=True, dx = effective_dx)
+        # else:
+        #     raise AttributeError('integral_mode not recognized.')
+        # # Solving with intermediate p by integrating factor
+        # exp_neg2pi = np.exp(-int_p_2pi)
+        # exp_phi = np.exp(int_p)
+        # exp_negphi = np.exp(-int_p)
+        # integrand = f*exp_phi
+        #
+        # # Here integration_factor_2pi can no longer be evaluated by
+        # # integrate_phi_simpson(periodic=True), because the integrand
+        # # is not generally periodic.
+        # if integral_mode == 'simpson':
+        #     integration_factor = integrate_phi_simpson(integrand, periodic=False)
+        #     integration_factor_2pi = integrate_phi_simpson(integrand, periodic=True)
+        # elif integral_mode[-6:] == 'spline':
+        #     integration_factor = integrate_phi_spline(integrand, integral_mode, periodic=False)
+        #     integration_factor_2pi = integrate_phi_spline(integrand, integral_mode, periodic=True)
+        # else:
+        #     raise AttributeError('integral_mode not recognized.')
+        #     # The integration constant. Derived from the periodic boundary condition.
+        #
+        # integration_factor = integration_factor*exp_negphi
+        # integration_factor_2pi = integration_factor_2pi*exp_neg2pi
+        #
+        # # If the integral of p is periodic, I is periodic.
+        # # The BVP cannot get solved.
+        # if np.average(np.abs(int_p[:,0] - int_p[:,-1])) < np.max(f_eff)*noise_level_periodic:
+        #     print('I(phi) is periodic. Cannot yield an unique solution using only periodic BC.')
+        #     print('returning integration factor.')
+        #     c1=0
+        # else:
+        #     # exp_neg2pi may contain 1's.
+        #     exp_neg2pi[exp_neg2pi == 1] = np.inf
+        #     c1=integration_factor_2pi/(1-exp_neg2pi)
+        # out = c1*exp_negphi+integration_factor
+        # out = out[:,:-1]
+        # return(out*f_eff_scaling)
 
 # ONLY USED IN solve_integration_factor().
 # A stack of dphi operators acting on the fft of
@@ -1489,7 +1493,7 @@ def fft_conv_op_batch(source):
 # -- Output --
 # y is a ChiPhiFunc's content
 def solve_integration_factor_chi(coeff, coeff_dp, coeff_dc, f, \
-    integral_mode=two_pi_integral_mode,
+    integral_mode,
     asymptotic_order=asymptotic_order, fft_max_freq=None): # not nfp-dependent
 
     len_chi = f.shape[0]
@@ -1518,7 +1522,7 @@ def solve_integration_factor_chi(coeff, coeff_dp, coeff_dc, f, \
 # -- Output --
 # y is a ChiPhiFunc's content
 def solve_dphi_iota_dchi(iota, f, \
-    integral_mode=two_pi_integral_mode,
+    integral_mode='auto',
     asymptotic_order=asymptotic_order, fft_max_freq=None): # not nfp-dependent
     return(
         solve_integration_factor_chi(0, 1, iota, f, \
