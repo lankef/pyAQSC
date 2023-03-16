@@ -172,7 +172,7 @@ def iterate_Yn_cp_magnetic(n_unknown,
     else:
         print('n_unknown+n_unknown%2',n_unknown+n_unknown%2)
         print('B_theta_coef_cp',B_theta_coef_cp.get_order())
-        D3_RHS_no_unknown = -MHD_parsed.eval_D3_RHS_m_LHS(
+        D3_RHS_no_unknown = -parsed.eval_D3_RHS_m_LHS(
             n = n_eval,
             X_coef_cp = X_coef_cp.mask(n_unknown).zero_append(),
             # Only dep on Y[+-1]
