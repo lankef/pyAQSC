@@ -20,7 +20,7 @@ if config.use_pyQSC:
 # Size of the chi and phi grid used for evaluation
 n_grid_phi = config.n_grid_phi
 n_grid_chi = config.n_grid_chi
-points = np.linspace(0, 2*np.pi*(1-1/n_grid_phi), n_grid_phi)
+points = jnp.linspace(0, 2*np.pi*(1-1/n_grid_phi), n_grid_phi)
 chi = np.linspace(0, 2*np.pi*(1-1/n_grid_chi), n_grid_chi)
 phi = points
 
@@ -104,6 +104,9 @@ def compare_chiphifunc(A, B, fourier_mode=False, simple_mode=True, colormap_mode
         A.display_content(fourier_mode=fourier_mode, colormap_mode=colormap_mode)
         print('B')
         B.display_content(fourier_mode=fourier_mode, colormap_mode=colormap_mode)
+    if A.content.shape[1]!=B.content.shape[1]:
+        print('Phi grid number not matched.')
+        return()
 
     if A.nfp != B.nfp:
         if A.nfp == 1 or B.nfp == 1:
@@ -125,8 +128,8 @@ def compare_chiphifunc(A, B, fourier_mode=False, simple_mode=True, colormap_mode
 
     diff_AB = A-B
     # A or B has extra components, plot those components separately
-    if A.get_shape()[0]!=B.get_shape()[0]:
-        amount_to_trim = abs(A.get_shape()[0]-B.get_shape()[0])//2
+    if A.content.shape[0]!=B.content.shape[0]:
+        amount_to_trim = abs(A.content.shape[0]-B.content.shape[0])//2
         center_content = diff_AB.content[amount_to_trim: -amount_to_trim].copy()
         trimmed_content = diff_AB.content.copy()
         trimmed_content[amount_to_trim: -amount_to_trim] = np.zeros_like(center_content)
@@ -144,20 +147,18 @@ def compare_chiphifunc(A, B, fourier_mode=False, simple_mode=True, colormap_mode
     print('fractional errors b/w data and general formula')
 
     # Sometimes 2 ChiPhiFuncs being compared will have different row/col numbers.
-    if A.get_shape()[0]%2!=B.get_shape()[0]%2:
+    if A.content.shape[0]%2!=B.content.shape[0]%2:
         raise AttributeError('2 ChiPhiFunc\'s being compared have different'\
         'even/oddness.')
-    A_content, B_content = A.stretch_phi_to_match(B)
-    A = ChiPhiFunc(A_content, nfp)
-    B = ChiPhiFunc(B_content, nfp)
-    shape = (max(A.get_shape()[0], B.get_shape()[0]),max(A.get_shape()[1],B.get_shape()[1]))
+        
+    shape = (max(A.content.shape[0], B.content.shape[0]),max(A.content.shape[1],B.content.shape[1]))
     A_content_padded = np.zeros(shape, np.complex128)
     B_content_padded = np.zeros(shape, np.complex128)
 
-    a_pad_row = (shape[0] - A.get_shape()[0])//2
-    a_pad_col = (shape[1] - A.get_shape()[1])//2
-    b_pad_row = (shape[0] - B.get_shape()[0])//2
-    b_pad_col = (shape[1] - B.get_shape()[1])//2
+    a_pad_row = (shape[0] - A.content.shape[0])//2
+    a_pad_col = (shape[1] - A.content.shape[1])//2
+    b_pad_row = (shape[0] - B.content.shape[0])//2
+    b_pad_col = (shape[1] - B.content.shape[1])//2
     A_content_padded[a_pad_row:shape[0]-a_pad_row,a_pad_col:shape[1]-a_pad_col] = A.content
     B_content_padded[b_pad_row:shape[0]-b_pad_row,b_pad_col:shape[1]-b_pad_col] = B.content
     print_fractional_error(A_content_padded, B_content_padded)

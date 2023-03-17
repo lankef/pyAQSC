@@ -48,16 +48,19 @@ def iterate_Xn_cp(n_eval,
         iota_coef=iota_coef).cap_m(n_eval))
 
 # O_matrices, O_einv, vector_free_coef only uses B_alpha_coef and X_coef_cp
-def iterate_Yn_cp_operators(n_eval, X_coef_cp, B_alpha_coef): # nfp-dependent only in output
-
+def iterate_Yn_cp_operators(ChiPhiEpsFunc_last_ord, X_coef_cp, B_alpha_coef): # nfp-dependent only in output
+    '''
+    Input: -----
+    ChiPhiEpsFunc_last_ord: A ChiPhiEpsFunc known to be of order n_unknown-1 (last order).
+    '''
+    n_unknown = len(ChiPhiEpsFunc_last_ord.chiphifunc_list)
     # Getting coeffs
     # Both uses B_alpha0 and X1 only
-    chiphifunc_A = parsed.eval_ynp1.coef_a(n_eval-1, B_alpha_coef, X_coef_cp)
+    chiphifunc_A = parsed.eval_ynp1.coef_a(n_unknown-1, B_alpha_coef, X_coef_cp)
     chiphifunc_B = parsed.eval_ynp1.coef_b(B_alpha_coef, X_coef_cp)
 
     # Calculating the inverted matrices
-    i_free = (n_eval+1)//2 # We'll always use Yn0 or Yn1p as the free var.
-    O_matrices, O_einv, vector_free_coef, nfp = ChiPhiFunc.get_O_O_einv_from_A_B(chiphifunc_A, chiphifunc_B, i_free, n_eval)
+    O_matrices, O_einv, vector_free_coef, nfp = get_O_O_einv_from_A_B(chiphifunc_A, chiphifunc_B, TODO)
     return(O_matrices, O_einv, vector_free_coef, nfp)
 
 # O_matrices, O_einv, vector_free_coef only uses B_alpha_coef and X_coef_cp
@@ -777,7 +780,7 @@ class Equilibrium:
             dl_p=dl_p,
             tau_p=tau_p,
             iota_coef=iota_coef
-            ).integrate_chi(ignore_mode_0=True)
+            ).antid_chi()
         filter_record_noise_and_append('B_psi_coef_cp', B_psi_nm3,0)
 
         # Requires:
@@ -853,7 +856,7 @@ class Equilibrium:
             dl_p=dl_p,
             tau_p=tau_p,
             iota_coef=iota_coef
-            ).integrate_chi(ignore_mode_0 = True)
+            ).antid_chi()
         B_psi_nm2.content[B_psi_nm2.get_shape()[0]//2] = B_psi_nm20
         filter_record_noise_and_append('B_psi_coef_cp', B_psi_nm2,1)
 
@@ -1055,7 +1058,7 @@ class Equilibrium:
             dl_p=dl_p,
             tau_p=tau_p,
             iota_coef=iota_coef
-            ).integrate_chi(ignore_mode_0=True)
+            ).antid_chi()
         # Don't record noise yet. This "partial" solution will be fed into
         # iterate_looped
         B_psi_coef_cp.append(B_psi_nm2)

@@ -1,6 +1,7 @@
 import chiphifunc
 import warnings
-import numpy as np
+import numpy as np # Used in saving and loading
+import jax.numpy as jnp
 
 '''ChiPhiEpsFunc'''
 # A container for lists of ChiPhiFuncs. Primarily used to handle array index out of bound
@@ -8,26 +9,32 @@ import numpy as np
 # Initialization:
 # ChiPhiEpsFunc([X0, X1, X2, ... Xn])
 class ChiPhiEpsFunc:
-    def __init__(self, list, nfp, check_consistency = True): # nfp-dependent!!
+    def __init__(self, list:list, nfp:int, check_consistency:bool=True): # nfp-dependent!!
         self.chiphifunc_list = list
         self.nfp = nfp
         if check_consistency:
             self.check_nfp_consistency()
 
+    def _tree_flatten(self):
+        children = (self.x,)  # arrays / dynamic values
+        aux_data = {'chiphifunc_list': self.chiphifunc_list}  # static values
+        return (children, aux_data)
+
+    @classmethod
+    def _tree_unflatten(cls, aux_data, children):
+        return cls(*children, **aux_data)
+
     # Check the nfp of all constituents in self.chiphifunc_list
     def check_nfp_consistency(self):
-        for item in self.chiphifunc_list:
-            self.check_nfp(item) # nfp-dependent!!
+        for i in range(len(self.chiphifunc_list)):
+            if not jnp.isscalar(self.chiphifunc_list[i]):
+                if self.chiphifunc_list[i].nfp!=0 and self.chiphifunc_list[i].nfp!=self.nfp:
+                    self.chiphifunc_list[i] = \
+                        'inconsistent item, ' \
+                        +'item.nfp'+str(item.nfp) \
+                        +', self.nfp'+str(self.nfp)
 
-    # Throws an error if item is a ChiPhiFunc and has non-zero nfp thats
-    # not equal to self.nfp
-    def check_nfp(self, item):
-        if not np.isscalar(item):
-            if item.nfp!=0 and item.nfp!=self.nfp:
-                print('item.nfp', item.nfp)
-                print('self.nfp', self.nfp)
-                raise ValueError('A ChiPhiEpsFunc must contain ChiPhiFunc\'s with '\
-                'nfp = ChiPhiEpsFunc.nfp or 0.') # nfp-dependent!!
+
 
     def __getitem__(self, index): # not nfp-dependent
         # If array index out of bound then put in an null item first
@@ -40,9 +47,9 @@ class ChiPhiEpsFunc:
         ' ChiPhiEpsFunc.append() to prevent changes to known terms.')
 
     # Implementation of list append
-    def append(self, item):
-        self.check_nfp(item)
-        self.chiphifunc_list.append(item)  # nfp-dependent!!
+    # def append(self, item):
+    #     TODO add type check
+    #     self.chiphifunc_list.append(item)  # nfp-dependent!!
 
     # Append one or more zeros to the end of the list.
     # For evaluating higher order terms with recursion relation. Sometimes
