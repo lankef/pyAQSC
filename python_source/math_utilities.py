@@ -1,8 +1,11 @@
 import numpy as np
+
+import jax.numpy as jnp
+from jax import jit, vmap, tree_util
+from functools import partial # for JAX jit with static params
+
 from math import floor, ceil
 from joblib import Parallel, delayed
-from numba import jit, njit, prange
-from numba import int32, bool_, float32
 import scipy.fftpack
 import chiphifunc
 import warnings
@@ -12,6 +15,7 @@ n_jobs = 8
 
 # Sum: implemented as a function taking in a single-argument func and the lower/upper bounds
 # Can run in parallel, but runs serial by default.
+# expr should be non-dynamic.
 def py_sum(expr, lower, upper, n_jobs=1, backend='threading'):
     out = 0
     upper_floor = floor(upper)
@@ -45,18 +49,20 @@ def py_sum_parallel(expr, lower, upper):
 # Used to make sure new indices of terms and new upper bounds are within the
 # bound of the original summations
 # is_seq(a,b): 1 if a<=b
+@partial(jit, static_argnums=(0, 1,))
 def is_seq(a, b):
     if a<=b:
         return(1)
     else:
-        return(0)
+        return(ChiPhiFuncSpecial(0))
 # Used to ensure new index values (after removing the innermost sum) are integers.
 # is_integer(a): 1 if a is integer
+@partial(jit, static_argnums=(0,))
 def is_integer(a):
     if a%1==0:
         return(1)
     else:
-        return(0)
+        return(ChiPhiFuncSpecial(0))
 
 # Takes phi or chi derivative.
 # y: ChiPhiFunc or const
@@ -101,14 +107,14 @@ def diff(y, x_name1, order1, x_name2=None, order2=None):
         out=out#.filter() # TODO: REPLACE WITH REGULARITY
     return(out)
 
-# integrate over chi.
-def int_chi(y):
-    if isinstance(y, chiphifunc.ChiPhiFunc):
-        return(y.integrate_chi())
-    elif y == 0:
-        return(0)
-    else:
-        raise TypeError('Illegal int_chi argument: ' + str(y))
+# # integrate over chi.
+# def int_chi(y):
+#     if isinstance(y, chiphifunc.ChiPhiFunc):
+#         return(y.antid_chi())
+#     elif y == 0:
+#         return(0)
+#     else:
+#         raise TypeError('Illegal int_chi argument: ' + str(y))
 
 # Faster. In this case, tensordot is faster than einsum.
 def einsum_ijkl_jmln_to_imkn(array_A, array_B):

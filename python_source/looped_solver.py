@@ -58,7 +58,7 @@ def generate_RHS(
         dl_p=dl_p,
         tau_p=tau_p,
         iota_coef=iota_coef
-    ).integrate_chi(ignore_mode_0=True).filter('low_pass',max_freq)
+    ).antid_chi().filter('low_pass',max_freq)
     B_psi_coef_cp_no_unknown=B_psi_coef_cp.mask(n_unknown-3)
     B_psi_coef_cp_no_unknown.append(B_psi_nm2_no_unknown)
     out_dict_RHS['B_psi_nm2_no_unknown'] = B_psi_nm2_no_unknown
@@ -417,9 +417,6 @@ def generate_tensor_operator(
             dchi_array_temp = (1j*np.arange(-num_mode+1,num_mode+1,2)[None, :, None])
             if dchi>0:
                 tensor_coef_nD = tensor_coef_nD*dchi_array_temp**dchi
-                # Simpler than but equivalent to
-                # dchi_matrix_temp = dchi_op(num_mode, False)
-                # tensor_coef_nD = np.einsum('ijk,jl->ilk',tensor_coef_nD, dchi_matrix_temp**dchi)
             elif dchi<0:
                 if num_mode%2==0: # chi integrals are only supported when there is no constant componemnt
                     tensor_coef_nD = tensor_coef_nD/dchi_array_temp**(-dchi)
@@ -1206,7 +1203,7 @@ def iterate_looped(
 
         # B_psi0
         dphi_B_psi_nm2_0 = ChiPhiFunc(np.array([solution[-1]]), nfp)
-        B_psi_nm2_0 = dphi_B_psi_nm2_0.integrate_phi(periodic=False, zero_avg=True)
+        B_psi_nm2_0 = dphi_B_psi_nm2_0.integrate_phi_fft(zero_avg=True)
         B_psi_nm2 = out_dict_RHS['B_psi_nm2_no_unknown'] + B_psi_nm2_0
 
         # Calculating Yn
@@ -1250,7 +1247,7 @@ def iterate_looped(
             B_theta_n_no_center_content[n_unknown//2:] = solution[n_unknown//2-1:-2]
             B_theta_n = ChiPhiFunc(B_theta_n_no_center_content, nfp) + B_theta_coef_cp[n_unknown][0]
 
-            B_theta_in_B_psi = n_unknown/2*B_theta_n.integrate_chi(ignore_mode_0=True)
+            B_theta_in_B_psi = n_unknown/2*B_theta_n.antid_chi()
             B_theta_in_B_psi_fft_short=fft_filter(B_theta_in_B_psi.fft().content, max_freq*2, axis=1)
 
             B_psi_nm2 += B_theta_in_B_psi
@@ -1311,7 +1308,7 @@ def iterate_looped(
         solution = solve_result['solution']
 
         B_theta_n = ChiPhiFunc(solution[:-2], nfp)
-        B_theta_in_B_psi = n_unknown/2*B_theta_n.integrate_chi(ignore_mode_0=True)
+        B_theta_in_B_psi = n_unknown/2*B_theta_n.antid_chi()
         B_theta_in_B_psi_fft_short=fft_filter(B_theta_in_B_psi.fft().content, max_freq*2, axis=1)
 
         B_psi_nm2 = out_dict_RHS['B_psi_nm2_no_unknown'] + B_theta_in_B_psi

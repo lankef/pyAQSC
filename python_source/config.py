@@ -9,9 +9,10 @@
 use_pyQSC = True
 
 ''' Numerical settings (chiphifunc.py) '''
+double_precision = True
 # Default numerical methods -----
-diff_mode = 'fft' # available: pseudo_spectral, finite_difference, fft, spline
-integral_mode = 'fft' # avalable: b_spline, cubic_spline, simpson, fft
+diff_mode = 'fft' # available: pseudo_spectral, finite_difference, fft,
+integral_mode = 'fft' # avalable: fft
 two_pi_integral_mode = 'simpson' # available: b_spline, cubic_spline, simpson, fft
 # Asymptotic series settings -----
 # solve_integration_factor() can automatically switch to using asymptotic
@@ -47,12 +48,3 @@ backend_math_utilities = 'threading'
 # evaluate_ChiPhiEpsFunc(ChiPhiEpsFunc)
 n_grid_phi = 1000
 n_grid_chi = 500
-
-''' Debug mode (chiphifunc.py) '''
-# When enabled, all ChiPhiFunc __init__ calls become tracked, and
-# can be accessed in the lists chiphifunc.debug_max_value[] and
-# chiphifunc.debug_avg_value[].
-# WARNING: These lists need TO BE PERIODICALLY PURGED MANUALLY.
-# WARNING: Debug mode SUBSTALTIALLY SLOWS DOWN the code by disabling numba
-# in various places.
-debug_mode = False
