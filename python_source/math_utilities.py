@@ -1,23 +1,21 @@
-import numpy as np
-
 import jax.numpy as jnp
 from jax import jit, vmap, tree_util
 from functools import partial # for JAX jit with static params
 
 from math import floor, ceil
-from joblib import Parallel, delayed
-import scipy.fftpack
-import chiphifunc
-import warnings
+from chiphifunc import *
 from functools import lru_cache
 
 n_jobs = 8
 
 # Sum: implemented as a function taking in a single-argument func and the lower/upper bounds
-# Can run in parallel, but runs serial by default.
 # expr should be non-dynamic.
-def py_sum(expr, lower, upper, n_jobs=1, backend='threading'):
-    out = 0
+# Non-jitted because an argument is a callable. A wrapper for a py_sum with no
+# callable argument can be jitted.
+def py_sum(expr, lower, upper):
+    # The integer 0 cannot be added to even ChiPhiFuncs,
+    # because JAX does not support conditionals on traced arguments.
+    out = ChiPhiFuncSpecial(0)
     upper_floor = floor(upper)
     lower_ceil = ceil(lower)
     # If lower==upper then return expr(lower)
@@ -25,24 +23,30 @@ def py_sum(expr, lower, upper, n_jobs=1, backend='threading'):
         return(expr(lower_ceil))
     # Warning for lower>upper
     if lower_ceil>upper_floor:
-        # warnings.warn('Warning: lower bound higher than upper bound in '+str(expr) \
-        # +'. Bound values: lower='+str(lower)+', upper='+str(upper), RuntimeWarning)
-        return(chiphifunc.ChiPhiFuncNull())
-    if n_jobs<1:
-        raise ValueError('n_jobs must not be smaller than 1')
-    if n_jobs==1:
-        for i in range(lower_ceil,upper_floor+1):
-            out = out + expr(i)
-    else: # Running parallel evaluation for sum arguments
-        out_list = Parallel(n_jobs=n_jobs, backend=backend)(
-            delayed(expr)(i) for i in range(lower, upper+1)
-        )
-        for a in out_list:
-            out = out+a
+        # This is classified as "out of bound".
+        return(ChiPhiFuncSpecial(-1))
+    indices = list(range(lower_ceil,upper_floor+1))
+    out_list = jax.tree_util.tree_map(expr, indices)
+    for item in out_list:
+        out = out+item
     return(out)
 
-def py_sum_parallel(expr, lower, upper):
-    return(py_sum(expr, lower, upper, n_jobs=n_jobs))
+def py_sum_loop(expr, lower, upper):
+    # The integer 0 cannot be added to even ChiPhiFuncs,
+    # because JAX does not support conditionals on traced arguments.
+    out = ChiPhiFuncSpecial(0)
+    upper_floor = floor(upper)
+    lower_ceil = ceil(lower)
+    # If lower==upper then return expr(lower)
+    if upper_floor==lower_ceil:
+        return(expr(lower_ceil))
+    # Warning for lower>upper
+    if lower_ceil>upper_floor:
+        # This is classified as "out of bound".
+        return(ChiPhiFuncSpecial(-1))
+    for i in range(lower_ceil,upper_floor+1):
+        out = out + expr(i)
+    return(out)
 
 ## Condition operators
 
@@ -64,76 +68,43 @@ def is_integer(a):
     else:
         return(ChiPhiFuncSpecial(0))
 
-# Takes phi or chi derivative.
-# y: ChiPhiFunc or const
-# x_name: 'chi' or 'phi'
-# order: number of times to take derivative
-def diff_backend(y, x_name, order):
-    if np.isscalar(y):
+@partial(jit, static_argnums=(1, 2, ))
+def diff_backend(y, is_chi:bool, order):
+    '''
+    Takes phi or chi derivative.
+    Input:
+    y: ChiPhiFunc or const
+    is_chi: True for 'chi' or False for 'phi'
+    order: order of derivative
+    '''
+    if jnp.isscalar(y):
         return(0)
     out = y
-
-    if not isinstance(y, chiphifunc.ChiPhiFunc):
-        raise AttributeError('Warning: diff is being evaluated on: '+str(type(y))+\
-        '. This should not happen unless you are testing.')
-        #
-        # if x_name=='phi':
-        #     dphi = lambda i_chi : scipy.fftpack.diff(y[i_chi], order=order)
-        #     out = np.array(Parallel(n_jobs=8, backend='threading')(
-        #         delayed(dphi)(i_chi) for i_chi in range(len(y))
-        #     ))
-        #
-        # if x_name=='chi':
-        #     dchi = lambda i_phi : scipy.fftpack.diff(y.T[i_phi], order=order)
-        #     out = np.array(Parallel(n_jobs=8, backend='threading')(
-        #         delayed(dchi)(i_phi) for i_phi in range(len(y.T))
-        #     )).T
+    if isinstance(y, ChiPhiFunc):
+        if is_chi:
+            out = out.dchi(order)
+        else:
+            out = out.dphi(order)
     else:
-        if x_name=='phi':
-            out = out.dphi(order=order)
-
-        if x_name=='chi':
-            for i in range(order):
-                out = out.dchi()
+        return(ChiPhiFuncSpecial(-13))
     return(out)
 
 # Maxima sometimes merges a few diff's together.
-@lru_cache(maxsize=1000)
-def diff(y, x_name1, order1, x_name2=None, order2=None):
-    out = diff_backend(y, x_name1, order1)
-    if x_name2 is not None:
-        out = diff_backend(out, x_name2, order2)
-    if type(out) is chiphifunc.ChiPhiFunc:
-        out=out#.filter() # TODO: REPLACE WITH REGULARITY
+@partial(jit, static_argnums=(1, 2, 3, 4,))
+def diff(y, is_chi1, order1, is_chi2=None, order2=None):
+    out = diff_backend(y, is_chi1, order1)
+    if is_chi2 is not None:
+        out = diff_backend(out, is_chi2, order2)
     return(out)
-
-# # integrate over chi.
-# def int_chi(y):
-#     if isinstance(y, chiphifunc.ChiPhiFunc):
-#         return(y.antid_chi())
-#     elif y == 0:
-#         return(0)
-#     else:
-#         raise TypeError('Illegal int_chi argument: ' + str(y))
 
 # Faster. In this case, tensordot is faster than einsum.
 def einsum_ijkl_jmln_to_imkn(array_A, array_B):
     if len(array_A.shape)!=4 or len(array_B.shape)!=4:
-        raise ValueError('Both input need to be 4d arrays')
+        return(jnp.nan)# Both input need to be 4d arrays
     # ikjl
-    A_transposed = np.transpose(array_A, (0,2,1,3))
+    A_transposed = jnp.transpose(array_A, (0,2,1,3))
     # jlmn
-    B_transposed = np.transpose(array_B, (0,2,1,3))
+    B_transposed = jnp.transpose(array_B, (0,2,1,3))
     # ikmn
-    array_out = np.tensordot(A_transposed, B_transposed)
-    return(np.transpose(array_out, (0,2,1,3)))
-
-# Slower than Einsum ijkl, jl -> ik. For reference only.
-def einsum_ijkl_jl_to_ik(array_A, array_B):
-    if len(array_A.shape)!=4 or len(array_B.shape)!=2:
-        raise ValueError('Both input need to be 4d arrays')
-    # ikjl
-    A_transposed = np.transpose(array_A, (0,2,1,3))
-    # ikmn
-    array_out = np.tensordot(A_transposed, array_B)
-    return(array_out)
+    array_out = jnp.tensordot(A_transposed, B_transposed)
+    return(jnp.transpose(array_out, (0,2,1,3)))

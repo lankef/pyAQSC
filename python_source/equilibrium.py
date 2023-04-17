@@ -17,7 +17,6 @@ from matplotlib import pyplot as plt
 import parsed
 import MHD_parsed
 
-
 # Performance
 import time
 
@@ -29,6 +28,7 @@ import time
 # See overleaf (will be offline later) document which variables are needed and
 # which orders are needed.
 # not nfp-dependent
+@partial(jit, static_argnums=(0,))
 def iterate_Xn_cp(n_eval,
     X_coef_cp,
     Y_coef_cp,
@@ -48,12 +48,11 @@ def iterate_Xn_cp(n_eval,
         iota_coef=iota_coef).cap_m(n_eval))
 
 # O_matrices, O_einv, vector_free_coef only uses B_alpha_coef and X_coef_cp
-def iterate_Yn_cp_operators(ChiPhiEpsFunc_last_ord, X_coef_cp, B_alpha_coef): # nfp-dependent only in output
+@partial(jit, static_argnums=(0,))
+def iterate_Yn_cp_operators(n_unknown, X_coef_cp, B_alpha_coef): # nfp-dependent only in output
     '''
     Input: -----
-    ChiPhiEpsFunc_last_ord: A ChiPhiEpsFunc known to be of order n_unknown-1 (last order).
     '''
-    n_unknown = len(ChiPhiEpsFunc_last_ord.chiphifunc_list)
     # Getting coeffs
     # Both uses B_alpha0 and X1 only
     chiphifunc_A = parsed.eval_ynp1.coef_a(n_unknown-1, B_alpha_coef, X_coef_cp)
@@ -65,6 +64,7 @@ def iterate_Yn_cp_operators(ChiPhiEpsFunc_last_ord, X_coef_cp, B_alpha_coef): # 
 
 # O_matrices, O_einv, vector_free_coef only uses B_alpha_coef and X_coef_cp
 # nfp-dependent!!
+@partial(jit, static_argnums=(0,13))
 def iterate_Yn_cp_RHS(n_eval,
     X_coef_cp,
     Y_coef_cp,
@@ -218,6 +218,7 @@ def iterate_Yn_cp_magnetic(n_unknown,
 # \iota_{(n-2)/2 \text{ or } (n-3)/2}
 # \kappa, \frac{dl}{d\phi}, \tau
 # not nfp-dependent
+@partial(jit, static_argnums=(0,))
 def iterate_Zn_cp(
     n_eval,
     X_coef_cp, Y_coef_cp, Z_coef_cp,
@@ -279,7 +280,7 @@ def iterate_p_perp_n(n_eval,
     Delta_coef_cp,
     iota_coef):
     return(
-        parsed.eval_p_perp_n.eval_p_perp_n_cp(n_eval,
+        MHD_parsed.eval_p_perp_n.eval_p_perp_n_cp(n_eval,
         B_theta_coef_cp.mask(n_eval-2).zero_append().zero_append(), # cancellation for 2 orders
         B_psi_coef_cp,
         B_alpha_coef,
@@ -403,11 +404,10 @@ class Equilibrium:
         constant['eta'] = eta
 
         # Pressure can be trivial
-        current_order = X_coef_cp.get_order()
         if not unknown['p_perp_coef_cp']:
-            unknown['p_perp_coef_cp'] = ChiPhiEpsFunc.zeros_to_order(current_order)
+            unknown['p_perp_coef_cp'] = ChiPhiEpsFunc.zeros_like(X_coef_cp)
         if not unknown['Delta_coef_cp']:
-            unknown['Delta_coef_cp'] = ChiPhiEpsFunc.zeros_to_order(current_order)
+            unknown['Delta_coef_cp'] = ChiPhiEpsFunc.zeros_like(X_coef_cp)
 
         # Manages noises
         if not noise:

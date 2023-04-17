@@ -1,7 +1,7 @@
-import chiphifunc
-import warnings
-import numpy as np # Used in saving and loading
+from chiphifunc import *
 import jax.numpy as jnp
+from functools import partial
+from jax import jit, tree_util
 
 '''ChiPhiEpsFunc'''
 # A container for lists of ChiPhiFuncs. Primarily used to handle array index out of bound
@@ -9,112 +9,157 @@ import jax.numpy as jnp
 # Initialization:
 # ChiPhiEpsFunc([X0, X1, X2, ... Xn])
 class ChiPhiEpsFunc:
-    def __init__(self, list:list, nfp:int, check_consistency:bool=True): # nfp-dependent!!
+    def __init__(self, list:list, nfp:int, check_consistency:bool=False): # nfp-dependent!!
         self.chiphifunc_list = list
         self.nfp = nfp
         if check_consistency:
-            self.check_nfp_consistency()
+            self = self.check_nfp_consistency()
 
+    ''' For JAX use '''
     def _tree_flatten(self):
-        children = (self.x,)  # arrays / dynamic values
-        aux_data = {'chiphifunc_list': self.chiphifunc_list}  # static values
+        children = (self.chiphifunc_list,)  # arrays / dynamic values
+        aux_data = {
+            'nfp': self.nfp
+        }  # static values
         return (children, aux_data)
 
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
         return cls(*children, **aux_data)
 
-    # Check the nfp of all constituents in self.chiphifunc_list
+    # This consistency check cannot be jitted.
+    # Because otherwise every element will have a consistency check if
+    # on it.
     def check_nfp_consistency(self):
+        '''
+        Check the nfp of all constituents in self.chiphifunc_list
+        '''
         for i in range(len(self.chiphifunc_list)):
-            if not jnp.isscalar(self.chiphifunc_list[i]):
-                if self.chiphifunc_list[i].nfp!=0 and self.chiphifunc_list[i].nfp!=self.nfp:
-                    self.chiphifunc_list[i] = \
-                        'inconsistent item, ' \
-                        +'item.nfp'+str(item.nfp) \
-                        +', self.nfp'+str(self.nfp)
+            item = self.chiphifunc_list[i]
+            if jnp.isscalar(item):
+                if item==0:
+                    self.chiphifunc_list[i] = ChiPhiFuncSpecial(0)
+                    continue
+                continue
+            if isinstance(item, ChiPhiFunc) and (item.nfp==self.nfp or item.nfp<0):
+                if jnp.all(item.content==0):
+                    self.chiphifunc_list[i] = ChiPhiFuncSpecial(0)
+                    continue
+                continue
+            self.chiphifunc_list[i] = ChiPhiFuncSpecial(-14)
 
 
-
-    def __getitem__(self, index): # not nfp-dependent
-        # If array index out of bound then put in an null item first
+    def __getitem__(self, index):
+        '''
+        If array index out of bound or <0, then return a special element,
+        ChiPhiFuncSpecial(-1). Unlike all other error codes, this special element
+        has the special property that
+        ChiPhiFuncSpecial(-1) * ChiPhiFuncSpecial(0) = 0.
+        '''
         if (index>len(self.chiphifunc_list)-1 or index<0):
-            return(chiphifunc.ChiPhiFuncNull())
+            return(ChiPhiFuncSpecial(-1))
         return(self.chiphifunc_list[index])
 
-    def __setitem__(self, key, newvalue): # not nfp-dependent
-        raise NotImplementedError('ChiPhiEpsFunc should only be edited with'\
-        ' ChiPhiEpsFunc.append() to prevent changes to known terms.')
+    def append(self, item):
+        '''
+        Returns a new ChiPhiEpsFunc with a new item appended to the end.
+        '''
+        if jnp.isscalar(item)\
+            or (
+                isinstance(item, ChiPhiFunc)
+                and (
+                    item.nfp==self.nfp or item.nfp<0
+                )
+            ):
+            return(
+                ChiPhiEpsFunc(self.chiphifunc_list+[item], self.nfp)
+            )
+        else:
+            return(
+                ChiPhiEpsFunc(self.chiphifunc_list+[ChiPhiFuncSpecial(-14)], self.nfp)
+            )
 
-    # Implementation of list append
-    # def append(self, item):
-    #     TODO add type check
-    #     self.chiphifunc_list.append(item)  # nfp-dependent!!
-
-    # Append one or more zeros to the end of the list.
-    # For evaluating higher order terms with recursion relation. Sometimes
-    # expressions used to evaluate a higher order term includes the term itself,
-    # and requires ChiPhiEpsFunc to provide zero (rather than ChiPhiFuncNull
-    # from __getitem__ when array index is out of bound)
-    def zero_append(self, n=1): # nfp-dependent!!
-        new_list = self.chiphifunc_list.copy()
-        for i in range(n):
-            new_list.append(0)
+    # @partial(jit, static_argnums=(1,))
+    def zero_append(self, n=1):
+        '''
+        Append one or more zeros to the end of the list.
+        For evaluating higher order terms with recursion relation. Sometimes
+        expressions used to evaluate a higher order term includes the term itself,
+        and requires ChiPhiEpsFunc to provide zero (rather than ChiPhiFuncNull
+        from __getitem__ when array index is out of bound)
+        '''
+        zeros = [ChiPhiFuncSpecial(0)]*n
         # we know the new element has consistent nfp.
-        return(ChiPhiEpsFunc(new_list, self.nfp, False))
+        return(ChiPhiEpsFunc(self.chiphifunc_list+zeros, self.nfp))
 
-    # For testing recursion. Produces a sub-list up to the nth element (order).
-    def mask(self, n): # nfp-dependent!!
-        if n>len(self.chiphifunc_list)-1:
-            raise IndexError('Mask size is larger than the list\'s size')
-        # we know the new element has consistent nfp.
-        return(ChiPhiEpsFunc(self.chiphifunc_list[:n+1], self.nfp, False))
+    # @partial(jit, static_argnums=(1,))
+    def mask(self, n):
+        '''
+        Produces a sub-list up to the nth element (order).
+        When n exceeds the maximum order known, fill with ChiPhiFuncSpecial(-14).
+        '''
+        n_diff = n-(len(self.chiphifunc_list)-1)
+        if n_diff>0:
+             return(ChiPhiEpsFunc(
+                 self.chiphifunc_list[:n+1]+[ChiPhiFuncSpecial(-1)]*n_diff,
+                 self.nfp,
+                 False
+             ))
+        return(ChiPhiEpsFunc(self.chiphifunc_list[:n+1], self.nfp))
 
-    # Copies a ChiPhiEpsFunc. Does not copy the constituents of self.chiphifunc_list.
-    def copy(self): # nfp-dependent!!
-        return(ChiPhiEpsFunc(self.chiphifunc_list.copy(), self.nfp, False))
-
-    def __list__(self): # not nfp-dependent
-        return(self.chiphifunc_list)
-
-
-    def __len__(self): # not nfp-dependent
-        return(len(self.chiphifunc_list))
-
-    def get_order(self): # not nfp-dependent
+    # Cannot be jitted. The formula involvng len(traced) need to be
+    # substituted into other jitted functions 'symbolically'.
+    def get_order(self):
+        ''' Gets the currently known order of a power series. '''
         return(len(self.chiphifunc_list)-1)
 
-    # Make a list with order+1 zero elements
-    # not nfp-dependent
-    def zeros_to_order(order, nfp=0):
-        new_list = []
-        for i in range(order+1):
-            new_list.append(0)
-        return(ChiPhiEpsFunc(new_list, nfp))
+    # @partial(jit, static_argnums=(0,))
+    def zeros_like(other):
+        '''
+        Make a ChiPhiFunc with zero elements with the same order
+        and nfp as another.
+        '''
+        return(ChiPhiEpsFunc([ChiPhiFuncSpecial(0)]*(other.get_order()+1), other.nfp))
 
-    # Make a list with order+1 zero elements
-    # not nfp-dependent
-    def zeros_like(chiphiepsfunc_in, nfp=0):
-        return(ChiPhiEpsFunc.zeros_to_order(chiphiepsfunc_in.get_order(), nfp))
+    ''' Printing '''
+    def __str__(self):
+        string = '['
+        first = True
+        # Convert all items into strings to aid readability
+        for item in self.chiphifunc_list:
+            if first:
+                first=False
+            else:
+                string = string + ', '
+            string += str(item)
+        string = string + '], nfp=' +str(self.nfp)
+        return(string)
 
-    # Converting to a list of arrays. For saving and loading.
+    ''' Saving and loading '''
+    # Converting to a list of ints and tuples. For saving and loading.
     # see recursion_relation.py.
     def to_content_list(self): # not nfp-dependent
         content_list = []
         for i in range(len(self.chiphifunc_list)):
             item = self.chiphifunc_list[i]
-            if np.isscalar(item):
+            if jnp.isscalar(item):
                 content_list.append(item)
             else:
-                content_list.append(item.content)
-        return(content_list)
+                content_list.append((item.content, item.nfp, item.is_special))
+        return(content_list, self.nfp)
 
     def from_content_list(content_list, nfp): # nfp-dependent!!
         chiphifunc_list = []
         for item in content_list:
-            if np.isscalar(item):
+            if jnp.isscalar(item):
                 chiphifunc_list.append(item)
             else:
-                chiphifunc_list.append(chiphifunc.ChiPhiFunc(item, nfp))
+
+                chiphifunc_list.append(ChiPhiFunc(item[0], item[1], item[2]))
         out_chiphiepsfunc = ChiPhiEpsFunc(chiphifunc_list, nfp)
         return(out_chiphiepsfunc)
+
+# For JAX use
+tree_util.register_pytree_node(ChiPhiEpsFunc,
+                               ChiPhiEpsFunc._tree_flatten,
+                               ChiPhiEpsFunc._tree_unflatten)

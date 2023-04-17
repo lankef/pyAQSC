@@ -196,28 +196,6 @@ def generate_RHS(
     out_dict_RHS['Yn_rhs_content_no_unknown']=Yn_rhs_content_no_unknown
 
     ''' Evaluating looped RHS '''
-    # print('Get orders --------------------------------------------------------------')
-    # print('n_unknown', n_unknown)
-    # print('X_coef_cp_no_unknown', X_coef_cp_no_unknown.get_order())
-    # X_coef_cp_no_unknown[X_coef_cp_no_unknown.get_order()].display_content()
-    # print('Y_coef_cp_no_unknown', Y_coef_cp_no_unknown.get_order())
-    # Y_coef_cp_no_unknown[Y_coef_cp_no_unknown.get_order()].display_content()
-    # print('Z_coef_cp_no_unknown', Z_coef_cp_no_unknown.get_order())
-    # Z_coef_cp_no_unknown[Z_coef_cp_no_unknown.get_order()].display_content()
-    # print('B_theta_coef_cp_0_only', B_theta_coef_cp_0_only.get_order())
-    # print(B_theta_coef_cp_0_only[B_theta_coef_cp_0_only.get_order()])
-    # print('B_psi_coef_cp_no_unknown', B_psi_coef_cp_no_unknown.get_order())
-    # B_psi_coef_cp_no_unknown[B_psi_coef_cp_no_unknown.get_order()].display_content()
-    # print('B_alpha_coef', B_alpha_coef.get_order())
-    # print(B_alpha_coef[B_alpha_coef.get_order()])
-    # print('B_denom_coef_c', B_denom_coef_c.get_order())
-    # print(B_denom_coef_c[B_denom_coef_c.get_order()])
-    # print('p_perp_coef_cp_no_unknown', p_perp_coef_cp_no_unknown.get_order())
-    # p_perp_coef_cp_no_unknown[p_perp_coef_cp_no_unknown.get_order()].display_content()
-    # print('Delta_coef_cp_no_unknown_0_offset', Delta_coef_cp_no_unknown_0_offset.get_order())
-    # Delta_coef_cp_no_unknown_0_offset[Delta_coef_cp_no_unknown_0_offset.get_order()].display_content()
-    # print('iota_coef', iota_coef.get_order())
-    # print(iota_coef[iota_coef.get_order()])
     looped_RHS_0_offset = -MHD_parsed.eval_loop(
         n=n_eval, \
         # Modified ChiPhiEpsFunc's dont need to be masked.
