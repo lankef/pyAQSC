@@ -28,16 +28,6 @@ asymptotic_order = 6
 # Caching -----
 # Maximum size of LRU cache in ChiPhiFunc
 max_size = 1000
-# Joblib -----
-# By default, the number of threads launched is set
-# to #cpu/2.
-import multiprocessing
-print('Detected', multiprocessing.cpu_count(), 'CPU\'s. Setting n_jobs to #CPU/2.')
-# scipy.integrate is based on compiled codes. 'threading' is the best backend.
-n_jobs_chiphifunc = multiprocessing.cpu_count()//2 # for integration factor
-n_jobs_math_utilities = multiprocessing.cpu_count()//2 # for summations
-backend_chiphifunc = 'threading'
-backend_math_utilities = 'threading'
 
 ''' Plotting and output settings (for chiphifunc_test_suite.py) '''
 # Number of grid points when:

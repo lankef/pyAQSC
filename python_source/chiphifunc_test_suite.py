@@ -470,7 +470,6 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
     # half of the 2-part paper
     B_denom_coef_c = ChiPhiEpsFunc([1, phi_avg(-X1*2*kap_p), B2, B3], nfp, True)
 
-    print('iota -- list(np.loadtxt(path+outputs.dat))', list(np.loadtxt(path+'outputs.dat')))
     iota_e = ChiPhiEpsFunc(list(np.loadtxt(path+'outputs.dat')), nfp, True)
 
     # Not an actual representation in pyQSC.

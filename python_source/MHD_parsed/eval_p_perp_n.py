@@ -17,122 +17,122 @@ def eval_p_perp_n_cp(n,
     p_perp_coef_cp, 
     Delta_coef_cp,
     iota_coef):    
-    def sum_arg_29(i296):
+    def sum_arg_29(i294):
         # Child args for sum_arg_29    
-        def sum_arg_28(i258):
+        def sum_arg_28(i256):
             # Child args for sum_arg_28
-            return(B_psi_coef_cp[i258]*diff(Delta_coef_cp[n-i296-i258-2],'phi',1))
+            return(B_psi_coef_cp[i256]*diff(Delta_coef_cp[n-i294-i256-2],False,1))
         
-        return(B_denom_coef_c[i296]*py_sum(sum_arg_28,0,n-i296-2))
+        return(B_denom_coef_c[i294]*py_sum(sum_arg_28,0,n-i294-2))
     
-    def sum_arg_27(i292):
+    def sum_arg_27(i290):
         # Child args for sum_arg_27    
-        def sum_arg_26(i290):
+        def sum_arg_26(i288):
             # Child args for sum_arg_26
-            return(Delta_coef_cp[i290]*diff(B_psi_coef_cp[n-i292-i290-2],'phi',1))
+            return(Delta_coef_cp[i288]*diff(B_psi_coef_cp[n-i290-i288-2],False,1))
         
-        return(B_denom_coef_c[i292]*py_sum(sum_arg_26,0,n-i292-2))
+        return(B_denom_coef_c[i290]*py_sum(sum_arg_26,0,n-i290-2))
     
-    def sum_arg_25(i287):
+    def sum_arg_25(i285):
         # Child args for sum_arg_25    
-        def sum_arg_24(i288):
+        def sum_arg_24(i286):
             # Child args for sum_arg_24    
-            def sum_arg_23(i260):
+            def sum_arg_23(i258):
                 # Child args for sum_arg_23
-                return(B_psi_coef_cp[i260]*diff(Delta_coef_cp[(-n)-i288+2*i287-i260+2],'chi',1))
+                return(B_psi_coef_cp[i258]*diff(Delta_coef_cp[(-n)-i286+2*i285-i258+2],True,1))
             
-            return(B_denom_coef_c[i288]*is_seq(n-i287-2,i287-i288)*py_sum(sum_arg_23,0,(-n)-i288+2*i287+2))
+            return(B_denom_coef_c[i286]*is_seq(n-i285-2,i285-i286)*py_sum(sum_arg_23,0,(-n)-i286+2*i285+2))
         
-        return(is_seq(0,n-i287-2)*iota_coef[n-i287-2]*is_integer(n-i287-2)*py_sum(sum_arg_24,0,i287))
+        return(is_seq(0,n-i285-2)*iota_coef[n-i285-2]*is_integer(n-i285-2)*py_sum(sum_arg_24,0,i285))
     
-    def sum_arg_22(i283):
+    def sum_arg_22(i281):
         # Child args for sum_arg_22    
-        def sum_arg_21(i284):
+        def sum_arg_21(i282):
             # Child args for sum_arg_21    
-            def sum_arg_20(i280):
+            def sum_arg_20(i278):
                 # Child args for sum_arg_20
-                return(Delta_coef_cp[i280]*diff(B_psi_coef_cp[(-n)-i284+2*i283-i280+2],'chi',1))
+                return(Delta_coef_cp[i278]*diff(B_psi_coef_cp[(-n)-i282+2*i281-i278+2],True,1))
             
-            return(B_denom_coef_c[i284]*is_seq(n-i283-2,i283-i284)*py_sum(sum_arg_20,0,(-n)-i284+2*i283+2))
+            return(B_denom_coef_c[i282]*is_seq(n-i281-2,i281-i282)*py_sum(sum_arg_20,0,(-n)-i282+2*i281+2))
         
-        return(is_seq(0,n-i283-2)*iota_coef[n-i283-2]*is_integer(n-i283-2)*py_sum(sum_arg_21,0,i283))
+        return(is_seq(0,n-i281-2)*iota_coef[n-i281-2]*is_integer(n-i281-2)*py_sum(sum_arg_21,0,i281))
     
-    def sum_arg_19(i273):
+    def sum_arg_19(i271):
         # Child args for sum_arg_19    
-        def sum_arg_18(i274):
+        def sum_arg_18(i272):
             # Child args for sum_arg_18
-            return(B_denom_coef_c[i274]*Delta_coef_cp[(-n)-i274+2*i273]*is_seq(n-i273,i273-i274))
+            return(B_denom_coef_c[i272]*Delta_coef_cp[(-n)-i272+2*i271]*is_seq(n-i271,i271-i272))
         
-        return((is_seq(0,n-i273)*n-is_seq(0,n-i273)*i273)*B_alpha_coef[n-i273]*is_integer(n-i273)*py_sum(sum_arg_18,0,i273))
+        return((is_seq(0,n-i271)*n-is_seq(0,n-i271)*i271)*B_alpha_coef[n-i271]*is_integer(n-i271)*py_sum(sum_arg_18,0,i271))
     
-    def sum_arg_17(i267):
+    def sum_arg_17(i265):
         # Child args for sum_arg_17    
-        def sum_arg_16(i268):
+        def sum_arg_16(i266):
             # Child args for sum_arg_16
-            return(B_denom_coef_c[i268]*diff(B_psi_coef_cp[(-n)-i268+2*i267+2],'chi',1)*is_seq(n-i267-2,i267-i268))
+            return(B_denom_coef_c[i266]*diff(B_psi_coef_cp[(-n)-i266+2*i265+2],True,1)*is_seq(n-i265-2,i265-i266))
         
-        return(is_seq(0,n-i267-2)*iota_coef[n-i267-2]*is_integer(n-i267-2)*py_sum(sum_arg_16,0,i267))
+        return(is_seq(0,n-i265-2)*iota_coef[n-i265-2]*is_integer(n-i265-2)*py_sum(sum_arg_16,0,i265))
     
-    def sum_arg_15(i266):
+    def sum_arg_15(i264):
         # Child args for sum_arg_15
-        return(B_denom_coef_c[i266]*diff(B_psi_coef_cp[n-i266-2],'phi',1))
+        return(B_denom_coef_c[i264]*diff(B_psi_coef_cp[n-i264-2],False,1))
     
-    def sum_arg_14(i261):
+    def sum_arg_14(i259):
         # Child args for sum_arg_14    
-        def sum_arg_13(i262):
+        def sum_arg_13(i260):
             # Child args for sum_arg_13
-            return(i262*B_denom_coef_c[i262]*Delta_coef_cp[(-n)-i262+2*i261]*is_seq(n-i261,i261-i262))
+            return(i260*B_denom_coef_c[i260]*Delta_coef_cp[(-n)-i260+2*i259]*is_seq(n-i259,i259-i260))
         
-        return(is_seq(0,n-i261)*B_alpha_coef[n-i261]*is_integer(n-i261)*py_sum(sum_arg_13,0,i261))
+        return(is_seq(0,n-i259)*B_alpha_coef[n-i259]*is_integer(n-i259)*py_sum(sum_arg_13,0,i259))
     
-    def sum_arg_12(i253):
+    def sum_arg_12(i251):
         # Child args for sum_arg_12    
-        def sum_arg_11(i254):
+        def sum_arg_11(i252):
             # Child args for sum_arg_11    
-            def sum_arg_10(i248):
+            def sum_arg_10(i246):
                 # Child args for sum_arg_10
-                return(B_denom_coef_c[i248]*B_denom_coef_c[(-n)-i254+2*i253-i248])
+                return(B_denom_coef_c[i246]*B_denom_coef_c[(-n)-i252+2*i251-i246])
             
-            return(i254*p_perp_coef_cp[i254]*is_seq(n-i253,i253-i254)*py_sum(sum_arg_10,0,(-n)-i254+2*i253))
+            return(i252*p_perp_coef_cp[i252]*is_seq(n-i251,i251-i252)*py_sum(sum_arg_10,0,(-n)-i252+2*i251))
         
-        return(is_seq(0,n-i253)*B_alpha_coef[n-i253]*is_integer(n-i253)*py_sum(sum_arg_11,0,i253))
+        return(is_seq(0,n-i251)*B_alpha_coef[n-i251]*is_integer(n-i251)*py_sum(sum_arg_11,0,i251))
     
-    def sum_arg_9(i293):
+    def sum_arg_9(i291):
         # Child args for sum_arg_9    
-        def sum_arg_7(i294):
+        def sum_arg_7(i292):
             # Child args for sum_arg_7
-            return(is_seq(0,(-n)-i294+2*i293)*B_denom_coef_c[i294]*B_theta_coef_cp[(-n)-i294+2*i293]*is_integer((-n)-i294+2*i293)*is_seq((-n)-i294+2*i293,i293-i294))
+            return(is_seq(0,(-n)-i292+2*i291)*B_denom_coef_c[i292]*B_theta_coef_cp[(-n)-i292+2*i291]*is_integer((-n)-i292+2*i291)*is_seq((-n)-i292+2*i291,i291-i292))
             
-        def sum_arg_8(i294):
+        def sum_arg_8(i292):
             # Child args for sum_arg_8
-            return(is_seq(0,(-n)-i294+2*i293)*B_denom_coef_c[i294]*B_theta_coef_cp[(-n)-i294+2*i293]*is_integer((-n)-i294+2*i293)*is_seq((-n)-i294+2*i293,i293-i294))
+            return(is_seq(0,(-n)-i292+2*i291)*B_denom_coef_c[i292]*B_theta_coef_cp[(-n)-i292+2*i291]*is_integer((-n)-i292+2*i291)*is_seq((-n)-i292+2*i291,i291-i292))
         
-        return(iota_coef[n-i293]*(n*py_sum(sum_arg_8,0,i293)-i293*py_sum(sum_arg_7,0,i293)))
+        return(iota_coef[n-i291]*(n*py_sum(sum_arg_8,0,i291)-i291*py_sum(sum_arg_7,0,i291)))
     
-    def sum_arg_6(i277):
+    def sum_arg_6(i275):
         # Child args for sum_arg_6    
-        def sum_arg_3(i278):
+        def sum_arg_3(i276):
             # Child args for sum_arg_3    
-            def sum_arg_2(i276):
+            def sum_arg_2(i274):
                 # Child args for sum_arg_2
-                return(is_seq(0,(-n)-i278+2*i277-i276)*Delta_coef_cp[i276]*B_theta_coef_cp[(-n)-i278+2*i277-i276]*is_integer((-n)-i278+2*i277-i276)*is_seq((-n)-i278+2*i277-i276,(-i278)+i277-i276))
+                return(is_seq(0,(-n)-i276+2*i275-i274)*Delta_coef_cp[i274]*B_theta_coef_cp[(-n)-i276+2*i275-i274]*is_integer((-n)-i276+2*i275-i274)*is_seq((-n)-i276+2*i275-i274,(-i276)+i275-i274))
             
-            return(B_denom_coef_c[i278]*py_sum(sum_arg_2,0,i277-i278))
+            return(B_denom_coef_c[i276]*py_sum(sum_arg_2,0,i275-i276))
             
-        def sum_arg_5(i278):
+        def sum_arg_5(i276):
             # Child args for sum_arg_5    
-            def sum_arg_4(i276):
+            def sum_arg_4(i274):
                 # Child args for sum_arg_4
-                return(is_seq(0,(-n)-i278+2*i277-i276)*Delta_coef_cp[i276]*B_theta_coef_cp[(-n)-i278+2*i277-i276]*is_integer((-n)-i278+2*i277-i276)*is_seq((-n)-i278+2*i277-i276,(-i278)+i277-i276))
+                return(is_seq(0,(-n)-i276+2*i275-i274)*Delta_coef_cp[i274]*B_theta_coef_cp[(-n)-i276+2*i275-i274]*is_integer((-n)-i276+2*i275-i274)*is_seq((-n)-i276+2*i275-i274,(-i276)+i275-i274))
             
-            return(B_denom_coef_c[i278]*py_sum(sum_arg_4,0,i277-i278))
+            return(B_denom_coef_c[i276]*py_sum(sum_arg_4,0,i275-i276))
         
-        return(iota_coef[n-i277]*(n*py_sum(sum_arg_5,0,i277)-i277*py_sum(sum_arg_3,0,i277)))
+        return(iota_coef[n-i275]*(n*py_sum(sum_arg_5,0,i275)-i275*py_sum(sum_arg_3,0,i275)))
     
-    def sum_arg_1(i269):
+    def sum_arg_1(i267):
         # Child args for sum_arg_1
-        return((is_seq(0,n-i269)*B_denom_coef_c[2*i269-n]*n-is_seq(0,n-i269)*i269*B_denom_coef_c[2*i269-n])*B_alpha_coef[n-i269]*is_integer(n-i269)*is_seq(n-i269,i269))
+        return((is_seq(0,n-i267)*B_denom_coef_c[2*i267-n]*n-is_seq(0,n-i267)*i267*B_denom_coef_c[2*i267-n])*B_alpha_coef[n-i267]*is_integer(n-i267)*is_seq(n-i267,i267))
     
     
-    out = -((-4*py_sum_parallel(sum_arg_9,ceil(n/2),floor(n)))+4*py_sum_parallel(sum_arg_6,ceil(n/2),floor(n))+4*is_seq(0,n-2)*is_integer(n-2)*py_sum_parallel(sum_arg_29,0,n-2)+4*is_seq(0,n-2)*is_integer(n-2)*py_sum_parallel(sum_arg_27,0,n-2)+4*py_sum_parallel(sum_arg_25,ceil(n/2)-1,floor(n)-2)+4*py_sum_parallel(sum_arg_22,ceil(n/2)-1,floor(n)-2)-4*py_sum_parallel(sum_arg_19,ceil(n/2),floor(n))-4*py_sum_parallel(sum_arg_17,ceil(n/2)-1,floor(n)-2)-4*is_seq(0,n-2)*is_integer(n-2)*py_sum_parallel(sum_arg_15,0,n-2)-py_sum_parallel(sum_arg_14,ceil(n/2),floor(n))+2*py_sum_parallel(sum_arg_12,ceil(n/2),floor(n))+4*py_sum_parallel(sum_arg_1,ceil(n/2),floor(n)))/(2*B_alpha_coef[0]*B_denom_coef_c[0]**2*n)
+    out = -((-4*py_sum(sum_arg_9,ceil(n/2),floor(n)))+4*py_sum(sum_arg_6,ceil(n/2),floor(n))+4*is_seq(0,n-2)*is_integer(n-2)*py_sum(sum_arg_29,0,n-2)+4*is_seq(0,n-2)*is_integer(n-2)*py_sum(sum_arg_27,0,n-2)+4*py_sum(sum_arg_25,ceil(n/2)-1,floor(n)-2)+4*py_sum(sum_arg_22,ceil(n/2)-1,floor(n)-2)-4*py_sum(sum_arg_19,ceil(n/2),floor(n))-4*py_sum(sum_arg_17,ceil(n/2)-1,floor(n)-2)-4*is_seq(0,n-2)*is_integer(n-2)*py_sum(sum_arg_15,0,n-2)-py_sum(sum_arg_14,ceil(n/2),floor(n))+2*py_sum(sum_arg_12,ceil(n/2),floor(n))+4*py_sum(sum_arg_1,ceil(n/2),floor(n)))/(2*B_alpha_coef[0]*B_denom_coef_c[0]**2*n)
     return(out)

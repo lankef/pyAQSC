@@ -68,7 +68,7 @@ class ChiPhiEpsFunc:
             or (
                 isinstance(item, ChiPhiFunc)
                 and (
-                    item.nfp==self.nfp or item.nfp<0
+                    item.nfp==self.nfp or item.nfp<=0
                 )
             ):
             return(
@@ -79,7 +79,7 @@ class ChiPhiEpsFunc:
                 ChiPhiEpsFunc(self.chiphifunc_list+[ChiPhiFuncSpecial(-14)], self.nfp)
             )
 
-    # @partial(jit, static_argnums=(1,))
+    @partial(jit, static_argnums=(1,))
     def zero_append(self, n=1):
         '''
         Append one or more zeros to the end of the list.
@@ -92,7 +92,7 @@ class ChiPhiEpsFunc:
         # we know the new element has consistent nfp.
         return(ChiPhiEpsFunc(self.chiphifunc_list+zeros, self.nfp))
 
-    # @partial(jit, static_argnums=(1,))
+    @partial(jit, static_argnums=(1,))
     def mask(self, n):
         '''
         Produces a sub-list up to the nth element (order).
@@ -113,7 +113,7 @@ class ChiPhiEpsFunc:
         ''' Gets the currently known order of a power series. '''
         return(len(self.chiphifunc_list)-1)
 
-    # @partial(jit, static_argnums=(0,))
+    @partial(jit, static_argnums=(0,))
     def zeros_like(other):
         '''
         Make a ChiPhiFunc with zero elements with the same order
