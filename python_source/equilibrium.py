@@ -312,6 +312,12 @@ def iterate_delta_n_0_offset(n_eval,
             p_perp_coef_cp,
             Delta_coef_cp.mask(n_eval-1).zero_append(),
             iota_coef)
+            print('Delta_n_inhomog_component',Delta_n_inhomog_component)
+            print('orders: n_eval',n_eval)
+            print('B_denom_coef_c', (B_denom_coef_c).get_order())
+            print('p_perp_coef_cp', (p_perp_coef_cp).get_order())
+            print('Delta_coef_cp.mask(n_eval-1).zero_append()', (Delta_coef_cp.mask(n_eval-1).zero_append()).get_order())
+            print('iota_coef', (iota_coef).get_order())
         else:
             Delta_n_inhomog_component = MHD_parsed.eval_inhomogenous_Delta_n_cp(n_eval,
             B_denom_coef_c,
@@ -322,6 +328,8 @@ def iterate_delta_n_0_offset(n_eval,
     # At even orders, setting Delta[even, 0] to have zero average.
     # This average is a free parameter, because the center component of
     # the ODE is dphi x = f.
+    print('n_eval',n_eval)
+    print('Delta_n_inhomog_component',Delta_n_inhomog_component)
     content = solve_dphi_iota_dchi(
         iota=iota_coef[0]/Delta_n_inhomog_component.nfp,
         f=Delta_n_inhomog_component.content/Delta_n_inhomog_component.nfp,
@@ -908,15 +916,10 @@ def iterate_2(equilibrium,
     kap_p = equilibrium.constant['kap_p']
     dl_p = equilibrium.constant['dl_p']
     tau_p = equilibrium.constant['tau_p']
-    iota_coef.append(iota_new)
-    B_denom_coef_c.append(B_denom_nm1)
-    B_denom_coef_c.append(B_denom_n)
-    B_alpha_coef.append(B_alpha_nb2)
-
-    # For reducing duplicate code
-    def filter_and_append(name, chiphifunc, max_freq_i):
-        chiphifunc = chiphifunc.filter(max_freq[max_freq_i])
-        equilibrium.unknown[name].append(chiphifunc)
+    iota_coef = iota_coef.append(iota_new)
+    B_denom_coef_c = B_denom_coef_c.append(B_denom_nm1)
+    B_denom_coef_c = B_denom_coef_c.append(B_denom_n)
+    B_alpha_coef = B_alpha_coef.append(B_alpha_nb2)
 
     # Evaluating order n_eval-1
 
@@ -942,18 +945,20 @@ def iterate_2(equilibrium,
         max_k_diff_pre_inv = max_k_diff_pre_inv[0],
         max_k_diff_post_inv = max_k_diff_post_inv[0],
     )
-    filter_and_append('B_theta_coef_cp', solution_nm1_known_iota['B_theta_n'], 0)
-    filter_and_append('B_psi_coef_cp', solution_nm1_known_iota['B_psi_nm2'], 0)
-    filter_and_append('X_coef_cp', solution_nm1_known_iota['Xn'], 0)
-    filter_and_append('Y_coef_cp', solution_nm1_known_iota['Yn'], 0)
-    filter_and_append('Z_coef_cp', solution_nm1_known_iota['Zn'], 0)
-    filter_and_append('p_perp_coef_cp', solution_nm1_known_iota['pn'], 0)
-    filter_and_append('Delta_coef_cp', solution_nm1_known_iota['Deltan'], 0)
+    B_theta_coef_cp = B_theta_coef_cp.append(solution_nm1_known_iota['B_theta_n'].filter(max_freq[0]))
+    B_psi_coef_cp = B_psi_coef_cp.append(solution_nm1_known_iota['B_psi_nm2'].filter(max_freq[0]))
+    X_coef_cp = X_coef_cp.append(solution_nm1_known_iota['Xn'].filter(max_freq[0]))
+    Y_coef_cp = Y_coef_cp.append(solution_nm1_known_iota['Yn'].filter(max_freq[0]))
+    Z_coef_cp = Z_coef_cp.append(solution_nm1_known_iota['Zn'].filter(max_freq[0]))
+    p_perp_coef_cp = p_perp_coef_cp.append(solution_nm1_known_iota['pn'].filter(max_freq[0]))
+    Delta_coef_cp = Delta_coef_cp.append(solution_nm1_known_iota['Deltan'].filter(max_freq[0]))
 
     # This "partial" solution will be fed into
-    # iterate_looped
-    B_theta_coef_cp.append(solution_nm1_known_iota['B_theta_np10'])
+    # iterate_looped. This is already filtered.
+    B_theta_coef_cp = B_theta_coef_cp.append(solution_nm1_known_iota['B_theta_np10'])
 
+    # B_psi[n-2] without the zeroth component.
+    # MAY NOT BE NECESSARY
     B_psi_nm2 = iterate_dc_B_psi_nm2(n_eval=n_eval,
         X_coef_cp=X_coef_cp,
         Y_coef_cp=Y_coef_cp,
@@ -967,7 +972,7 @@ def iterate_2(equilibrium,
         tau_p=tau_p,
         iota_coef=iota_coef
         ).antid_chi()
-    B_psi_coef_cp.append(B_psi_nm2)
+    B_psi_coef_cp = B_psi_coef_cp.append(B_psi_nm2)
 
     solution_n = looped_solver.iterate_looped(
         n_unknown = n_eval,
@@ -996,18 +1001,18 @@ def iterate_2(equilibrium,
     # too.
     B_psi_coef_cp = B_psi_coef_cp.mask(n_eval-3)
     equilibrium.unknown['B_psi_coef_cp'] = B_psi_coef_cp
-    filter_and_append('B_psi_coef_cp', solution_n['B_psi_nm2'],1)
+    B_psi_coef_cp = B_psi_coef_cp.append(solution_n['B_psi_nm2']).filter(max_freq[1])
     # This only reassigns the pointer B_theta. Need to re-assign equilibrium.unknown[]
     # too.
     B_theta_coef_cp = B_theta_coef_cp.mask(n_eval-1)
     equilibrium.unknown['B_theta_coef_cp'] = B_theta_coef_cp
-    filter_and_append('B_theta_coef_cp', solution_n['B_theta_n'],1)
+    B_theta_coef_cp = B_theta_coef_cp.append(solution_n['B_theta_n']).filter(max_freq[1])
 
-    filter_and_append('X_coef_cp', solution_n['Xn'],1)
-    filter_and_append('Z_coef_cp', solution_n['Zn'],1)
-    filter_and_append('p_perp_coef_cp', solution_n['pn'],1)
-    filter_and_append('Delta_coef_cp', solution_n['Deltan'],1)
-    filter_and_append('Y_coef_cp', solution_n['Yn'],1)
+    X_coef_cp = X_coef_cp.append(solution_n['Xn']).filter(max_freq[1])
+    Z_coef_cp = Z_coef_cp.append(solution_n['Zn']).filter(max_freq[1])
+    p_perp_coef_cp = p_perp_coef_cp.append(solution_n['pn']).filter(max_freq[1])
+    Delta_coef_cp = Delta_coef_cp.append(solution_n['Deltan']).filter(max_freq[1])
+    Y_coef_cp = Y_coef_cp.append(solution_n['Yn']).filter(max_freq[1])
 
     equilibrium.check_order_consistency()
     return(solution_nm1_known_iota, solution_n)

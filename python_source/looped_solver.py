@@ -63,7 +63,7 @@ def generate_RHS(
         iota_coef=iota_coef
     ).antid_chi().filter(max_freq)
 
-    B_psi_coef_cp_no_unknown=B_psi_coef_cp.mask(n_unknown-3)
+    B_psi_coef_cp_no_unknown = B_psi_coef_cp.mask(n_unknown-3)
     B_psi_coef_cp_no_unknown = B_psi_coef_cp_no_unknown.append(B_psi_nm2_no_unknown)
     out_dict_RHS['B_psi_nm2_no_unknown'] = B_psi_nm2_no_unknown
     # Even orders
@@ -149,7 +149,7 @@ def generate_RHS(
             tau_p=tau_p,
             iota_coef=iota_coef
             ).filter(max_freq)
-        X_coef_cp_no_unknown=X_coef_cp.mask(n_unknown-1)
+        X_coef_cp_no_unknown = X_coef_cp.mask(n_unknown-1)
         X_coef_cp_no_unknown = X_coef_cp_no_unknown.append(Xn_no_B_theta)
         pn_no_B_theta = equilibrium.iterate_p_perp_n(
             n_eval=n_unknown,
@@ -160,23 +160,36 @@ def generate_RHS(
             p_perp_coef_cp=p_perp_coef_cp,
             Delta_coef_cp=Delta_coef_cp,
             iota_coef=iota_coef).filter(max_freq)
-        p_perp_coef_cp_no_unknown=p_perp_coef_cp.mask(n_unknown-1)
+        p_perp_coef_cp_no_unknown = p_perp_coef_cp.mask(n_unknown-1)
         p_perp_coef_cp_no_unknown = p_perp_coef_cp_no_unknown.append(pn_no_B_theta)
+        print('B_psi_nm2_no_unknown',B_psi_nm2_no_unknown)
+        print('Zn_no_B_theta',Zn_no_B_theta)
+        print('Xn_no_B_theta',Xn_no_B_theta)
+        print('pn_no_B_theta',pn_no_B_theta)
+        print('................')
+        print('pn_no_B_theta inputs')
+        print('n_eval',n_eval)
+        print('B_theta_coef_cp',B_theta_coef_cp.get_order())
+        print('B_psi_coef_cp_no_unknown',B_psi_coef_cp_no_unknown.get_order())
+        print('B_alpha_coef',B_alpha_coef.get_order())
+        print('B_denom_coef_c',B_denom_coef_c.get_order())
+        print('p_perp_coef_cp',p_perp_coef_cp.get_order())
+        print('Delta_coef_cp',Delta_coef_cp.get_order())
+        print('iota_coef',iota_coef.get_order())
         Deltan_with_iota_no_B_theta = equilibrium.iterate_delta_n_0_offset(n_eval=n_unknown,
             B_denom_coef_c=B_denom_coef_c,
             p_perp_coef_cp=p_perp_coef_cp_no_unknown,
             Delta_coef_cp=Delta_coef_cp,
             iota_coef=iota_coef,
-            integral_mode='auto',
             max_freq=max_freq,
             no_iota_masking = True).filter(max_freq)
         Delta_coef_cp_no_unknown_0_offset = Delta_coef_cp.mask(n_eval-2)
         Delta_coef_cp_no_unknown_0_offset = Delta_coef_cp_no_unknown_0_offset.append(Deltan_with_iota_no_B_theta)
 
-        out_dict_RHS['Zn_no_B_theta']=Zn_no_B_theta
-        out_dict_RHS['pn_no_B_theta']=pn_no_B_theta
-        out_dict_RHS['Xn_no_B_theta']=Xn_no_B_theta
-        out_dict_RHS['Deltan_no_B_theta']=Deltan_with_iota_no_B_theta
+        out_dict_RHS['Zn_no_B_theta'] = Zn_no_B_theta
+        out_dict_RHS['pn_no_B_theta'] = pn_no_B_theta
+        out_dict_RHS['Xn_no_B_theta'] = Xn_no_B_theta
+        out_dict_RHS['Deltan_no_B_theta'] = Deltan_with_iota_no_B_theta
 
     ''' Y, unknown at all orders and contains B_psi. '''
     Yn_rhs_no_unknown = equilibrium.iterate_Yn_cp_RHS(n_unknown=n_unknown,

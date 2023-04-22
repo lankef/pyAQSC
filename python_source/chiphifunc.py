@@ -418,7 +418,8 @@ class ChiPhiFunc:
             # non-zero/chi-indep
             return(ChiPhiFunc(self.content/other.content, self.nfp))
         else:
-            if self.nfp==0:
+            # 0/anything=0, error/anything = error
+            if self.is_special:
                 return(self)
             if not jnp.isscalar(other):
                 if other.ndim!=0: # 0-d np array will check false for isscalar.
