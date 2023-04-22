@@ -24,7 +24,9 @@ def py_sum(expr, lower, upper):
     # Warning for lower>upper
     if lower_ceil>upper_floor:
         # This is classified as "out of bound".
-        return(ChiPhiFuncSpecial(-1))
+        # Originally the code is -1. Since the formula
+        # are checked correct, these are made 0.
+        return(ChiPhiFuncSpecial(0))
     indices = list(range(lower_ceil,upper_floor+1))
     out_list = jax.tree_util.tree_map(expr, indices)
     for item in out_list:
@@ -43,7 +45,9 @@ def py_sum_test(expr, lower, upper):
     # Warning for lower>upper
     if lower_ceil>upper_floor:
         # This is classified as "out of bound".
-        return(ChiPhiFuncSpecial(-1))
+        # Originally the code is -1. Since the formula
+        # are checked correct, these are made 0.
+        return(ChiPhiFuncSpecial(0))
     for i in range(lower_ceil,upper_floor+1):
         print('expr('+str(i)+') =',expr(i))
         out_list.append(expr(i))

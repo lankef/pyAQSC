@@ -126,8 +126,8 @@ def phi_avg(in_quant):
             jnp.mean(in_quant.content,axis=1)
         ]).T
         return(ChiPhiFunc(new_content,in_quant.nfp))
-    if not jnp.isscalar(other):
-        if other.ndim!=0: # 0-d np array will check false for isscalar.
+    if not jnp.isscalar(in_quant):
+        if in_quant.ndim!=0: # 0-d np array will check false for isscalar.
             return(ChiPhiFuncSpecial(-5))
     return(in_quant)
 
@@ -161,7 +161,7 @@ class ChiPhiFunc:
     Can be cancelled by a ChiPhiFuncSpecial with nfp=0.
 
     Negative-nfp -----
-    -1: Out of bound
+    -1: Out of bound - DISCONTINUED
     -2: Invalid/mismatched nfp
     -3: Invalid mode number
     -4: Mismatched even/oddness/direct division by chi-dependent ChiPhiFunc
@@ -286,10 +286,10 @@ class ChiPhiFunc:
                 return(self)
             if self.is_special:
                 if other.is_special: # Adding two nulls compound the error message
-                    if self.nfp==-1 or other.nfp==-1:
-                        return(ChiPhiFuncSpecial(-1))
-                    else:
-                        return(ChiPhiFuncSpecial(self.nfp*100+other.nfp))
+                    # if self.nfp==-1 or other.nfp==-1:
+                    #     return(ChiPhiFuncSpecial(-1))
+                    # else:
+                    return(ChiPhiFuncSpecial(self.nfp*100+other.nfp))
                 return(self)
             if other.is_special:
                 return(other)
@@ -356,19 +356,19 @@ class ChiPhiFunc:
         '''
         if isinstance(other, ChiPhiFunc):
             if self.nfp==0:
-                if other.nfp<-1: # nfp < 0 always means error message
+                if other.nfp<0: # nfp < 0 always means error message
                     return(other)
                 return(self) # 0*out of bound and 0*non-trivial are both 0.
             if other.nfp==0:
-                if self.nfp<-1: # nfp < 0 always means error message
+                if self.nfp<0: # nfp < 0 always means error message
                     return(self)
                 return(other) # 0*out of bound and 0*non-trivial are both 0.
             if self.is_special:
                 if other.is_special: # Adding two nulls compound the error message
-                    if self.nfp==-1 or other.nfp==-1:
-                        return(ChiPhiFuncSpecial(-1))
-                    else:
-                        return(ChiPhiFuncSpecial(self.nfp*100+other.nfp))
+                    # if self.nfp==-1 or other.nfp==-1:
+                    #     return(ChiPhiFuncSpecial(-1))
+                    # else:
+                    return(ChiPhiFuncSpecial(self.nfp*100+other.nfp))
                 return(self)
             if other.is_special:
                 return(other)
@@ -405,10 +405,10 @@ class ChiPhiFunc:
                 if other.nfp==0:
                     return(ChiPhiFuncSpecial(-8)) # /zero error
                 if self.is_special: # dividing two nulls compound the error message
-                    if self.nfp==-1 or other.nfp==-1:
-                        return(ChiPhiFuncSpecial(-1))
-                    else:
-                        return(ChiPhiFuncSpecial(self.nfp*100+other.nfp))
+                    # if self.nfp==-1 or other.nfp==-1:
+                    #     return(ChiPhiFuncSpecial(-1))
+                    # else:
+                    return(ChiPhiFuncSpecial(self.nfp*100+other.nfp))
                 return(other)
             # Handles zero/(not error)
             if self.nfp==0:
@@ -418,8 +418,7 @@ class ChiPhiFunc:
             # non-zero/chi-indep
             return(ChiPhiFunc(self.content/other.content, self.nfp))
         else:
-            # 0/anything=0, error/anything = error
-            if self.is_special:
+            if self.nfp==0:
                 return(self)
             if not jnp.isscalar(other):
                 if other.ndim!=0: # 0-d np array will check false for isscalar.
@@ -430,8 +429,8 @@ class ChiPhiFunc:
     def __rtruediv__(self, other):
         ''' other/self, only supports division by scalar or functions of phi. '''
         if self.is_special:
-            if self.nfp==1:
-                return(self)
+            # if self.nfp==-1:
+            #     return(self)
             if self.nfp==0:
                 return(ChiPhiFuncSpecial(-8))
             return(self)
@@ -1485,7 +1484,7 @@ def to_tensor_fft_op_multi_dim(
     len_tensor: int,
     nfp: int):
 
-    if ChiPhiFunc_in == 0:
+    if ChiPhiFunc_in.nfp == 0:
         return(0)
     # A stack of convolution matrices
     # shape is (len_chi+num_mode-1, num_mode, len_phi)

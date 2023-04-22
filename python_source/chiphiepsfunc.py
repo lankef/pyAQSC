@@ -57,7 +57,8 @@ class ChiPhiEpsFunc:
         ChiPhiFuncSpecial(-1) * ChiPhiFuncSpecial(0) = 0.
         '''
         if (index>len(self.chiphifunc_list)-1 or index<0):
-            return(ChiPhiFuncSpecial(-1))
+            # return(ChiPhiFuncSpecial(-1))
+            return(ChiPhiFuncSpecial(0))
         return(self.chiphifunc_list[index])
 
     def append(self, item):
@@ -101,7 +102,8 @@ class ChiPhiEpsFunc:
         n_diff = n-(len(self.chiphifunc_list)-1)
         if n_diff>0:
              return(ChiPhiEpsFunc(
-                 self.chiphifunc_list[:n+1]+[ChiPhiFuncSpecial(-1)]*n_diff,
+                 #self.chiphifunc_list[:n+1]+[ChiPhiFuncSpecial(-1)]*n_diff,
+                 self.chiphifunc_list[:n+1]+[ChiPhiFuncSpecial(0)]*n_diff,
                  self.nfp,
                  False
              ))
