@@ -596,7 +596,7 @@ class ChiPhiFunc:
         else:
             return(ChiPhiFuncSpecial())
 
-    @partial(jit, static_argnums=(1, 2,))
+    @partial(jit, static_argnums=(2,))
     def filter_reduced_length(self, arg):
         '''
         Low pass filter that reduces the length of a ChiPhiFunc.
