@@ -6,8 +6,6 @@ from math import floor, ceil
 from chiphifunc import *
 from functools import lru_cache
 
-n_jobs = 8
-
 # Sum: implemented as a function taking in a single-argument func and the lower/upper bounds
 # expr should be non-dynamic.
 # Non-jitted because an argument is a callable. A wrapper for a py_sum with no

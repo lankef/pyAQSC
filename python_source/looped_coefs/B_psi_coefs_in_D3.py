@@ -12,23 +12,23 @@ def eval_B_psi_coefs_D3(n_eval, X_coef_cp, Y_coef_cp,
     
     coef_B_psi_dphi_0_dchi_2_all_but_Y_D3 = ((iota_coef[0]*X_coef_cp[1]*Y_coef_cp[1]*diff(Y_coef_cp[1],True,1)-iota_coef[0]*Y_coef_cp[1]**2*diff(X_coef_cp[1],True,1))*dl_p*tau_p+(iota_coef[0]*X_coef_cp[1]*diff(X_coef_cp[1],False,1)+2*iota_coef[0]**2*X_coef_cp[1]*diff(X_coef_cp[1],True,1))*diff(Y_coef_cp[1],True,1)-iota_coef[0]*Y_coef_cp[1]*diff(X_coef_cp[1],True,1)*diff(X_coef_cp[1],False,1)-2*iota_coef[0]**2*Y_coef_cp[1]*(diff(X_coef_cp[1],True,1))**2)/(dl_p*kap_p*n_eval-dl_p*kap_p)
     
-    coef_B_psi_dphi_0_dchi_3_all_but_Y_D3 = 0
+    coef_B_psi_dphi_0_dchi_3_all_but_Y_D3 = ChiPhiFuncSpecial(0)
     
     coef_B_psi_dphi_1_dchi_0_all_but_Y_D3 = ((X_coef_cp[1]*Y_coef_cp[1]*diff(Y_coef_cp[1],True,2)-X_coef_cp[1]*(diff(Y_coef_cp[1],True,1))**2+Y_coef_cp[1]*diff(X_coef_cp[1],True,1)*diff(Y_coef_cp[1],True,1)-Y_coef_cp[1]**2*diff(X_coef_cp[1],True,2))*dl_p*kap_p*tau_p+(Y_coef_cp[1]*(diff(X_coef_cp[1],True,1))**2-X_coef_cp[1]*diff(X_coef_cp[1],True,1)*diff(Y_coef_cp[1],True,1))*diff(kap_p,False,1)+((-2*(diff(X_coef_cp[1],True,1))**2*diff(Y_coef_cp[1],False,1))+(X_coef_cp[1]*diff(X_coef_cp[1],False,1)+3*iota_coef[0]*X_coef_cp[1]*diff(X_coef_cp[1],True,1))*diff(Y_coef_cp[1],True,2)+2*X_coef_cp[1]*diff(X_coef_cp[1],True,1)*diff(Y_coef_cp[1],True,1,False,1)+2*diff(X_coef_cp[1],True,1)*diff(X_coef_cp[1],False,1)*diff(Y_coef_cp[1],True,1)-Y_coef_cp[1]*diff(X_coef_cp[1],True,2)*diff(X_coef_cp[1],False,1)-3*iota_coef[0]*Y_coef_cp[1]*diff(X_coef_cp[1],True,1)*diff(X_coef_cp[1],True,2)-2*Y_coef_cp[1]*diff(X_coef_cp[1],True,1)*diff(X_coef_cp[1],True,1,False,1))*kap_p)/(dl_p*kap_p**2*n_eval-dl_p*kap_p**2)
     
     coef_B_psi_dphi_1_dchi_1_all_but_Y_D3 = ((X_coef_cp[1]*Y_coef_cp[1]*diff(Y_coef_cp[1],True,1)-Y_coef_cp[1]**2*diff(X_coef_cp[1],True,1))*dl_p*tau_p+(X_coef_cp[1]*diff(X_coef_cp[1],False,1)+3*iota_coef[0]*X_coef_cp[1]*diff(X_coef_cp[1],True,1))*diff(Y_coef_cp[1],True,1)-Y_coef_cp[1]*diff(X_coef_cp[1],True,1)*diff(X_coef_cp[1],False,1)-3*iota_coef[0]*Y_coef_cp[1]*(diff(X_coef_cp[1],True,1))**2)/(dl_p*kap_p*n_eval-dl_p*kap_p)
     
-    coef_B_psi_dphi_1_dchi_2_all_but_Y_D3 = 0
+    coef_B_psi_dphi_1_dchi_2_all_but_Y_D3 = ChiPhiFuncSpecial(0)
     
-    coef_B_psi_dphi_1_dchi_3_all_but_Y_D3 = 0
+    coef_B_psi_dphi_1_dchi_3_all_but_Y_D3 = ChiPhiFuncSpecial(0)
     
     coef_B_psi_dphi_2_dchi_0_all_but_Y_D3 = (X_coef_cp[1]*diff(X_coef_cp[1],True,1)*diff(Y_coef_cp[1],True,1)-Y_coef_cp[1]*(diff(X_coef_cp[1],True,1))**2)/(dl_p*kap_p*n_eval-dl_p*kap_p)
     
-    coef_B_psi_dphi_2_dchi_1_all_but_Y_D3 = 0
+    coef_B_psi_dphi_2_dchi_1_all_but_Y_D3 = ChiPhiFuncSpecial(0)
     
-    coef_B_psi_dphi_2_dchi_2_all_but_Y_D3 = 0
+    coef_B_psi_dphi_2_dchi_2_all_but_Y_D3 = ChiPhiFuncSpecial(0)
     
-    coef_B_psi_dphi_2_dchi_3_all_but_Y_D3 = 0
+    coef_B_psi_dphi_2_dchi_3_all_but_Y_D3 = ChiPhiFuncSpecial(0)
     return(
         to_tensor_fft_op_multi_dim(coef_B_psi_dphi_0_dchi_0_all_but_Y_D3,
             dphi=0, dchi=0,

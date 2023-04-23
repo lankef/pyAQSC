@@ -45,7 +45,7 @@ readable_string(expr):=block(
     return(string(expr))
 )$
 
-change_to_parallel(string_in):=ssubst("py_sum_parallel","py_sum",out_string)$
+change_to_parallel(string_in):=ssubst("py_sum","py_sum",out_string)$
 /* Indent every lines in string. For printf*/
 indent(string_in):= sconcat("    ", ssubst("~%    ","~%",string_in))$
 
@@ -177,7 +177,7 @@ block([
     expr_string_list: split(expr_string, "py_sum_marked["),
     expr_string: first(expr_string_list),
     for i: 2 thru length(expr_string_list) do(
-        expr_string: sconcat(expr_string, "py_sum_parallel", substring(expr_string_list[i], 1+sposition("]", expr_string_list [i])))
+        expr_string: sconcat(expr_string, "py_sum", substring(expr_string_list[i], 1+sposition("]", expr_string_list [i])))
     ),
 
     return(sconcat(out_string,expr_string))
@@ -189,8 +189,13 @@ edit_string_py(in_string):= block(
     out_string: ssubst("**","^",out_string),
     out_string: ssubst("diff","'diff",out_string),
     out_string: ssubst("ceil","ceiling",out_string),
-    out_string: ssubst(",\'chi\',",",chi,",out_string),
-    out_string: ssubst(",\'phi\',",",phi,",out_string)
+    /*
+    This is something special about this code. Because JAX does not take
+    string arguments, we can only differentiate chi and phi derivatives
+    with a boolean.
+    */
+    out_string: ssubst(",True,",",chi,",out_string),
+    out_string: ssubst(",False,",",phi,",out_string)
 );
 
 /* Adds imports, for near axis expansion. */

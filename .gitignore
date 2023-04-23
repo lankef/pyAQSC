@@ -1,17 +1,1 @@
-# ----- Operating Systems
-# OS X
-# https://github.com/github/gitignore/blob/master/Global/OSX.gitignore
-.DS_Store
-.AppleDouble
-.LSOverride
-# Windows
-# https://github.com/github/gitignore/blob/master/Global/Windows.gitignore
-# Windows image file caches
-Thumbs.db
-ehthumbs.db
-
-# ----- Python
-__pycache__/
-
-# ----- Project
-depreciated/
+python_source/unsupported_by_jax.py
