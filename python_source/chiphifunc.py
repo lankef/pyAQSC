@@ -8,8 +8,6 @@ from matplotlib import pyplot as plt
 # with joblib.
 import scipy.integrate
 import scipy.interpolate
-from joblib import Parallel, delayed
-from functools import lru_cache # import functools for caching
 
 # Configurations
 import config
