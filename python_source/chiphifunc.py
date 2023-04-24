@@ -1,5 +1,5 @@
 import jax.numpy as jnp
-from jax import jit, vmap, tree_util
+from jax import jit, pmap, tree_util
 from functools import partial # for JAX jit with static params
 
 import math # factorial in dphi_direct
@@ -107,7 +107,7 @@ def ChiPhiFuncSpecial(error_code:int):
     return(ChiPhiFunc(jnp.nan, error_code, is_special=True))
 
 # A jitted vectorized convolution function
-batch_convolve = jit(vmap(jnp.convolve, in_axes=1, out_axes=1))
+batch_convolve = jit(pmap(jnp.convolve, in_axes=1, out_axes=1))
 
 @jit
 def phi_avg(in_quant):
@@ -176,6 +176,7 @@ class ChiPhiFunc:
     -14: Inconsistent type in ChiPhiEpsFunc
     -15: Insufficient argument in Equilibrium
     -16: Filter mode not recognized
+    -17: Incorrect looped equation even/odd-ness
 
     When multiple error types are present, the error will be recorded as:
     100*error_a+10*error_b+error_c
@@ -596,7 +597,7 @@ class ChiPhiFunc:
         else:
             return(ChiPhiFuncSpecial())
 
-    @partial(jit, static_argnums=(2,))
+    @partial(jit, static_argnums=(1,))
     def filter_reduced_length(self, arg):
         '''
         Low pass filter that reduces the length of a ChiPhiFunc.
@@ -917,7 +918,7 @@ tree_util.register_pytree_node(ChiPhiFunc,
 
 ''' I.2 Utilities '''
 roll_axis_01 = lambda a, shift: jnp.roll(jnp.roll(a, shift, axis=0), shift, axis=1)
-batch_roll_axis_01 = jit(vmap(roll_axis_01, in_axes=0, out_axes=0))
+batch_roll_axis_01 = jit(pmap(roll_axis_01, in_axes=0, out_axes=0))
 
 # @lru_cache(maxsize=10)
 @partial(jit, static_argnums=(0,))
@@ -1096,7 +1097,7 @@ def batch_matrix_inv_excluding_col(in_matrices:jnp.ndarray):
 ''' III.3 Convolution operator generator and ChiPhiFunc.content wrapper '''
 # A jitted vectorized version of jnp.roll
 roll_axis_0 = lambda a, shift: jnp.roll(a, shift, axis=0)
-batch_roll_axis_0 = jit(vmap(roll_axis_0, in_axes=1, out_axes=1))
+batch_roll_axis_0 = jit(pmap(roll_axis_0, in_axes=1, out_axes=1))
 # @partial(jit, static_argnums=(1,))
 def conv_tensor(content: jnp.ndarray, n_dim:int):
     '''
@@ -1126,7 +1127,7 @@ def conv_tensor(content: jnp.ndarray, n_dim:int):
     return(batch_roll_axis_0(content_padded, shift[None, :]))
 
 roll_fft_last_axis = lambda a, shift: jnp.roll(a, shift, axis=-1)
-batch_roll_fft_last_axis = jit(vmap(roll_fft_last_axis, in_axes=(-2,0), out_axes=2))
+batch_roll_fft_last_axis = jit(pmap(roll_fft_last_axis, in_axes=(-2,0), out_axes=2))
 @jit
 def fft_conv_tensor_batch(source):
     '''
@@ -1240,7 +1241,7 @@ def solve_1d_fft(p_eff, f_eff, fft_max_freq: int=None): # not nfp-dependent
 
     return(sln)
 
-solve_1d_fft_batch = vmap(solve_1d_fft, in_axes=(0, 0, None), out_axes=0)
+solve_1d_fft_batch = pmap(solve_1d_fft, in_axes=(0, 0, None), out_axes=0)
 @partial(jit, static_argnums=(3,))
 def solve_integration_factor(coeff_arr, coeff_dp_arr, f_arr, fft_max_freq: int=None): # not nfp-dependent
     '''

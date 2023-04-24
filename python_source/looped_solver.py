@@ -1,7 +1,7 @@
 # Solves the looped equations.
 import jax.numpy as jnp
 from functools import partial
-from jax import jit, vmap, tree_util
+from jax import jit, tree_util
 
 # ChiPhiFunc and ChiPhiEpsFunc
 from chiphifunc import *
@@ -11,8 +11,6 @@ from math_utilities import *
 # parsed relations
 import MHD_parsed
 import looped_coefs
-
-import time
 
 # TODO: make delta and B_theta coefficients constants carried by the equilibrium.
 
@@ -1198,11 +1196,11 @@ def generate_tensor_operator(
     filtered_looped_fft_operator = jnp.transpose(full_tensor_fft_op, (0,2,1,3))
 
     # Filter off-diagonal elements in the linear differential operator.
-    filter_operator(filtered_looped_fft_operator, max_k_diff_pre_inv)
+    filtered_looped_fft_operator = filter_operator(filtered_looped_fft_operator, max_k_diff_pre_inv)
     # Finding the inverse differential operator
     filtered_inv_looped_fft_operator = jnp.linalg.tensorinv(filtered_looped_fft_operator)
     # Filter off-diagonal elements in the inverted linear differential operator.
-    filter_operator(filtered_inv_looped_fft_operator, max_k_diff_post_inv)
+    filtered_inv_looped_fft_operator = filter_operator(filtered_inv_looped_fft_operator, max_k_diff_post_inv)
     # (n_unknown(+1), len_tensor, n_unknown(+1), len_tensor)
     out_dict_tensor['filtered_looped_fft_operator']= filtered_looped_fft_operator
     out_dict_tensor['filtered_inv_looped_fft_operator']= filtered_inv_looped_fft_operator
@@ -1303,10 +1301,7 @@ def iterate_looped(
 ):
     # if target_len_phi<max_freq*2:
     #     raise ValueError('target_len_phi must >= max_freq*2.')
-    print('iterate_looped: start')
-    start_time = time.time()
     # First calculate RHS
-    print('iterate_looped: jitting RHS')
     out_dict_RHS = generate_RHS(
         n_unknown = n_unknown,
         max_freq = max_freq,
@@ -1326,11 +1321,8 @@ def iterate_looped(
     )
     O_einv = out_dict_RHS['O_einv']
     vector_free_coef = out_dict_RHS['vector_free_coef']
-    print("Done, time elapsed(s):",(time.time() - start_time))
-    start_time = time.time()
     # Then calculate the inverted differential operators
     filtered_RHS_0_offset = out_dict_RHS['filtered_RHS_0_offset']
-    print('iterate_looped: jitting LHS differential operator')
     out_dict_tensor = generate_tensor_operator(
         n_unknown = n_unknown,
         nfp = nfp,
@@ -1354,13 +1346,10 @@ def iterate_looped(
         max_k_diff_post_inv = max_k_diff_post_inv,
     )
     filtered_inv_looped_fft_operator = out_dict_tensor['filtered_inv_looped_fft_operator']
-    print("Done, time elapsed(s):",(time.time() - start_time))
-    start_time = time.time()
     # Even order
     if n_unknown%2==0:
         # Solve for Delta n0.
         coef_Delta_offset = lambda_coef_delta(n_unknown+1, B_alpha_coef, B_denom_coef_c)
-        print('iterate_looped: jitting periodic BC solve')
         solve_result = solve(
             n_unknown=n_unknown,
             nfp=nfp,
@@ -1384,9 +1373,6 @@ def iterate_looped(
             axis=1
         ), axis=1), nfp)
         vec_free = solution[-2]
-        print("Done, time elapsed(s):",(time.time() - start_time))
-        start_time = time.time()
-        print('iterate_looped: substituting into unknowns: B_psi dependence')
         Yn = ChiPhiFunc(
             (
                 jnp.einsum('ijk,jk->ik',O_einv,out_dict_RHS['Yn_rhs_content_no_unknown'])
@@ -1510,9 +1496,6 @@ def iterate_looped(
 
         Yn_B_theta_terms = 0
         if n_unknown>2:
-            print("Done, time elapsed(s):",(time.time() - start_time))
-            start_time = time.time()
-            print('iterate_looped: substituting into unknowns: B_theta dependence')
             B_theta_n_no_center_content = jnp.zeros((n_unknown-1, target_len_phi), jnp.complex128)
             B_theta_n_no_center_content[:n_unknown//2-1] = solution[:n_unknown//2-1]
             B_theta_n_no_center_content[n_unknown//2:] = solution[n_unknown//2-1:-2]
@@ -1681,9 +1664,6 @@ def iterate_looped(
                 tau_p=tau_p,
                 n_eval=n_unknown+1)*B_denom_coef_c[0]*B_theta_in_B_psi.dphi()
             )
-        print("Done, time elapsed(s):",(time.time() - start_time))
-        start_time = time.time()
-        print('iterate_looped: Done')
         return({
             'B_theta_n': B_theta_n,
             'B_psi_nm2': B_psi_nm2,#!!_BTHETA!!!!!,
@@ -1702,7 +1682,6 @@ def iterate_looped(
             'dphi_B_psi_nm2_0': dphi_B_psi_nm2_0
         })
     else:
-        print('iterate_looped: jitting periodic BC solve')
         solve_result = solve(
             n_unknown=n_unknown,
             nfp=nfp,
@@ -1711,9 +1690,6 @@ def iterate_looped(
             filtered_RHS_0_offset=filtered_RHS_0_offset,
         )
         solution = solve_result['solution']
-        print("Done, time elapsed(s):",(time.time() - start_time))
-        start_time = time.time()
-        print('iterate_looped: substituting into unknowns: B_theta dependence')
         B_theta_n = ChiPhiFunc(solution[:-2], nfp)
         B_theta_in_B_psi = n_unknown/2*B_theta_n.antid_chi()
         B_theta_in_B_psi_fft_short=fft_filter(B_theta_in_B_psi.fft().content, max_freq*2, axis=1)
@@ -1893,9 +1869,6 @@ def iterate_looped(
                 tau_p=tau_p,
                 n_eval=n_unknown+1)*B_denom_coef_c[0]*B_theta_in_B_psi.dphi()
         )
-        print("Done, time elapsed(s):",(time.time() - start_time))
-        start_time = time.time()
-        print('iterate_looped: Done')
         return({
             'B_theta_n': B_theta_n.filter(max_freq),
             'B_theta_np10': ChiPhiFunc(jnp.array([solution[-1]]), nfp),
@@ -1914,7 +1887,6 @@ def iterate_looped(
             'out_dict_tensor':out_dict_tensor,
         })
 
-
 ''' V. Utilities '''
 # The diff in the mode numbers coupled by two elements.
 # For filtering off-diagonal components of the matrix.
@@ -1931,12 +1903,11 @@ def mode_difference_matrix(len_phi):
 def filter_operator(operator, max_k_diff):
     len_phi = operator.shape[1]
     if max_k_diff >= len_phi:
-        print('off-diagonal filtering skipped')
-        return()
+        return(operator)
     operator = jnp.transpose(operator, (0,2,1,3))
     mode_diff_mat = mode_difference_matrix(len_phi)
     operator[:,:,mode_diff_mat>max_k_diff] = 0
-    operator = jnp.transpose(operator, (0,2,1,3))
+    return(jnp.transpose(operator, (0,2,1,3)))
 
 # Cyclic import
 import equilibrium
