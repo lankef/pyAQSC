@@ -36,17 +36,18 @@ class ChiPhiEpsFunc:
         '''
         for i in range(len(self.chiphifunc_list)):
             item = self.chiphifunc_list[i]
-            if jnp.isscalar(item):
-                if item==0:
-                    self.chiphifunc_list[i] = ChiPhiFuncSpecial(0)
-                    continue
-                continue
-            if isinstance(item, ChiPhiFunc) and (item.nfp==self.nfp or item.nfp<0):
+            # Do not modify a CHiPhiFUnc if it has consistent nfp or is an error
+            if isinstance(item, ChiPhiFunc) and (item.nfp==self.nfp or item.nfp<=0):
                 if jnp.all(item.content==0):
                     self.chiphifunc_list[i] = ChiPhiFuncSpecial(0)
                     continue
                 continue
-            if item.ndim==0:
+            # Do not modify scalars
+            if jnp.isscalar(item) or item.ndim==0:
+                # Force known zeros to be special zeros.
+                if item==0:
+                    self.chiphifunc_list[i] = ChiPhiFuncSpecial(0)
+                    continue
                 continue
             self.chiphifunc_list[i] = ChiPhiFuncSpecial(-14)
 
@@ -68,9 +69,12 @@ class ChiPhiEpsFunc:
         Returns a new ChiPhiEpsFunc with a new item appended to the end.
         '''
         if isinstance(item, ChiPhiFunc):
+            # Mismatched nfp. If item is special then we still append it directly
+            # to preserve the error message
             if item.nfp!=self.nfp and not item.is_special:
                 return(ChiPhiEpsFunc(self.chiphifunc_list+[ChiPhiFuncSpecial(-14)], self.nfp))
         elif not jnp.isscalar(item):
+            # Jax scalars are 0-d DeviceArrays.
             if item.ndim!=0:
                 return(ChiPhiEpsFunc(self.chiphifunc_list+[ChiPhiFuncSpecial(-14)], self.nfp))
         return(ChiPhiEpsFunc(self.chiphifunc_list+[item], self.nfp))
