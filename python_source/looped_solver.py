@@ -67,7 +67,6 @@ def generate_RHS(
         tau_p=tau_p,
         iota_coef=iota_coef
     ).antid_chi().filter(max_freq)
-    print('looped B_psi_nm2_no_unknown',B_psi_nm2_no_unknown)
 
     B_psi_coef_cp_no_unknown = B_psi_coef_cp.mask(n_unknown-3)
     B_psi_coef_cp_no_unknown = B_psi_coef_cp_no_unknown.append(B_psi_nm2_no_unknown)
@@ -168,9 +167,6 @@ def generate_RHS(
             iota_coef=iota_coef).filter(max_freq)
         p_perp_coef_cp_no_unknown = p_perp_coef_cp.mask(n_unknown-1)
         p_perp_coef_cp_no_unknown = p_perp_coef_cp_no_unknown.append(pn_no_B_theta)
-        print('looped Zn_no_B_theta',Zn_no_B_theta)
-        print('looped pn_no_B_theta',pn_no_B_theta)
-        print('looped Xn_no_B_theta',Xn_no_B_theta)
         Deltan_with_iota_no_B_theta = equilibrium.iterate_delta_n_0_offset(n_eval=n_unknown,
             B_denom_coef_c=B_denom_coef_c,
             p_perp_coef_cp=p_perp_coef_cp_no_unknown,
@@ -626,7 +622,7 @@ def generate_tensor_operator(
         # B_theta always have n_unknown-1 components.
         dchi_temp_B_theta = (1j*jnp.arange(-n_unknown+2,n_unknown-1,2)[None, :, None, None])
         if n_unknown%2==0:
-            dchi_temp_B_theta[:,(n_unknown-1)//2,:,:]=jnp.inf
+            dchi_temp_B_theta = dchi_temp_B_theta.at[:,(n_unknown-1)//2,:,:].set(jnp.inf)
 
         # overall B_psi coefficients carried by Y.
         # should be of shape (n_unknown, n_unknown-1, len_phi, len_phi)
@@ -1304,27 +1300,6 @@ def iterate_looped(
     max_k_diff_pre_inv=None,
     max_k_diff_post_inv=None
 ):
-    print('Whats the difference? -----')
-
-    print('n_unknown',n_unknown)
-    print('nfp',nfp)
-    print('target_len_phi',target_len_phi)
-    print('X_coef_cp',X_coef_cp)
-    print('Y_coef_cp',Y_coef_cp)
-    print('Z_coef_cp',Z_coef_cp)
-    print('p_perp_coef_cp',p_perp_coef_cp)
-    print('Delta_coef_cp',Delta_coef_cp)
-    print('B_psi_coef_cp',B_psi_coef_cp)
-    print('B_theta_coef_cp',B_theta_coef_cp)
-    print('B_alpha_coef',B_alpha_coef)
-    print('B_denom_coef_c',B_denom_coef_c)
-    print('kap_p',kap_p)
-    print('tau_p',tau_p)
-    print('dl_p',dl_p)
-    print('iota_coef',iota_coef)
-    print('max_freq',max_freq)
-    print('max_k_diff_pre_inv',max_k_diff_pre_inv)
-    print('max_k_diff_post_inv',max_k_diff_post_inv)
     # if target_len_phi<max_freq*2:
     #     raise ValueError('target_len_phi must >= max_freq*2.')
     # First calculate RHS
@@ -1523,8 +1498,8 @@ def iterate_looped(
         Yn_B_theta_terms = 0
         if n_unknown>2:
             B_theta_n_no_center_content = jnp.zeros((n_unknown-1, target_len_phi), jnp.complex128)
-            B_theta_n_no_center_content[:n_unknown//2-1] = solution[:n_unknown//2-1]
-            B_theta_n_no_center_content[n_unknown//2:] = solution[n_unknown//2-1:-2]
+            B_theta_n_no_center_content = B_theta_n_no_center_content.at[:n_unknown//2-1].set(solution[:n_unknown//2-1])
+            B_theta_n_no_center_content = B_theta_n_no_center_content.at[n_unknown//2:].set(solution[n_unknown//2-1:-2])
             B_theta_n = ChiPhiFunc(B_theta_n_no_center_content, nfp) + B_theta_coef_cp[n_unknown][0]
 
             B_theta_in_B_psi = n_unknown/2*B_theta_n.antid_chi()
@@ -1931,7 +1906,7 @@ def filter_operator(operator, max_k_diff):
         return(operator)
     operator = jnp.transpose(operator, (0,2,1,3))
     mode_diff_mat = mode_difference_matrix(len_phi)
-    operator[:,:,mode_diff_mat>max_k_diff] = 0
+    operator = operator.at[:,:,mode_diff_mat>max_k_diff].set(0)
     return(jnp.transpose(operator, (0,2,1,3)))
 
 # Cyclic import

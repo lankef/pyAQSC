@@ -975,11 +975,11 @@ def iterate_2(equilibrium,
     # This only reassigns the pointer B_psi. Need to re-assign equilibrium.unknown[]
     # too.
     B_psi_coef_cp = B_psi_coef_cp.mask(n_eval-3)
-    B_psi_coef_cp = B_psi_coef_cp.append(solution_n['B_psi_nm2']).filter(max_freq[1])
+    B_psi_coef_cp = B_psi_coef_cp.append(solution_n['B_psi_nm2'].filter(max_freq[1]))
     # This only reassigns the pointer B_theta. Need to re-assign equilibrium.unknown[]
     # too.
     B_theta_coef_cp = B_theta_coef_cp.mask(n_eval-1)
-    B_theta_coef_cp = B_theta_coef_cp.append(solution_n['B_theta_n']).filter(max_freq[1])
+    B_theta_coef_cp = B_theta_coef_cp.append(solution_n['B_theta_n'].filter(max_freq[1]))
 
     X_coef_cp = X_coef_cp.append(solution_n['Xn']) # .filter(max_freq[1])
     Z_coef_cp = Z_coef_cp.append(solution_n['Zn']) # .filter(max_freq[1])
