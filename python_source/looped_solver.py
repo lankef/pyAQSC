@@ -2,6 +2,7 @@
 import jax.numpy as jnp
 from functools import partial
 from jax import jit, tree_util
+import jax
 
 # ChiPhiFunc and ChiPhiEpsFunc
 from chiphifunc import *
@@ -66,6 +67,7 @@ def generate_RHS(
         tau_p=tau_p,
         iota_coef=iota_coef
     ).antid_chi().filter(max_freq)
+    print('looped B_psi_nm2_no_unknown',B_psi_nm2_no_unknown)
 
     B_psi_coef_cp_no_unknown = B_psi_coef_cp.mask(n_unknown-3)
     B_psi_coef_cp_no_unknown = B_psi_coef_cp_no_unknown.append(B_psi_nm2_no_unknown)
@@ -166,9 +168,9 @@ def generate_RHS(
             iota_coef=iota_coef).filter(max_freq)
         p_perp_coef_cp_no_unknown = p_perp_coef_cp.mask(n_unknown-1)
         p_perp_coef_cp_no_unknown = p_perp_coef_cp_no_unknown.append(pn_no_B_theta)
-        Zn_no_B_theta.display_content()
-        pn_no_B_theta.display_content()
-        Xn_no_B_theta.display_content()
+        print('looped Zn_no_B_theta',Zn_no_B_theta)
+        print('looped pn_no_B_theta',pn_no_B_theta)
+        print('looped Xn_no_B_theta',Xn_no_B_theta)
         Deltan_with_iota_no_B_theta = equilibrium.iterate_delta_n_0_offset(n_eval=n_unknown,
             B_denom_coef_c=B_denom_coef_c,
             p_perp_coef_cp=p_perp_coef_cp_no_unknown,
@@ -301,7 +303,7 @@ def generate_RHS(
 # by jnp.tensordot(full_tensor_fft_op_reordered, fft_of_LHS, 2).
 # len_tensor: the number of phi modes kept in the tensor.
 # For avoiding singular tensor.
-# @partial(jit, static_argnums=(0,1,17,18,19))
+@partial(jit, static_argnums=(0,1,17,18,19))
 def generate_tensor_operator(
     n_unknown,
     nfp,
@@ -1302,6 +1304,27 @@ def iterate_looped(
     max_k_diff_pre_inv=None,
     max_k_diff_post_inv=None
 ):
+    print('Whats the difference? -----')
+
+    print('n_unknown',n_unknown)
+    print('nfp',nfp)
+    print('target_len_phi',target_len_phi)
+    print('X_coef_cp',X_coef_cp)
+    print('Y_coef_cp',Y_coef_cp)
+    print('Z_coef_cp',Z_coef_cp)
+    print('p_perp_coef_cp',p_perp_coef_cp)
+    print('Delta_coef_cp',Delta_coef_cp)
+    print('B_psi_coef_cp',B_psi_coef_cp)
+    print('B_theta_coef_cp',B_theta_coef_cp)
+    print('B_alpha_coef',B_alpha_coef)
+    print('B_denom_coef_c',B_denom_coef_c)
+    print('kap_p',kap_p)
+    print('tau_p',tau_p)
+    print('dl_p',dl_p)
+    print('iota_coef',iota_coef)
+    print('max_freq',max_freq)
+    print('max_k_diff_pre_inv',max_k_diff_pre_inv)
+    print('max_k_diff_post_inv',max_k_diff_post_inv)
     # if target_len_phi<max_freq*2:
     #     raise ValueError('target_len_phi must >= max_freq*2.')
     # First calculate RHS

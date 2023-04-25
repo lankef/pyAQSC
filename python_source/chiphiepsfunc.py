@@ -46,6 +46,8 @@ class ChiPhiEpsFunc:
                     self.chiphifunc_list[i] = ChiPhiFuncSpecial(0)
                     continue
                 continue
+            if item.ndim==0:
+                continue
             self.chiphifunc_list[i] = ChiPhiFuncSpecial(-14)
 
 
@@ -65,20 +67,13 @@ class ChiPhiEpsFunc:
         '''
         Returns a new ChiPhiEpsFunc with a new item appended to the end.
         '''
-        if jnp.isscalar(item)\
-            or (
-                isinstance(item, ChiPhiFunc)
-                and (
-                    item.nfp==self.nfp or item.nfp<=0
-                )
-            ):
-            return(
-                ChiPhiEpsFunc(self.chiphifunc_list+[item], self.nfp)
-            )
-        else:
-            return(
-                ChiPhiEpsFunc(self.chiphifunc_list+[ChiPhiFuncSpecial(-14)], self.nfp)
-            )
+        if isinstance(item, ChiPhiFunc):
+            if item.nfp!=self.nfp and not item.is_special:
+                return(ChiPhiEpsFunc(self.chiphifunc_list+[ChiPhiFuncSpecial(-14)], self.nfp))
+        elif not jnp.isscalar(item):
+            if item.ndim!=0:
+                return(ChiPhiEpsFunc(self.chiphifunc_list+[ChiPhiFuncSpecial(-14)], self.nfp))
+        return(ChiPhiEpsFunc(self.chiphifunc_list+[item], self.nfp))
 
     @partial(jit, static_argnums=(1,))
     def zero_append(self, n=1):
@@ -97,7 +92,12 @@ class ChiPhiEpsFunc:
     def mask(self, n):
         '''
         Produces a sub-list up to the nth element (order).
-        When n exceeds the maximum order known, fill with ChiPhiFuncSpecial(-14).
+        When n exceeds the maximum order known, fill with ChiPhiFuncSpecial(0)
+        for tracing incorrect logic or formulae.
+        Originally the fill is with special ChiPhiFunc, but since JAX cannot
+        read traced quantities' content, out-of-bound terms cannot cancel out.
+        (n-n)*(out of bound) = out of bound. Since all parsed formulae are checked
+        correct, in the JAX implementation we make out-of-bound terms 0 instead.
         '''
         n_diff = n-(len(self.chiphifunc_list)-1)
         if n_diff>0:
