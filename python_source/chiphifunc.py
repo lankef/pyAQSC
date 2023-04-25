@@ -96,10 +96,10 @@ def max_log10(input):
     return(jnp.log10(jnp.max(jnp.abs(input)))) # not nfp-sensitive
 
 # Input is not order-dependent, and permitted to be static.
-@partial(jit, static_argnums=(0,))
 def jit_fftfreq_int(int_in:int):
     ''' Shorthand for jnp.fft.fftfreq(n)*n rounded to the nearest int. '''
-    return(jnp.rint(jnp.fft.fftfreq(int_in)*int_in).astype(jnp.int32))
+    out = jnp.arange(int_in)
+    return(jnp.where(out>int_in//2,out-int_in,out))
 
 # Input is not order-dependent, and permitted to be static.
 @partial(jit, static_argnums=(0,))
@@ -820,7 +820,10 @@ class ChiPhiFunc:
             else:
                 ax1.plot(phis, jnp.real(content).T)
                 ax2.plot(phis, jnp.imag(content).T)
+        # if fname is None:
         plt.show()
+        # else:
+        #     plt.savefig(fname)
 
     def display(self, complex = False, size=(100,100), avg_clim = False):
         '''
@@ -917,9 +920,9 @@ tree_util.register_pytree_node(ChiPhiFunc,
                                ChiPhiFunc._tree_unflatten)
 
 ''' I.2 Utilities '''
+# Used only in pseudosspectral method.
 roll_axis_01 = lambda a, shift: jnp.roll(jnp.roll(a, shift, axis=0), shift, axis=1)
 batch_roll_axis_01 = jit(vmap(roll_axis_01, in_axes=0, out_axes=0))
-
 # @lru_cache(maxsize=10)
 @partial(jit, static_argnums=(0,))
 def dphi_op_pseudospectral(n:int):

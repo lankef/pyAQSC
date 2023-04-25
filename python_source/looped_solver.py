@@ -166,6 +166,9 @@ def generate_RHS(
             iota_coef=iota_coef).filter(max_freq)
         p_perp_coef_cp_no_unknown = p_perp_coef_cp.mask(n_unknown-1)
         p_perp_coef_cp_no_unknown = p_perp_coef_cp_no_unknown.append(pn_no_B_theta)
+        Zn_no_B_theta.display_content()
+        pn_no_B_theta.display_content()
+        Xn_no_B_theta.display_content()
         Deltan_with_iota_no_B_theta = equilibrium.iterate_delta_n_0_offset(n_eval=n_unknown,
             B_denom_coef_c=B_denom_coef_c,
             p_perp_coef_cp=p_perp_coef_cp_no_unknown,
@@ -175,7 +178,6 @@ def generate_RHS(
             no_iota_masking = True).filter(max_freq)
         Delta_coef_cp_no_unknown_0_offset = Delta_coef_cp.mask(n_eval-2)
         Delta_coef_cp_no_unknown_0_offset = Delta_coef_cp_no_unknown_0_offset.append(Deltan_with_iota_no_B_theta)
-
         out_dict_RHS['Zn_no_B_theta'] = Zn_no_B_theta
         out_dict_RHS['pn_no_B_theta'] = pn_no_B_theta
         out_dict_RHS['Xn_no_B_theta'] = Xn_no_B_theta
@@ -1202,7 +1204,7 @@ def generate_tensor_operator(
     # Filter off-diagonal elements in the inverted linear differential operator.
     filtered_inv_looped_fft_operator = filter_operator(filtered_inv_looped_fft_operator, max_k_diff_post_inv)
     # (n_unknown(+1), len_tensor, n_unknown(+1), len_tensor)
-    out_dict_tensor['filtered_looped_fft_operator']= filtered_looped_fft_operator
+    # out_dict_tensor['filtered_looped_fft_operator']= filtered_looped_fft_operator
     out_dict_tensor['filtered_inv_looped_fft_operator']= filtered_inv_looped_fft_operator
     return(out_dict_tensor)
 
@@ -1212,7 +1214,8 @@ def generate_tensor_operator(
 # target_len_phi: target phi length of the solution
 # coef_iota_nm1b2_in_Delta: Coefficient of iota (n-1)/2 in Delta. Is a constant
 # in the Equilibrium object. Needed for odd orders.
-def solve(n_unknown, nfp, target_len_phi,
+# @partial(jit, static_argnums=(0, 1, 2, ))
+def solve_free_param(n_unknown, nfp, target_len_phi,
     filtered_inv_looped_fft_operator, filtered_RHS_0_offset,
     coef_Delta_offset = 0
     ):
@@ -1283,7 +1286,7 @@ def solve(n_unknown, nfp, target_len_phi,
 # Delta_offset (even order only)
 # B_psi_nm2 (even order only)
 # vec_free
-@partial(jit, static_argnums=(0, 1, 2, 16, 17, 18))
+# @partial(jit, static_argnums=(0, 1, 2, 16, 17, 18))
 def iterate_looped(
     n_unknown,
     nfp,
@@ -1350,7 +1353,7 @@ def iterate_looped(
     if n_unknown%2==0:
         # Solve for Delta n0.
         coef_Delta_offset = lambda_coef_delta(n_unknown+1, B_alpha_coef, B_denom_coef_c)
-        solve_result = solve(
+        solve_result = solve_free_param(
             n_unknown=n_unknown,
             nfp=nfp,
             target_len_phi=target_len_phi,
@@ -1673,16 +1676,16 @@ def iterate_looped(
             'pn':pn.filter(max_freq),
             'Deltan':Deltan.filter(max_freq),
             'Delta_offset': solve_result['Delta_offset'],
-            'solution': solution,
-            'out_dict_RHS':out_dict_RHS,
-            'out_dict_tensor':out_dict_tensor,
-            'Yn0': vec_free,
-            'Yn_B_theta_terms': Yn_B_theta_terms,
-            'Yn_B_psi_0_terms': coef_B_psi_dphi_1_in_Y_var*dphi_B_psi_nm2_0,
-            'dphi_B_psi_nm2_0': dphi_B_psi_nm2_0
+            # 'solution': solution,
+            # 'out_dict_RHS':out_dict_RHS,
+            # 'out_dict_tensor':out_dict_tensor,
+            # 'Yn0': vec_free,
+            # 'Yn_B_theta_terms': Yn_B_theta_terms,
+            # 'Yn_B_psi_0_terms': coef_B_psi_dphi_1_in_Y_var*dphi_B_psi_nm2_0,
+            # 'dphi_B_psi_nm2_0': dphi_B_psi_nm2_0
         })
     else:
-        solve_result = solve(
+        solve_result = solve_free_param(
             n_unknown=n_unknown,
             nfp=nfp,
             target_len_phi=target_len_phi,
@@ -1879,12 +1882,11 @@ def iterate_looped(
             'Zn': Zn.filter(max_freq),
             'pn': pn.filter(max_freq),
             'Deltan': Deltan.filter(max_freq),
-            'Yn': Yn.filter(max_freq),
-            'Yn_B_theta_terms': Yn_B_theta_terms,
-            'Yn1p': vec_free,
-            'solution': solution,
-            'out_dict_RHS':out_dict_RHS,
-            'out_dict_tensor':out_dict_tensor,
+            # 'Yn_B_theta_terms': Yn_B_theta_terms,
+            # 'Yn1p': vec_free,
+            # 'solution': solution,
+            # 'out_dict_RHS':out_dict_RHS,
+            # 'out_dict_tensor':out_dict_tensor,
         })
 
 ''' V. Utilities '''
