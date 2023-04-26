@@ -12,6 +12,9 @@
 from math import floor, ceil
 from math_utilities import *
 import chiphifunc
+from jax import jit
+from functools import partial
+@partial(jit, static_argnums=(0,))
 def eval_Xn_cp(n,
     X_coef_cp,
     Y_coef_cp,

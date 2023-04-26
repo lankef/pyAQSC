@@ -206,12 +206,24 @@ package(string, name, arguments):=sconcat(
     "from math import floor, ceil~%",
     "from math_utilities import *~%",
     "import chiphifunc~%",
+    "from jax import jit~%",
+    "from functools import partial~%",
     pack_method(string, name, arguments)
 );
 
 
 /* Package a series of parsed commands into a method */
 pack_method(string, name, arguments):=(
+    sconcat(
+        "@partial(jit, static_argnums=(0,))~%",
+        "def ",name,"(",arguments,"):",
+        indent(string), "~%",
+        "    return(out)~%"
+    )
+);
+
+/* Package a series of parsed commands into a method */
+pack_method_no_n(string, name, arguments):=(
     sconcat(
         "def ",name,"(",arguments,"):",
         indent(string), "~%",

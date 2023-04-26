@@ -9,6 +9,9 @@
 from math import floor, ceil
 from math_utilities import *
 import chiphifunc
+from jax import jit
+from functools import partial
+@partial(jit, static_argnums=(0,))
 def eval_p_perp_n_cp(n,
     B_theta_coef_cp,
     B_psi_coef_cp,
