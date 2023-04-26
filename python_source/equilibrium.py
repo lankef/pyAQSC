@@ -315,12 +315,6 @@ def iterate_delta_n_0_offset(n_eval,
             p_perp_coef_cp,
             Delta_coef_cp.mask(n_eval-1).zero_append(),
             iota_coef)
-            print('Delta_n_inhomog_component',Delta_n_inhomog_component)
-            print('orders: n_eval',n_eval)
-            print('B_denom_coef_c', (B_denom_coef_c).get_order())
-            print('p_perp_coef_cp', (p_perp_coef_cp).get_order())
-            print('Delta_coef_cp.mask(n_eval-1).zero_append()', (Delta_coef_cp.mask(n_eval-1).zero_append()).get_order())
-            print('iota_coef', (iota_coef).get_order())
         else:
             Delta_n_inhomog_component = MHD_parsed.eval_inhomogenous_Delta_n_cp(n_eval,
             B_denom_coef_c,
@@ -331,8 +325,6 @@ def iterate_delta_n_0_offset(n_eval,
     # At even orders, setting Delta[even, 0] to have zero average.
     # This average is a free parameter, because the center component of
     # the ODE is dphi x = f.
-    print('n_eval',n_eval)
-    print('Delta_n_inhomog_component',Delta_n_inhomog_component)
     content = solve_dphi_iota_dchi(
         iota=iota_coef[0]/Delta_n_inhomog_component.nfp,
         f=Delta_n_inhomog_component.content/Delta_n_inhomog_component.nfp,
@@ -690,8 +682,6 @@ def iterate_2_magnetic_only(equilibrium,
         ).antid_chi()
     B_psi_coef_cp = B_psi_coef_cp.append(B_psi_nm3.filter(max_freq[0]))
 
-    print('iterate magnetic B_psi_nm3',B_psi_nm3)
-
     # Requires:
     # X_{n-1}, Y_{n-1}, Z_{n-1},
     # B_{\theta n}, B_{\psi n-2},
@@ -846,7 +836,7 @@ def iterate_2_magnetic_only(equilibrium,
         magnetic_only=True
     ))
 
-@partial(jit, static_argnums=(5, 6, 7, 8,))
+# @partial(jit, static_argnums=(5, 6, 7, 8,))
 def iterate_2(equilibrium,
     B_alpha_nb2,
     B_denom_nm1, B_denom_n,

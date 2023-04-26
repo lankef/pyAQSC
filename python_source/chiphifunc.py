@@ -96,10 +96,11 @@ def max_log10(input):
     return(jnp.log10(jnp.max(jnp.abs(input)))) # not nfp-sensitive
 
 # Input is not order-dependent, and permitted to be static.
+@partial(jit, static_argnums=(0,))
 def jit_fftfreq_int(int_in:int):
     ''' Shorthand for jnp.fft.fftfreq(n)*n rounded to the nearest int. '''
     out = jnp.arange(int_in)
-    return(jnp.where(out>int_in//2,out-int_in,out))
+    return(jnp.where(out>(int_in-1)//2,out-int_in,out))
 
 # Input is not order-dependent, and permitted to be static.
 @partial(jit, static_argnums=(0,))

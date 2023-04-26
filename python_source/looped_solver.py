@@ -1,8 +1,7 @@
 # Solves the looped equations.
 import jax.numpy as jnp
 from functools import partial
-from jax import jit, tree_util
-import jax
+from jax import jit
 
 # ChiPhiFunc and ChiPhiEpsFunc
 from chiphifunc import *
@@ -267,7 +266,6 @@ def generate_RHS(
         looped_RHS_0_offset = ChiPhiFunc(looped_content, looped_RHS_0_offset.nfp)
 
     out_dict_RHS['filtered_RHS_0_offset'] = fft_filter(looped_RHS_0_offset.fft().content, max_freq*2, axis=1)
-
     return(out_dict_RHS)
 
 ''' II. Tensor operator '''
@@ -299,7 +297,7 @@ def generate_RHS(
 # by jnp.tensordot(full_tensor_fft_op_reordered, fft_of_LHS, 2).
 # len_tensor: the number of phi modes kept in the tensor.
 # For avoiding singular tensor.
-@partial(jit, static_argnums=(0,1,17,18,19))
+# @partial(jit, static_argnums=(0,1,17,18,19))
 def generate_tensor_operator(
     n_unknown,
     nfp,
@@ -831,7 +829,7 @@ def generate_tensor_operator(
         # First clear all coeffs for the center elem
         full_tensor_fft_op = full_tensor_fft_op.at[n_unknown//2].set(0)
         ''' B_theta dependebce carried by B_psi terms in Delta n and p n '''
-        coef_Delta_n = -(B_alpha_coef[0]*(diff(B_denom_coef_c[1],'chi',1)))/2
+        coef_Delta_n = -(B_alpha_coef[0]*(diff(B_denom_coef_c[1],True,1)))/2
         coef_dchi_p_n = 2*B_alpha_coef[0]*B_denom_coef_c[0]*B_denom_coef_c[1]
         # dchi B_psi contains n_unknown/2 B_theta
         # Because this portion of the code is only for odd orders,
@@ -1123,7 +1121,7 @@ def generate_tensor_operator(
             ChiPhiFunc_in=coef_B_theta_np1_0
         )
         # Merge, remove redundant dims, and constructing row to append
-        D3_comp_fft_op = jnp.zeros((1,n_unknown+1, len_tensor, len_tensor), dtype=jnp.complex128)
+        D3_comp_fft_op = jnp.zeros((1, n_unknown+1, len_tensor, len_tensor), dtype=jnp.complex128)
         D3_comp_fft_op = D3_comp_fft_op.at[0, n_unknown//2-1].set(elem_fft_op_B_theta_n_1n[0][0])
         D3_comp_fft_op = D3_comp_fft_op.at[0, n_unknown//2].set(elem_fft_op_B_theta_n_1p[0][0])
         D3_comp_fft_op = D3_comp_fft_op.at[0, -2].set((elem_fft_op_Yn1p + elem_fft_op_dp_Yn1p)[0][0])
@@ -1147,9 +1145,9 @@ def generate_tensor_operator(
         )*n_unknown/2/dchi_temp_B_theta
 
         # Full Yn coef for B_theta dependence. In theory
-        D3_Yn_coef = diff(X_coef_cp[1],'chi',1)*dl_p*tau_p
-        D3_dchi_Yn_coef = -X_coef_cp[1]*dl_p*tau_p+diff(Y_coef_cp[1],'phi',1)+2*iota_coef[0]*(diff(Y_coef_cp[1],'chi',1))
-        D3_dphi_Yn_coef = diff(Y_coef_cp[1],'chi',1)
+        D3_Yn_coef = diff(X_coef_cp[1],True,1)*dl_p*tau_p
+        D3_dchi_Yn_coef = -X_coef_cp[1]*dl_p*tau_p+diff(Y_coef_cp[1],False,1)+2*iota_coef[0]*(diff(Y_coef_cp[1],True,1))
+        D3_dphi_Yn_coef = diff(Y_coef_cp[1],True,1)
         # We now generate Y coefficient operators that works with
         # (n_unknown+1, n_unknown-1, len_phi, len_phi)
         # tensor_fft_op_B_psi_in_Y
@@ -1189,7 +1187,7 @@ def generate_tensor_operator(
         D3_comp_fft_op = D3_comp_fft_op.at[:,:n_unknown-1,:,:].set(
             D3_comp_fft_op[:,:n_unknown-1,:,:]
             + tensor_fft_op_D3_B_theta_through_Y
-            + tensor_fft_op_D3_B_psi_in_all_but_Y[n_eval//2]
+            + tensor_fft_op_D3_B_psi_in_all_but_Y[n_unknown//2]
         )
         full_tensor_fft_op = jnp.concatenate((full_tensor_fft_op, D3_comp_fft_op), axis=0)
 
@@ -1882,7 +1880,7 @@ def iterate_looped(
             'Deltan': Deltan.filter(max_freq),
             # 'Yn_B_theta_terms': Yn_B_theta_terms,
             # 'Yn1p': vec_free,
-            # 'solution': solution,
+            'solution': solution,
             # 'out_dict_RHS':out_dict_RHS,
             # 'out_dict_tensor':out_dict_tensor,
         })
