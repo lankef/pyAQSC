@@ -1711,7 +1711,7 @@ def iterate_looped(
             nfp=nfp,
             target_len_phi=target_len_phi,
             filtered_inv_looped_fft_operator=filtered_inv_looped_fft_operator,
-            filtered_RHS_0_offset=filtered_RHS_0_offset+B_theta_np10_avg*target_length,
+            filtered_RHS_0_offset=filtered_RHS_0_offset,
             B_theta_np10_avg = B_theta_np10_avg,
         )
         solution = solve_result['solution']

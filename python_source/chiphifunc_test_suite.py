@@ -609,7 +609,7 @@ def import_from_stel(stel = Qsc.from_paper('r2 section 5.2'), len_phi=1000, nfp_
         to_phi(stel.varphi, stel.Z3c1),
         to_phi(stel.varphi, stel.Z3c3)
     ]), nfp, fourier_mode = True)*r_factor**3
-    Z_coef_cp = ChiPhiEpsFunc([0, 0, Z2], nfp, True)
+    Z_coef_cp = ChiPhiEpsFunc([0, 0, Z2], nfp, fourier_mode = True)
     # B components
 
     Btc20 = 2*stel.I2/stel.B0
@@ -617,13 +617,13 @@ def import_from_stel(stel = Qsc.from_paper('r2 section 5.2'), len_phi=1000, nfp_
         to_phi(stel.varphi, Btc20)
     ]), nfp)], nfp, True)
 
-    B_psi_coef_cp = ChiPhiEpsFunc([0], nfp, True)
+    B_psi_coef_cp = ChiPhiEpsFunc([0], nfp, fourier_mode = True)
 
     B1c = -2*B0*eta
     B1 = ChiPhiFunc(np.array([
         0,
         np.average(B1c)
-    ]), nfp)
+    ]), nfp, fourier_mode = True)
     B20 = (0.75*stel.etabar**2/np.sqrt(B0) - stel.B20)*4*B0**2
     B2c = (0.75*stel.etabar**2/np.sqrt(B0) - stel.B2c)*4*B0**2
     B2s = -4*stel.B2s*B0**2
@@ -631,7 +631,7 @@ def import_from_stel(stel = Qsc.from_paper('r2 section 5.2'), len_phi=1000, nfp_
         np.average(B2s),
         np.average(B20),
         np.average(B2c)
-    ]), nfp)
+    ]), nfp, fourier_mode = True)
     B_denom_coef_c = ChiPhiEpsFunc([
         B0,
         B1,

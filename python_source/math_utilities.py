@@ -31,26 +31,6 @@ def py_sum(expr, lower, upper):
         out = out+item
     return(out)
 
-def py_sum_test(expr, lower, upper):
-    # The integer 0 cannot be added to even ChiPhiFuncs,
-    # because JAX does not support conditionals on traced arguments.
-    out_list = []
-    upper_floor = floor(upper)
-    lower_ceil = ceil(lower)
-    # If lower==upper then return expr(lower)
-    if upper_floor==lower_ceil:
-        return(expr(lower_ceil))
-    # Warning for lower>upper
-    if lower_ceil>upper_floor:
-        # This is classified as "out of bound".
-        # Originally the code is -1. Since the formula
-        # are checked correct, these are made 0.
-        return(ChiPhiFuncSpecial(0))
-    for i in range(lower_ceil,upper_floor+1):
-        print('expr('+str(i)+') =',expr(i))
-        out_list.append(expr(i))
-    return(out_list)
-
 ## Condition operators
 
 # Used to make sure new indices of terms and new upper bounds are within the
