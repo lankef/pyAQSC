@@ -10,19 +10,14 @@ use_pyQSC = True
 
 ''' Numerical settings (chiphifunc.py) '''
 double_precision = True
-# Default numerical methods -----
-diff_mode = 'fft' # available: pseudo_spectral, finite_difference, fft,
-integral_mode = 'fft' # avalable: fft
-two_pi_integral_mode = 'simpson' # available: b_spline, cubic_spline, simpson, fft
-# Asymptotic series settings -----
-# solve_integration_factor() can automatically switch to using asymptotic
-# series for solving y'+py=f under integration_mode='auto' when the
-# average amplitude of p is greater than a threshold set by this value.
-# 20 is a good empirical value found in the ODE section of 'ChiPhiFunc test suite.ipynb'
-asymptotic_threshold = 20
-# When solving y'+py=f with an asymptotic series, stop at this order if the
-# optimal truncation is not yet reached.
-asymptotic_order = 6
+diff_mode = 'fft'
+# Currently, It takes ~1hr to compile iterate_2 (most of the time taken by
+# looped_solver.py) to order 4 for each combination of nfp and number of
+# harmonics. Compiling to higher order may require ~10 hrs.
+# However, it offers ~ 20x speed up for each case.
+# The compile can be disabled to only compile recursion relations for individual
+# variables and save
+compile_MHD_iteration = False
 
 ''' Caching and Joblib settings '''
 # Caching -----

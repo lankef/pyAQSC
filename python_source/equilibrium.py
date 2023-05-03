@@ -18,7 +18,6 @@ import parsed
 import MHD_parsed
 import looped_coefs
 
-
 ''' I. Magnetic equations '''
 # The magnetic equations alone can serve as a set of recursion relations,
 # solving for $X, Y, Z, B_{\psi}, \iota$ from $B_{\theta}, B_{alpha}$ and $B$.
@@ -27,7 +26,6 @@ import looped_coefs
 # See overleaf (will be offline later) document which variables are needed and
 # which orders are needed.
 # not nfp-dependent
-@partial(jit, static_argnums=(0,))
 def iterate_Xn_cp(n_eval,
     X_coef_cp,
     Y_coef_cp,
@@ -47,7 +45,6 @@ def iterate_Xn_cp(n_eval,
         iota_coef=iota_coef).cap_m(n_eval))
 
 # O_matrices, O_einv, vector_free_coef only uses B_alpha_coef and X_coef_cp
-@partial(jit, static_argnums=(0,))
 def iterate_Yn_cp_operators(n_unknown, X_coef_cp, B_alpha_coef): # nfp-dependent only in output
     '''
     Input: -----
@@ -63,7 +60,6 @@ def iterate_Yn_cp_operators(n_unknown, X_coef_cp, B_alpha_coef): # nfp-dependent
 
 # O_matrices, O_einv, vector_free_coef only uses B_alpha_coef and X_coef_cp
 # nfp-dependent!!
-@partial(jit, static_argnums=(0,))
 def iterate_Yn_cp_RHS(n_unknown,
     X_coef_cp,
     Y_coef_cp,
@@ -74,7 +70,9 @@ def iterate_Yn_cp_RHS(n_unknown,
     B_denom_coef_c,
     kap_p, dl_p, tau_p,
     iota_coef): # nfp-dependent!!
-
+    # This result is known due to indexing.
+    if n_unknown == 1:
+        return(ChiPhiFunc(jnp.zeros((3,X_coef_cp[1].content.shape[1])), X_coef_cp.nfp))
     # Getting rhs-lhs for the Yn+1 equation
     # for Yn to work, "n" must be subbed with n-1 here
     chiphifunc_rhs = parsed.eval_ynp1.rhs_minus_lhs(n_unknown-1,
@@ -116,7 +114,6 @@ def iterate_Yn_cp_RHS(n_unknown,
 # \iota_{(n-3)/2 or (n-4)/2}, B_{\alpha  (n-1)/2 or (n-2)/2}
 # nfp-dependent!!
 # Cannot be jitted beause of the lambda funcs
-@partial(jit, static_argnums=(0,12))
 def iterate_Yn_cp_magnetic(n_unknown,
     X_coef_cp,
     Y_coef_cp,
@@ -208,8 +205,6 @@ def iterate_Yn_cp_magnetic(n_unknown,
 # \iota_{(n-2)/2 \text{ or } (n-3)/2}
 # \kappa, \frac{dl}{d\phi}, \tau
 # not nfp-dependent
-# @partial(jit, static_argnums=(0,))
-@partial(jit, static_argnums=(0,))
 def iterate_Zn_cp(
     n_eval,
     X_coef_cp, Y_coef_cp, Z_coef_cp,
@@ -236,7 +231,6 @@ def iterate_Zn_cp(
 # B_{\theta n-1}, B_0,
 # B_{\alpha 0}, \bar{\iota}_{(n-2)/2 or (n-3)/2}$
 # not nfp-dependent
-@partial(jit, static_argnums=(0,))
 def iterate_dc_B_psi_nm2(
     n_eval,
     X_coef_cp, Y_coef_cp, Z_coef_cp,
@@ -263,7 +257,6 @@ def iterate_dc_B_psi_nm2(
 # Uses B_theta [n-2], B_[psi n-2], B_alpha first-order terms, B_denom[n],
 # p_[perp n-1], Delta_[n-1],iota_[(n-3)/2 (n-2)/2]
 # not nfp-dependent
-@partial(jit, static_argnums=(0,))
 def iterate_p_perp_n(n_eval,
     B_theta_coef_cp,
     B_psi_coef_cp,
@@ -290,7 +283,6 @@ def iterate_p_perp_n(n_eval,
 # This method always ensures zero avg(Delta[n,0]), and will by default
 # set iota[(n-1)/2] to zero, but has the option to use known iota for debugging.
 # nfp-dependent!!
-@partial(jit, static_argnums=(0, 5, 6,))
 def iterate_delta_n_0_offset(n_eval,
     B_denom_coef_c,
     p_perp_coef_cp,
@@ -610,7 +602,6 @@ Equilibrium._tree_unflatten)
 # n_eval must be even.
 # not nfp-dependent
 # Yn0, B_psi_nm20 must both be consts or 1d arrays.
-@partial(jit, static_argnums=(9, 10,))
 def iterate_2_magnetic_only(equilibrium,
     B_theta_nm1, B_theta_n,
     Yn0,

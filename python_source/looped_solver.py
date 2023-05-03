@@ -86,6 +86,9 @@ def generate_RHS(
             B_alpha_coef,
             kap_p, dl_p, tau_p,
             iota_coef).filter(max_freq)
+        Z_coef_cp_no_unknown = Z_coef_cp.mask(n_eval-2)
+        Z_coef_cp_no_unknown = Z_coef_cp_no_unknown.append(Zn_no_B_psi)
+
         pn_no_B_psi = equilibrium.iterate_p_perp_n(
             n_eval=n_unknown,
             B_theta_coef_cp=B_theta_coef_cp,
@@ -97,8 +100,7 @@ def generate_RHS(
             iota_coef=iota_coef).filter(max_freq)
         p_perp_coef_cp_no_unknown = p_perp_coef_cp.mask(n_eval-2)
         p_perp_coef_cp_no_unknown = p_perp_coef_cp_no_unknown.append(pn_no_B_psi)
-        Z_coef_cp_no_unknown = Z_coef_cp.mask(n_eval-2)
-        Z_coef_cp_no_unknown = Z_coef_cp_no_unknown.append(Zn_no_B_psi)
+
         ''' X and Delta, contains B_psi, unknown at even orders '''
         Xn_no_B_psi = equilibrium.iterate_Xn_cp(n_unknown,
             X_coef_cp,
@@ -108,16 +110,18 @@ def generate_RHS(
             B_alpha_coef,
             kap_p, dl_p, tau_p,
             iota_coef).filter(max_freq)
+        X_coef_cp_no_unknown = X_coef_cp.mask(n_eval-2)
+        X_coef_cp_no_unknown = X_coef_cp_no_unknown.append(Xn_no_B_psi)
+
         Deltan_no_B_psi = equilibrium.iterate_delta_n_0_offset(n_eval=n_unknown,
             B_denom_coef_c=B_denom_coef_c,
             p_perp_coef_cp=p_perp_coef_cp_no_unknown,
             Delta_coef_cp=Delta_coef_cp,
             max_freq=max_freq,
             iota_coef=iota_coef).filter(max_freq)
-        X_coef_cp_no_unknown = X_coef_cp.mask(n_eval-2)
-        X_coef_cp_no_unknown = X_coef_cp_no_unknown.append(Xn_no_B_psi)
         Delta_coef_cp_no_unknown_0_offset = Delta_coef_cp.mask(n_eval-2)
         Delta_coef_cp_no_unknown_0_offset = Delta_coef_cp_no_unknown_0_offset.append(Deltan_no_B_psi)
+
         out_dict_RHS['B_theta_n_0_only'] = B_theta_n_0_only
         out_dict_RHS['Zn_no_B_psi']=Zn_no_B_psi
         out_dict_RHS['pn_no_B_psi']=pn_no_B_psi
@@ -1191,6 +1195,12 @@ def generate_tensor_operator(
         )
         full_tensor_fft_op = jnp.concatenate((full_tensor_fft_op, D3_comp_fft_op), axis=0)
 
+        # B_theta[n+1, 0] does not actually have a unique solution, and its average
+        # need to be given. To do this, we edit the [:, -1, :, 0] element of the
+        # operator. This will add a constant offset of B_theta_np10_avg*target_length
+        # to all elements in RHS.
+        full_tensor_fft_op = full_tensor_fft_op.at[:, -1, :, 0].set(full_tensor_fft_op[:, -1, :, 0]+1)
+
     filtered_looped_fft_operator = jnp.transpose(full_tensor_fft_op, (0,2,1,3))
 
     # Filter off-diagonal elements in the linear differential operator.
@@ -1211,13 +1221,27 @@ def generate_tensor_operator(
 # coef_iota_nm1b2_in_Delta: Coefficient of iota (n-1)/2 in Delta. Is a constant
 # in the Equilibrium object. Needed for odd orders.
 # @partial(jit, static_argnums=(0, 1, 2, ))
+# TODO
+# TODO
+# TODO Calculate the iota dependence of the RHS and the unit iota contribution to the LHS
+# TODO sigma 0 is a special constraint because it constrains the sum of certain
+# TODO fourier mode coefficients, rather than the value of any single one?
+# TODO However, the biggest trouble comes from B_theta[2, 0]. Because the solution
+# TODO to it is non-unique, it's highly likely the LHS operator is nearly
+# TODO singular, but only possible to invert due to rounding errors.
+# TODO Now, how do we encode avg of B_theta or stellarator symmetry into the
+# TODO differential operator??
 def solve_free_param(n_unknown, nfp, target_len_phi,
     filtered_inv_looped_fft_operator, filtered_RHS_0_offset,
-    coef_Delta_offset = 0
+    coef_Delta_offset = 0,
+    B_theta_np10_avg = 0 # Only used at odd orders, when B_theta[n+1,0] is a free param.
     ):
     out_dict_solve = {}
     # Solution with zero value for the free constant parameter
-    filtered_solution = jnp.tensordot(filtered_inv_looped_fft_operator, filtered_RHS_0_offset, 2)
+    filtered_solution = jnp.tensordot(
+        filtered_inv_looped_fft_operator,
+        filtered_RHS_0_offset + B_theta_np10_avg*filtered_RHS_0_offset.shape[1],
+    2)
     # To have periodic B_psi, values for a constant free marameter, Delt_offset
     # must be found at even orders.
     # Integral(B_psi') = 0 is equivalent to filtered_solution[-1,0] = 0.
@@ -1295,6 +1319,7 @@ def iterate_looped(
     iota_coef,
     # lambda for the coefficient of the scalar free parameter in RHS
     max_freq,
+    B_theta_np10_avg = 0,
     max_k_diff_pre_inv=None,
     max_k_diff_post_inv=None
 ):
@@ -1686,7 +1711,8 @@ def iterate_looped(
             nfp=nfp,
             target_len_phi=target_len_phi,
             filtered_inv_looped_fft_operator=filtered_inv_looped_fft_operator,
-            filtered_RHS_0_offset=filtered_RHS_0_offset,
+            filtered_RHS_0_offset=filtered_RHS_0_offset+B_theta_np10_avg*target_length,
+            B_theta_np10_avg = B_theta_np10_avg,
         )
         solution = solve_result['solution']
         B_theta_n = ChiPhiFunc(solution[:-2], nfp)
