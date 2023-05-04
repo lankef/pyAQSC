@@ -1195,11 +1195,12 @@ def generate_tensor_operator(
         )
         full_tensor_fft_op = jnp.concatenate((full_tensor_fft_op, D3_comp_fft_op), axis=0)
 
+        # * Is this statement true?
         # B_theta[n+1, 0] does not actually have a unique solution, and its average
         # need to be given. To do this, we edit the [:, -1, :, 0] element of the
         # operator. This will add a constant offset of B_theta_np10_avg*target_length
         # to all elements in RHS.
-        full_tensor_fft_op = full_tensor_fft_op.at[:, -1, :, 0].set(full_tensor_fft_op[:, -1, :, 0]+1)
+        # full_tensor_fft_op = full_tensor_fft_op.at[:, -1, :, 0].set(full_tensor_fft_op[:, -1, :, 0]+1)
 
     filtered_looped_fft_operator = jnp.transpose(full_tensor_fft_op, (0,2,1,3))
 
@@ -1234,13 +1235,13 @@ def generate_tensor_operator(
 def solve_free_param(n_unknown, nfp, target_len_phi,
     filtered_inv_looped_fft_operator, filtered_RHS_0_offset,
     coef_Delta_offset = 0,
-    B_theta_np10_avg = 0 # Only used at odd orders, when B_theta[n+1,0] is a free param.
+    # B_theta_np10_avg = 0 # Only used at odd orders, when B_theta[n+1,0] is a free param.
     ):
     out_dict_solve = {}
     # Solution with zero value for the free constant parameter
     filtered_solution = jnp.tensordot(
         filtered_inv_looped_fft_operator,
-        filtered_RHS_0_offset + B_theta_np10_avg*filtered_RHS_0_offset.shape[1],
+        filtered_RHS_0_offset # + B_theta_np10_avg*filtered_RHS_0_offset.shape[1],
     2)
     # To have periodic B_psi, values for a constant free marameter, Delt_offset
     # must be found at even orders.
@@ -1319,7 +1320,7 @@ def iterate_looped(
     iota_coef,
     # lambda for the coefficient of the scalar free parameter in RHS
     max_freq,
-    B_theta_np10_avg = 0,
+    # B_theta_np10_avg = 0,
     max_k_diff_pre_inv=None,
     max_k_diff_post_inv=None
 ):
@@ -1712,7 +1713,7 @@ def iterate_looped(
             target_len_phi=target_len_phi,
             filtered_inv_looped_fft_operator=filtered_inv_looped_fft_operator,
             filtered_RHS_0_offset=filtered_RHS_0_offset,
-            B_theta_np10_avg = B_theta_np10_avg,
+            # B_theta_np10_avg = B_theta_np10_avg,
         )
         solution = solve_result['solution']
         B_theta_n = ChiPhiFunc(solution[:-2], nfp)
