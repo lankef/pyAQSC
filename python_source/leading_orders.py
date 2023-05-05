@@ -335,8 +335,8 @@ def leading_orders(
     d_phi = phi[1]-phi[0]
     phi_times_mode = mode_num[:, None]*phi[None, :]
 
-    cos_arr = np.cos(phi_times_mode)
-    sin_arr = np.sin(phi_times_mode)
+    cos_arr = jnp.cos(phi_times_mode)
+    sin_arr = jnp.sin(phi_times_mode)
 
     # Calculate r and z on Cartesian phi grid
     # each row is a trigonometry component with a different mode number.
@@ -354,8 +354,8 @@ def leading_orders(
     d2_l_d_phi2 = (R0*R0p + R0p*R0pp + Z0p*Z0pp)/d_l_d_phi
 
     # dl/dphi in Boozer coordinate
-    axis_length = np.sum(d_l_d_phi) * d_phi * nfp
-    dl_p = axis_length/np.pi/2
+    axis_length = jnp.sum(d_l_d_phi) * d_phi * nfp
+    dl_p = axis_length/jnp.pi/2
 
     # l on cartesian phi grid
     # Setting the first element to 0. Removing the last element.
@@ -368,7 +368,7 @@ def leading_orders(
 
     # d_l_d_phi_wrapped = np.concatenate([d_l_d_phi, [d_l_d_phi[0]]])
     # d_l_d_phi_spline = scipy.interpolate.CubicSpline(np.linspace(0,2*np.pi/nfp, len_phi+1), d_l_d_phi_wrapped, bc_type = 'periodic')
-    # dl_p_spline.integrate(0, 2*np.pi)/np.pi/2 # No more accurate than the sum version.
+    # dl_p_spline.integrate(0, 2*np.pi)/jnp.pi/2 # No more accurate than the sum version.
 
     # dphi/dl
     dphidl = 1/d_l_d_phi
@@ -412,7 +412,7 @@ def leading_orders(
         d3_r_d_phi3_cylindrical*d_r_d_phi_cylindrical_x_d2_r_d_phi2,
         axis = 1
     )
-    torsion_denominator = np.sum(d_r_d_phi_cylindrical_x_d2_r_d_phi2**2, axis=1)
+    torsion_denominator = jnp.sum(d_r_d_phi_cylindrical_x_d2_r_d_phi2**2, axis=1)
     torsion = torsion_numerator / torsion_denominator
 
     ''' Calculating basis '''
@@ -457,7 +457,7 @@ def leading_orders(
     # self.X11c = self.etabar / curvature # will be provided in other formats
     # self.min_R0 = fourier_minimum(self.R0)
     ''' 0th order quantities '''
-    B_alpha0 = dl_p/np.sqrt(B0) # (Rodriguez 2021, J0)
+    B_alpha0 = dl_p/jnp.sqrt(B0) # (Rodriguez 2021, J0)
     B1 = ChiPhiFunc(
         jnp.array([
             [0], # Choice of angular coordinate. See eq II.
@@ -517,7 +517,7 @@ def leading_orders(
     then solves the linear 2nd order homogenous form of D3 for Yc[1,1].
     '''
     ''' II m = 0 '''
-    target_length = fft_max_freq[0]*2
+    shortened_length = fft_max_freq[0]*2
     # RHS of II[1][0]
     II_2_inhomog = -B_alpha_coef[0]/2*(
         4*B0*B1*p_perp_coef_cp[1].dchi()
@@ -530,11 +530,11 @@ def leading_orders(
     # and a BC is provided.
     p_eff = (coef_B_theta_20.content/coef_dp_B_theta_20.content)[0]
     f_eff = (II_2_inhomog.content/coef_dp_B_theta_20.content)[0]
-    p_fft = fft_filter(jnp.fft.fft(p_eff), target_length, axis=0)
-    f_fft = fft_filter(jnp.fft.fft(f_eff), target_length, axis=0)
+    p_fft = fft_filter(jnp.fft.fft(p_eff), shortened_length, axis=0)
+    f_fft = fft_filter(jnp.fft.fft(f_eff), shortened_length, axis=0)
     # Creating differential operator and convolution operator
     # as in solve_ODE
-    diff_matrix = fft_dphi_op(target_length)
+    diff_matrix = fft_dphi_op(shortened_length)
     conv_matrix = fft_conv_op(p_fft)
     tot_matrix = diff_matrix + conv_matrix
     # The average of B_theta[2,0] is its zeroth element in FFT representation.
@@ -542,7 +542,7 @@ def leading_orders(
     # By adding 1 to all elements in this column will result in
     # adding B_theta_20_average to all elements in the RHS.
     tot_matrix = tot_matrix.at[:, 0].set(tot_matrix[:, 0]+1)
-    f_fft = f_fft+B_theta_20_avg*target_length
+    f_fft = f_fft+B_theta_20_avg*shortened_length
     sln_fft = jnp.linalg.solve(tot_matrix, f_fft)
     B_theta_20 = ChiPhiFunc(jnp.fft.ifft(fft_pad(sln_fft, len_phi, axis=0), axis=0)[None, :], nfp)
     B_theta_coef_cp = B_theta_coef_cp.append(B_theta_20)
@@ -562,14 +562,14 @@ def leading_orders(
     R_lin = q1+q2.dphi()/q2
     u_avg = 1 # Doesn't actually impact Y! That's crazy.
     # The differential operator is:
-    R_fft = fft_filter(jnp.fft.fft(R_lin.content[0]), target_length, axis=0)
-    S_fft = fft_filter(jnp.fft.fft(S_lin.content[0]), target_length, axis=0)
+    R_fft = fft_filter(jnp.fft.fft(R_lin.content[0]), shortened_length, axis=0)
+    S_fft = fft_filter(jnp.fft.fft(S_lin.content[0]), shortened_length, axis=0)
     R_conv_matrix = fft_conv_op(R_fft)
     S_conv_matrix = fft_conv_op(S_fft)
     riccati_matrix = diff_matrix**2 - R_conv_matrix@diff_matrix + S_conv_matrix
     # BC
     riccati_matrix = riccati_matrix.at[:, 0].set(riccati_matrix[:, 0]+1)
-    riccati_RHS = jnp.ones(target_length)*u_avg*target_length
+    riccati_RHS = jnp.ones(shortened_length)*u_avg*shortened_length
     # Solution
     riccati_sln_fft = jnp.linalg.solve(riccati_matrix, riccati_RHS)
     riccati_u = ChiPhiFunc(jnp.fft.ifft(fft_pad(riccati_sln_fft, len_phi, axis=0), axis=0)[None, :], nfp)
