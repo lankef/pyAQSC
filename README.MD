@@ -1,12 +1,12 @@
-# APES (Anisotropic Pressure Expansion for Stellarators)
+# pyAQSC
 This code constructs globally quasi-symmetric stellarator equilibria with
 anisotropic pressure near axis expansion to any order.
 
 ## Dependencies
-The python codes requires Numpy, Scipy, Matplotlib, Numba and Joblib. In addition,
-[pqQSC](https://github.com/landreman/pyQSC) [4] is used for axis shape evaluation
-and some plotting features. However, the code can be run without a pyQSC installation
-by setting the `use_pyQSC` variable in config.py to `False`.
+The python codes requires Numpy, Matplotlib, and JAX. 
+
+
+
 
 The Maxima notebooks requires wxMaxima to view. The notebooks are not required to
 run the main code, but contains source expressions much of code is parsed from.
