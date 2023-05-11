@@ -4,9 +4,6 @@
 from math import floor, ceil
 from math_utilities import *
 import chiphifunc
-from jax import jit
-from functools import partial
-@partial(jit, static_argnums=(0,))
 def eval_D3_RHS_m_LHS(n, X_coef_cp, Y_coef_cp, Z_coef_cp, B_theta_coef_cp,
     B_denom_coef_c, B_alpha_coef, iota_coef, dl_p, tau_p, kap_p):
     def sum_arg_15(i268):
@@ -70,15 +67,15 @@ def eval_D3_RHS_m_LHS(n, X_coef_cp, Y_coef_cp, Z_coef_cp, B_theta_coef_cp,
         return(is_seq(0,n-i209)*B_alpha_coef[n-i209]*is_integer(n-i209)*py_sum(sum_arg_1,0,i209))
 
 
-    out = ((is_seq(0,n)*dl_p*is_integer(n)*py_sum(sum_arg_14,0,n)-is_seq(0,n)*dl_p*is_integer(n)*py_sum(sum_arg_15,0,n))*tau_p)\
-        +(is_seq(0,n)*is_integer(n)*py_sum(sum_arg_9,0,n))\
-        +(py_sum(sum_arg_8,ceil(n/2),floor(n)))\
-        +(is_seq(0,n)*is_integer(n)*py_sum(sum_arg_6,0,n))\
-        +(py_sum(sum_arg_5,ceil(n/2),floor(n)))\
-        +(is_seq(0,n)*is_integer(n)*py_sum(sum_arg_3,0,n))\
-        +(-py_sum(sum_arg_2,ceil(n/2),floor(n)))\
-        +(-is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum(sum_arg_13,0,n))\
-        +(is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum(sum_arg_12,0,n))\
-        +(py_sum(sum_arg_11,ceil(n/2),floor(n)))\
+    out = ((is_seq(0,n)*dl_p*is_integer(n)*py_sum_parallel(sum_arg_14,0,n)-is_seq(0,n)*dl_p*is_integer(n)*py_sum_parallel(sum_arg_15,0,n))*tau_p)\
+        +(is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_9,0,n))\
+        +(py_sum_parallel(sum_arg_8,ceil(n/2),floor(n)))\
+        +(is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_6,0,n))\
+        +(py_sum_parallel(sum_arg_5,ceil(n/2),floor(n)))\
+        +(is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_3,0,n))\
+        +(-py_sum_parallel(sum_arg_2,ceil(n/2),floor(n)))\
+        +(-is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum_parallel(sum_arg_13,0,n))\
+        +(is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum_parallel(sum_arg_12,0,n))\
+        +(py_sum_parallel(sum_arg_11,ceil(n/2),floor(n)))\
         +(is_seq(0,n)*dl_p*is_integer(n)*diff(Z_coef_cp[n],True,1))
     return(out)

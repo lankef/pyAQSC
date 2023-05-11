@@ -74,7 +74,7 @@ def generate_RHS(
     if n_unknown%2==0:
         ''' B_theta, center is known at even orders '''
         B_theta_n = B_theta_coef_cp[n_unknown]
-        B_theta_n_0_only = B_theta_n.get_constant()
+        B_theta_n_0_only = B_theta_n[0]
         B_theta_coef_cp_0_only = B_theta_coef_cp.mask(n_unknown-1)
         B_theta_coef_cp_0_only = B_theta_coef_cp_0_only.append(B_theta_n_0_only)
         # # Used to calculate B_theta_n
@@ -1241,8 +1241,9 @@ def solve_free_param(n_unknown, nfp, target_len_phi,
     # Solution with zero value for the free constant parameter
     filtered_solution = jnp.tensordot(
         filtered_inv_looped_fft_operator,
-        filtered_RHS_0_offset # + B_theta_np10_avg*filtered_RHS_0_offset.shape[1],
-    2)
+        filtered_RHS_0_offset, # + B_theta_np10_avg*filtered_RHS_0_offset.shape[1],
+        2
+    )
     # To have periodic B_psi, values for a constant free marameter, Delt_offset
     # must be found at even orders.
     # Integral(B_psi') = 0 is equivalent to filtered_solution[-1,0] = 0.

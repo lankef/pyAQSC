@@ -71,7 +71,7 @@ class ChiPhiEpsFunc:
         if isinstance(item, ChiPhiFunc):
             # Mismatched nfp. If item is special then we still append it directly
             # to preserve the error message
-            if item.nfp!=self.nfp and not item.is_special:
+            if item.nfp!=self.nfp and not item.is_special():
                 return(ChiPhiEpsFunc(self.chiphifunc_list+[ChiPhiFuncSpecial(-14)], self.nfp))
         elif not jnp.isscalar(item):
             # Jax scalars are 0-d DeviceArrays.
@@ -151,7 +151,7 @@ class ChiPhiEpsFunc:
             if jnp.isscalar(item):
                 content_list.append(item)
             else:
-                content_list.append((item.content, item.nfp, item.is_special))
+                content_list.append((item.content, item.nfp, item.is_special()))
         return(content_list, self.nfp)
 
     def from_content_list(content_list, nfp): # nfp-dependent!!

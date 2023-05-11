@@ -462,7 +462,7 @@ def leading_orders(
         jnp.array([
             [0], # Choice of angular coordinate. See eq II.
             [B11c]
-        ]), nfp, fourier_mode=True
+        ]), nfp, trig_mode=True
     )
     Delta0 = (-B0*p0) - phi_avg(-B0*p0) + Delta_0_avg # (Rodriguez 2021, eq. 41)
     eta = -B11c/(2*B0) # Defined for simple notation. (Rodriguez 2021, eq. 14)
@@ -482,7 +482,7 @@ def leading_orders(
     X1 = ChiPhiFunc(jnp.array([
         jnp.zeros_like(X11c.content[0]), # sin coeff is zero
         X11c.content[0],
-    ]), nfp, fourier_mode = True).filter(fft_max_freq[0])
+    ]), nfp, trig_mode = True).filter(fft_max_freq[0])
     X_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), X1], nfp)
     # p1 and Delta1 has the same formula as higher orders.
     p1 = iterate_p_perp_n(1,
@@ -577,7 +577,7 @@ def leading_orders(
     Y1 = ChiPhiFunc(jnp.array([
         Y11s.content[0], # sin coeff is zero
         Y11c.content[0],
-    ]), nfp, fourier_mode = True).filter(fft_max_freq[0])
+    ]), nfp, trig_mode = True).filter(fft_max_freq[0])
     Y_coef_cp = Y_coef_cp.append(Y1)
 
     ''' 2nd order quantities '''

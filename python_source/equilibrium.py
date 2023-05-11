@@ -34,7 +34,7 @@ def iterate_Xn_cp(n_eval,
     B_alpha_coef,
     kap_p, dl_p, tau_p,
     iota_coef):
-    return(parsed.eval_xn.eval_Xn_cp(
+    return(parsed.eval_Xn_cp(
         n=n_eval,
         X_coef_cp=X_coef_cp.mask(n_eval-1).zero_append(),
         Y_coef_cp=Y_coef_cp.mask(n_eval-1),
@@ -51,8 +51,8 @@ def iterate_Yn_cp_operators(n_unknown, X_coef_cp, B_alpha_coef): # nfp-dependent
     '''
     # Getting coeffs
     # Both uses B_alpha0 and X1 only
-    chiphifunc_A = parsed.eval_ynp1.coef_a(n_unknown-1, B_alpha_coef, X_coef_cp)
-    chiphifunc_B = parsed.eval_ynp1.coef_b(B_alpha_coef, X_coef_cp)
+    chiphifunc_A = parsed.coef_a(n_unknown-1, B_alpha_coef, X_coef_cp)
+    chiphifunc_B = parsed.coef_b(B_alpha_coef, X_coef_cp)
 
     # Calculating the inverted matrices
     O_matrices, O_einv, vector_free_coef = get_O_O_einv_from_A_B(chiphifunc_A, chiphifunc_B, n_unknown)
@@ -75,7 +75,7 @@ def iterate_Yn_cp_RHS(n_unknown,
         return(ChiPhiFunc(jnp.zeros((3,X_coef_cp[1].content.shape[1])), X_coef_cp.nfp))
     # Getting rhs-lhs for the Yn+1 equation
     # for Yn to work, "n" must be subbed with n-1 here
-    chiphifunc_rhs = parsed.eval_ynp1.rhs_minus_lhs(n_unknown-1,
+    chiphifunc_rhs = parsed.rhs_minus_lhs(n_unknown-1,
         X_coef_cp,
         Y_coef_cp.mask(n_unknown-1).zero_append(),
         Z_coef_cp,
@@ -212,7 +212,7 @@ def iterate_Zn_cp(
     B_alpha_coef,
     kap_p, dl_p, tau_p,
     iota_coef):
-    return(parsed.eval_znp1.eval_Zn_cp(
+    return(parsed.eval_Zn_cp(
         n=n_eval,
         X_coef_cp=X_coef_cp.mask(n_eval-1),
         Y_coef_cp=Y_coef_cp.mask(n_eval-1),
@@ -239,7 +239,7 @@ def iterate_dc_B_psi_nm2(
     kap_p, dl_p, tau_p,
     iota_coef):
     # Ignore B_theta_n
-    dchi_b_psi_nm2 = parsed.eval_dchi_b_psi_nm2.eval_dchi_B_psi_cp_nm2(n_eval, \
+    dchi_b_psi_nm2 = parsed.eval_dchi_B_psi_cp_nm2(n_eval, \
             X_coef_cp.mask(n_eval-1).zero_append(), \
             Y_coef_cp.mask(n_eval-1).zero_append(), \
             Z_coef_cp.mask(n_eval-1).zero_append(), \
@@ -266,7 +266,7 @@ def iterate_p_perp_n(n_eval,
     Delta_coef_cp,
     iota_coef):
     return(
-        MHD_parsed.eval_p_perp_n.eval_p_perp_n_cp(n_eval,
+        MHD_parsed.eval_p_perp_n_cp(n_eval,
         B_theta_coef_cp.mask(n_eval-2).zero_append().zero_append(), # cancellation for 2 orders
         B_psi_coef_cp,
         B_alpha_coef,
@@ -324,7 +324,7 @@ def iterate_delta_n_0_offset(n_eval,
     )
     Delta_out = ChiPhiFunc(content, Delta_n_inhomog_component.nfp).cap_m(n_eval)
     if n_eval%2==0:
-        Delta_out -= jnp.average(Delta_out.get_constant().content)
+        Delta_out -= jnp.average(Delta_out[0].content)
     return(Delta_out)
 
 ''' III. Equilibrium manager and Iterate '''
@@ -540,6 +540,12 @@ class Equilibrium:
             B_denom_coef_c, B_alpha_coef,
             B_psi_coef_cp, B_theta_coef_cp,
             kap_p, dl_p, tau_p, iota_coef)
+        # The general expression does not work for the zeroth order, because it
+        # performs order-matching with symbolic order n and then sub in n at
+        # evaluation time, rather than actually performing order-matching at each
+        # order. As a result, it IGNORES constant terms in the equation.
+        if n_unknown==0:
+            Cb-=dl_p
         Ck = MHD_parsed.validate_Ck(n_unknown-1, X_coef_cp, Y_coef_cp, Z_coef_cp,
             B_denom_coef_c, B_alpha_coef,
             B_psi_coef_cp, B_theta_coef_cp,

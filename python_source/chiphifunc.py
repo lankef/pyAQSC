@@ -13,18 +13,11 @@ import scipy.interpolate
 import config
 
 ''' Debug options and loading configs '''
-# tolerance on how periodic I(phi) is during integration factor.
-# When I(phi) is periodic, any C1 can satisfy the periodic BC,
-# The assiciated error is thrown by comparing the difference
-# between the integration factor's first and last element to
-# this variable.
-noise_level_periodic = 1e-10
 
 # Loading configurations
 if config.double_precision:
     import jax.config
     jax.config.update("jax_enable_x64", True)
-
 
 # Loading default diff modes
 # Converting differential mode string to an int for jitting.
@@ -32,13 +25,10 @@ if config.diff_mode=='fft':
     diff_mode=1
 if config.diff_mode=='pseudo_spectral':
     diff_mode=2
-# integral_mode = config.integral_mode
-# two_pi_integral_mode = config.two_pi_integral_mode
+
 # Maximum allowed asymptotic series order for y'+py=f
 # This feature is depreciated and no longer included in config.py.
 asymptotic_order = 6
-
-require = None
 
 ''' I. Representing functions of chi and phi (ChiPhiFunc subclasses) '''
 # Represents a function of chi and phi.
@@ -64,7 +54,6 @@ require = None
 # The number of phi modes will be tracked and cleaned up with a low-pass filter.
 
 ''' I.0 JIT methods used in the grid implementation '''
-# @partial(jit, static_argnums=(0,))
 def dchi_op(len_chi:int):
     '''
     Generate chi differential operator diff_matrix. diff_matrix@f.content = dchi(f).content
@@ -80,37 +69,91 @@ def dchi_op(len_chi:int):
     '''
     ind_chi = len_chi-1
     mode_chi = jnp.linspace(-ind_chi, ind_chi, len_chi)
-    return jnp.diag(1j*mode_chi) # not nfp-sensitive
-
+    return jnp.diag(1j*mode_chi)
 
 def wrap_grid_content_jit(content:jnp.ndarray):
     '''
     Used for wrapping grid content. Defined outside the ChiPhiFunc class so that
     it can be used in @njit compiled methods.
+    Input: -----
+
+    (m, k) 2d array.
+
+    Output: -----
+
+    (m, k+1) 2d array. output[:, -1] = output[:, 0]
     '''
     first_col = content[:,0]
-    return(jnp.concatenate((content, first_col[:,None]), axis=1)) # not nfp-sensitive
-
+    return(jnp.concatenate((content, first_col[:,None]), axis=1))
 
 def max_log10(input):
-    ''' Calculates the max amplitude's order of magnitude '''
+    '''
+    Calculates the max amplitude's order of magnitude
+    Input: -----
+
+    An ndarray.
+
+    Output: -----
+
+    The log10 of the maximum element in input.
+    '''
     return(jnp.log10(jnp.max(jnp.abs(input)))) # not nfp-sensitive
 
-# Input is not order-dependent, and permitted to be static.
+# Contains static argument.
 # @partial(jit, static_argnums=(0,))
 def jit_fftfreq_int(int_in:int):
-    ''' Shorthand for jnp.fft.fftfreq(n)*n rounded to the nearest int. '''
+    '''
+    Shorthand for jnp.fft.fftfreq(n)*n rounded to the nearest int.
+    The input should be static.
+
+    Input: -----
+
+    An integer equal to the length of an array (and its FFT)
+
+    Output: -----
+
+    np.fft.fft_freq(input)*input
+    '''
     out = jnp.arange(int_in)
     return(jnp.where(out>(int_in-1)//2,out-int_in,out))
 
-# Input is not order-dependent, and permitted to be static.
+# Contains static argument.
 # @partial(jit, static_argnums=(0,))
 def ChiPhiFuncSpecial(error_code:int):
-    return(ChiPhiFunc(jnp.nan, error_code, is_special=True))
+    '''
+    Creates a special ChiPhiFunc that represents 0 or an error.
+    This is necessary because JAX does not know the value of traced
+    values at compile time. Having a special zero type allows simplifications
+    like 0*n=0, and prevents even-oddness mismatch when zero odd order
+    ChiPhiFunc's (which have even number of chi components) are treated as
+    scalar 0. For example:
 
-# A jitted vectorized convolution function
+    odd + ChiPhiFuncSpecial(0)
+    = ChiPhiFunc(nfp=odd) + ChiPhiFunc(nfp=0)
+    = ChiPhiFunc(nfp=0)
+    odd + 0
+    = ChiPhiFunc(nfp=odd) + (traced int with unknown value)
+    = illegal operation.
+
+    Input: -----
+
+    An integer. Must be smaller than or equal to 0. This represents the type
+    of the special ChiPhiFunc and will be stored as its nfp.
+
+    Output: -----
+
+    A ChiPhiFunc with the given nfp (if error_code>0 then it's set to -2) and
+    content=np.nan
+    '''
+    if error_code>0:
+        return(ChiPhiFunc(jnp.nan, -2))
+    return(ChiPhiFunc(jnp.nan, error_code)) # , is_special=True))
+
+'''
+Convolves 2 2d arrays along axis=0.
+The inputs must have with equal lengths along axis=1
+'''
 batch_convolve = jit(vmap(jnp.convolve, in_axes=1, out_axes=1))
-
 
 def phi_avg(in_quant):
     '''
@@ -120,7 +163,7 @@ def phi_avg(in_quant):
     '''
     if isinstance(in_quant, ChiPhiFunc):
         # special ChiPhiFunc's
-        if in_quant.is_special:
+        if in_quant.is_special():
             return(in_quant)
         new_content = jnp.array([
             jnp.mean(in_quant.content,axis=1)
@@ -134,34 +177,62 @@ def phi_avg(in_quant):
 ''' I.1 Grid implementation '''
 class ChiPhiFunc:
     '''
-    ChiPhiFunc represents a function of chi and phi in even/odd fourier series in
-    chi. The coefficients are assumed phi-dependent with nfp field periods.
-    This dependence is stored on n grid points located at (0, ... 2pi(n-1)/n/nfp) in phi.
-    Members -----
-    1. content: 2d, complex64 or complex 128 arrays storing a function of chi and phi.
+    ChiPhiFunc represents a function of chi and phi in even(m = 0, 2, 4, ...)
+    or odd (m = 1, 3, 5, ...) fourier series in chi. The coefficients are
+    phi-dependent, and has nfp field periods. The phi dependence is stored
+    on n grid points located at phi = (0, ... 2pi(n-1)/n/nfp).
 
-    2. nfp: int, number of field periods. Automatically set to 0 when content has
-    only one column.
+    Members: -----
 
-    3. is_special: bool. A ChiPhiFunc with is_special represents an out-of-bound item when
-    loading from a ChiPhiEpsFunc. Such a ChiPhiFunc behaves identically to jnp.nan except
-    when multiplied with 0, which yields 0. This behavior is needed to work with the
-    way the maxima order-matcher enforces summation bounds.
+    1. (Traced) content: 2d ndarray, complex64 or complex 128 arrays storing a
+    function of chi and phi. The chi dependence can be specified as either an
+    exponential or trigonometric Fourier series. This is specified with
+    the argument trig_mode in the constructor.
+    The format of content is as follows:
+    Exponential:
+    [
+        [ A_{-m}(phi = 0), ... A_{-m}(phi = 2pi(n-1)/n/nfp) ],
+        [ A_{-(m-2)}(phi = 0), ... A_{-(m-1)}(phi = 2pi(n-1)/n/nfp) ],
+        ...,
+        [ A_{+m}(phi = 0), ... A_{+m}(phi = 2pi(n-1)/n/nfp) ],
+    ]
+    Trigonometric:
+    [
+        [ A^s_{m}(phi = 0), ... A^s_{-m}(phi = 2pi(n-1)/n/nfp) ],
+        [ A^s_{m-1}(phi = 0), ... A^s_{m-1}(phi = 2pi(n-1)/n/nfp) ],
+        ...,
+        [ A^c_{+m}(phi = 0), ... A^c_{+m}(phi = 2pi(n-1)/n/nfp) ],
+    ]
 
-    When is_special is True, nfp represents the type of special ChiPhiFunc:
+    2. (Static) nfp: int, number of field periods.
+
+    It is necessary to represent values exactly known to be 0 as
+    a special ChiPhiFunc, because JAX does not know the value of traced
+    values at compile time. Having a special zero type allows simplifications
+    like 0*n=0, and prevents even-oddness mismatch when zero odd order
+    ChiPhiFunc's (which have even number of chi components) are treated as
+    scalar 0. For example:
+
+    odd + ChiPhiFuncSpecial(0)
+    = ChiPhiFunc(nfp=odd) + ChiPhiFunc(nfp=0)
+    = ChiPhiFunc(nfp=0)
+    odd + 0
+    = ChiPhiFunc(nfp=odd) + (traced int with unknown value)
+    = illegal operation.
+
+    Since JAX does not support exception raising, errors are also
+    stored as special ChiPhiFunc. Special ChiPhiFunc's always have
+    content=np.nan and nfp<=0:
+
     nfp = 0 -----
     Zero produced by non-traced conditionals in math_utilities, or quantities
     known to be zero. The former is needed because such conditionals enforces
-    summation bounds, and need to cancel with out-of-bound power series coefficients.
-    The latter is needed because *0 changes the even/oddness of a ChiPhiFunc, and
-    need to be handled very carefully.
-
-    nfp = -1 -----
-    Produced when accessing an out-of-bound element of a ChiPhiEpsFunc.
-    Can be cancelled by a ChiPhiFuncSpecial with nfp=0.
+    summation bounds, and need to cancel with out-of-bound power series
+    coefficients. The latter is needed because *0 changes the even/oddness
+    of a ChiPhiFunc, and need to be handled very carefully.
 
     Negative-nfp -----
-    -1: Out of bound - DISCONTINUED
+    -1: DEPRECIATED
     -2: Invalid/mismatched nfp
     -3: Invalid mode number
     -4: Mismatched even/oddness/direct division by chi-dependent ChiPhiFunc
@@ -173,7 +244,7 @@ class ChiPhiFunc:
     -9: Incorrect argument for pow
     -10: Incorrect argument for dchi
     -11: Incorrect argument for dphi
-    -12: match_m() failed
+    -12: DEPRECIATED
     -13: Invalid object to diff()
     -14: Inconsistent type in ChiPhiEpsFunc
     -15: Insufficient argument in Equilibrium
@@ -183,40 +254,38 @@ class ChiPhiFunc:
     When multiple error types are present, the error will be recorded as:
     100*error_a+10*error_b+error_c
     (example of error -4, -3 followed by -11: -40311.)
-
-    Rules:
-    + ----
-    1. special(nfp=0)+anything = anything
-    2. special(nfp!=0)+anything not special = special(nfp!=0)
-    3. special(nfp!=0)+special(nfp!=0) = special(merged error message)
-    4. special(nfp=0)*special(nfp=1) = special(nfp=0)
-
     '''
-    def __init__(self, content:jnp.ndarray, nfp:int, is_special: bool=False, fourier_mode: bool=False):
+    def __init__(self, content:jnp.ndarray, nfp:int, trig_mode: bool=False):
         '''
-        Constructor. It has 1 extra parameter.
-        fourier_mode=true, every row of a content array is treated as a sin/cos
-        chi modes, rather than e^(im phi).
+        Constructor.
+
+        Inputs: -----
+
+        content: a 2d ndarray.
+
+        nfp: number of field periods.
+
+        trig_mode: Whether the ChiPhiFunc is given as trigonometric or exponential
+        fourier series.
+        When trig_mode=True, every row of a content array is treated as
+        a sin/cos chi mode, rather than a e^(im phi) mode. The format for
         '''
-        if is_special:
-            if nfp>0:
-                self.nfp = -2
-            self.is_special = True
+        if nfp<=0:
             self.content = jnp.nan
             self.nfp = nfp
         else:
             if content.ndim!=2: # Checks content shape
-                self.is_special = True
+                # self.is_special = True
                 self.content = jnp.nan
                 self.nfp = -7
             # Checks nfp type and sign
             elif nfp<=0 or not isinstance(nfp, int):
-                self.is_special = True
+                # self.is_special = True
                 self.content = jnp.nan
                 self.nfp = -2
             # A ChiPhiFuncs satisfying all above conditions is legal
             else:
-                self.is_special = False
+                # self.is_special = False
                 self.nfp = nfp
                 # Forcing complex128 type
                 if config.double_precision:
@@ -224,11 +293,16 @@ class ChiPhiFunc:
                 else:
                     content = content.astype(jnp.complex64)
                 self.content = jnp.asarray(content)
-                if fourier_mode:
-                    self.content = self.fourier_to_exp().content
+                if trig_mode:
+                    self.content = self.trig_to_exp().content
+
+    def is_special(self):
+        ''' Checks if a ChiPhiFunc is special. '''
+        return(self.nfp<=0)
 
     def __str__(self):
-        if self.is_special:
+        ''' For printing a ChiPhiFunc '''
+        if self.is_special():
             if self.nfp==-1:
                 msg = 'index out of bound'
             elif self.nfp==0:
@@ -240,25 +314,37 @@ class ChiPhiFunc:
             'ChiPhiFunc(content.shape='+str(self.content.shape)+', nfp='+str(self.nfp)+')'
         )
 
-    ''' For JAX use. '''
+    ''' Registers ChiPhiFunc as a pytree (nested list/dict) with JAX. '''
     def _tree_flatten(self):
         children = (self.content,)  # arrays / dynamic values
-        aux_data = {'nfp': self.nfp, 'is_special': self.is_special}  # static values
+        aux_data = {'nfp': self.nfp}  # static values
         return (children, aux_data)
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
         return cls(*children, **aux_data)
 
-    ''' I.1.1 Operator overloads '''
-    # Input is not order-dependent, and permitted to be static.
+    '''
+    I.1.1 Operator overloads
+    The following section contains overloads for algebraic operators. The
+    outputs will always be ChiPhiFunc. Note that any term known to be 0
+    will either be a ChiPhiFunc(nfp=0) or a ChiPhiFunc with content close to 0.
+    The reasoning is explained in the constructor section.
+    '''
+    # Static argument
     def __getitem__(self, index: int):
         '''
         Obtains the m=index component of this ChiPhiFunc.
         DOES NOT WORK like list indexing.
+
         Input: -----
+
         index: m (mode number)
+
+        Outputs: -----
+
+        A ChiPhiFunc of shape (1, self.content.shape[1]).
         '''
-        if self.is_special:
+        if self.is_special():
             return(self)
         len_chi = self.content.shape[0]
         # Checking even/oddness and total length
@@ -269,29 +355,43 @@ class ChiPhiFunc:
             return new_content[0,0]
         return(ChiPhiFunc(new_content, self.nfp))
 
-
     def __neg__(self):
-        # If self.is_special is true, this still preserves the error message
-        return ChiPhiFunc(-self.content, self.nfp, self.is_special)
-
+        '''
+        Overloads the - operator. Returns a ChiPhiFunc with
+        content=-self.content.
+        '''
+        # If self.is_special() is true, this still preserves the error message
+        return ChiPhiFunc(-self.content, self.nfp, self.is_special())
 
     def __add__(self, other):
         '''
-        Adds self with another ChiPhiFunc or scalar.
+        Overloads the self + other operator. Internally, this is a sum of the
+        two arguments' content with the center element of axis=0 aligned.
+        Both ChiPhiFunc must have equal phi grid numbers and nfp. The legal combination of
+        argument types are:
+        even self + even ChiPhiFunc other
+        even self + scalar or DeviceArrays(shape==[]) other
+        odd self + odd ChiPhiFunc other
+        even/odd self + ChiPhiFunc(nfp==0) other => self
+        ChiPhiFunc(nfp==0) self + even/odd other => other
+        even/odd self + ChiPhiFunc(nfp<0) other => ChiPhiFunc(nfp<0) other
+        ChiPhiFunc(nfp<0) self + even/odd other => ChiPhiFunc(nfp<0) self
+        ChiPhiFunc(nfp<=0) self + ChiPhiFunc(nfp<=0) other
+            => ChiPhiFunc(self.nfp*100+other.nfp)
         '''
         if isinstance(other, ChiPhiFunc):
             if self.nfp==0:
                 return(other)
             if other.nfp==0:
                 return(self)
-            if self.is_special:
-                if other.is_special: # Adding two nulls compound the error message
+            if self.is_special():
+                if other.is_special(): # Adding two nulls compound the error message
                     # if self.nfp==-1 or other.nfp==-1:
                     #     return(ChiPhiFuncSpecial(-1))
                     # else:
                     return(ChiPhiFuncSpecial(self.nfp*100+other.nfp))
                 return(self)
-            if other.is_special:
+            if other.is_special():
                 return(other)
             if self.nfp!=other.nfp:
                 return(ChiPhiFuncSpecial(-2)) # Mismatched shape
@@ -321,7 +421,7 @@ class ChiPhiFunc:
             if not jnp.isscalar(other):
                 if other.ndim!=0: # 0-d np array will check false for isscalar.
                     return(ChiPhiFuncSpecial(-5))
-            if self.is_special:
+            if self.is_special():
                 if self.nfp==0:
                     return(other)
                 return(self)
@@ -334,25 +434,34 @@ class ChiPhiFunc:
             updated_content = self.content.at[center_loc, :].set(updated_center)
             return(ChiPhiFunc(updated_content, self.nfp))
 
-
     def __radd__(self, other):
-        ''' other + self '''
+        ''' Overloads the other + self operator. See __add__() for details.'''
         return(self+other)
 
-
     def __sub__(self, other):
-        ''' self - other '''
+        ''' Overloads the self - other operator. See __add__() for details. '''
         return(self+(-other))
 
-
     def __rsub__(self, other):
-        ''' other - self '''
+        ''' Overloads the other - self operator. See __add__() for details. '''
         return(-(self-other))
-
 
     def __mul__(self, other):
         '''
-        Multiplies self with another ChiPhiFunc or scalar.
+        Overloads the self * other operator. Internally, this is a convolution
+        of the two arguments' content along axis=0.
+        Both ChiPhiFunc must have equal phi grid numbers and nfp. The legal
+        combination of argument types are:
+        even/odd self * even/odd ChiPhiFunc other
+        even/odd self * scalar or DeviceArrays(shape==[]) other
+        even/odd self * ChiPhiFunc(nfp==0) other => ChiPhiFunc(nfp==0) other
+        ChiPhiFunc(nfp==0) self * even/odd other => ChiPhiFunc(nfp==0) self
+        ChiPhiFunc(nfp==0) self * ChiPhiFunc(nfp==0) other
+            => ChiPhiFunc(nfp==0) self
+        ChiPhiFunc(nfp<0) self * even/odd other => ChiPhiFunc(nfp<0) self
+        even/odd self * ChiPhiFunc(nfp<0) other => ChiPhiFunc(nfp<0) other
+        ChiPhiFunc(nfp<0) * ChiPhiFunc(nfp<0) other
+            => ChiPhiFunc(self.nfp*100+other.nfp)
         '''
         if isinstance(other, ChiPhiFunc):
             if self.nfp==0:
@@ -363,14 +472,14 @@ class ChiPhiFunc:
                 if self.nfp<0: # nfp < 0 always means error message
                     return(self)
                 return(other) # 0*out of bound and 0*non-trivial are both 0.
-            if self.is_special:
-                if other.is_special: # Adding two nulls compound the error message
+            if self.is_special():
+                if other.is_special(): # Adding two nulls compound the error message
                     # if self.nfp==-1 or other.nfp==-1:
                     #     return(ChiPhiFuncSpecial(-1))
                     # else:
                     return(ChiPhiFuncSpecial(self.nfp*100+other.nfp))
                 return(self)
-            if other.is_special:
+            if other.is_special():
                 return(other)
             if self.nfp!=other.nfp:
                 return(ChiPhiFuncSpecial(-2)) # Mismatched nfp
@@ -387,24 +496,44 @@ class ChiPhiFunc:
             if not jnp.isscalar(other):
                 if other.ndim!=0: # 0-d np array will check false for isscalar.
                     return(ChiPhiFuncSpecial(-5))
-            if self.is_special:
+            if self.is_special():
                 return(self)
             return(ChiPhiFunc(other * self.content, self.nfp))
 
 
     def __rmul__(self, other):
-        ''' other * self '''
-        return(self*other) # not nfp-sensitive
+        ''' Overloads the other * self operator. See __mul__() for details. '''
+        return(self*other)
 
-
+    @jit
     def __truediv__(self, other):
-        ''' self / other, only supports division by scalar or functions of phi. '''
+        '''
+        Overloads the self / other operator. "Division" in the context of NAE
+        recursion relations is a deconvolution problem. For an other with no
+        chi dependence, this operation is trivial, and for a chi-dependent
+        other, this operation may be a exact or under-determined linear problem.
+        Luckily, (see paper appendix for linear operations) there is only one
+        case where "division" with chi-dependent other is necessary, in
+        Yn.
+        Both ChiPhiFunc must have equal phi grid numbers and nfp. The legal
+        combination of argument types are:
+        even/odd self / ChiPhiFunc other with one Chi component
+        even/odd self / scalar or DeviceArrays(shape==[]) other
+        even/odd self / ChiPhiFunc(nfp==0) other => /0 error
+        ChiPhiFunc(nfp==0) self / even/odd other => ChiPhiFunc(nfp==0) self
+        ChiPhiFunc(nfp==0) self * ChiPhiFunc(nfp==0) other
+            => ChiPhiFunc(nfp==0) self
+        ChiPhiFunc(nfp<0) self / even/odd other => ChiPhiFunc(nfp<0) self
+        even/odd self / ChiPhiFunc(nfp<0) other => ChiPhiFunc(nfp<0) other
+        ChiPhiFunc(nfp<0) self / ChiPhiFunc(nfp<0) other
+            => ChiPhiFunc(self.nfp*100+other.nfp)
+        '''
         if isinstance(other, ChiPhiFunc):
             # Handles zero/error, any/error and any/zero
-            if other.is_special:
+            if other.is_special():
                 if other.nfp==0:
                     return(ChiPhiFuncSpecial(-8)) # /zero error
-                if self.is_special: # dividing two nulls compound the error message
+                if self.is_special(): # dividing two nulls compound the error message
                     # if self.nfp==-1 or other.nfp==-1:
                     #     return(ChiPhiFuncSpecial(-1))
                     # else:
@@ -427,8 +556,10 @@ class ChiPhiFunc:
 
 
     def __rtruediv__(self, other):
-        ''' other/self, only supports division by scalar or functions of phi. '''
-        if self.is_special:
+        '''
+        Overloads the self / other operator. See __truediv__ for details.
+        '''
+        if self.is_special():
             # if self.nfp==-1:
             #     return(self)
             if self.nfp==0:
@@ -440,7 +571,7 @@ class ChiPhiFunc:
         else:
             if isinstance(other, ChiPhiFunc):
                 # Handles zero/non-zero and error/non-zero
-                if other.is_special:
+                if other.is_special():
                     return(other)
                 # Handles non-zero/non-zero and error/non-zero
                 return(ChiPhiFunc(other.content/self.content, self.nfp))
@@ -453,16 +584,20 @@ class ChiPhiFunc:
 
     def __rmatmul__(self, mat):
         '''
-        other@self, for treating this object as a vector of Chi modes,
-        and multiplying with a matrix
+        Overloads the other @ self operator, for treating this object as a
+        vector of Chi modes, and multiplying with a matrix. Directly multiplies
+        other to self.content.
         '''
         return ChiPhiFunc(mat @ self.content, self.nfp)
 
-    # Input is not order-dependent, and permitted to be static.
-    # @partial(jit, static_argnums=(1,))
+    # Static argument
+    @partial(jit, static_argnums=(1,))
     def __pow__(self, other):
-        ''' Integer power of ChiPhiFunc '''
-        if self.is_special:
+        '''
+        Overloads the self ** other operator. Only supports integer other.
+        A wrapper for multiple * operations.
+        '''
+        if self.is_special():
             return(self)
         new_content = self.content.copy()
         if other%1!=0:
@@ -475,11 +610,21 @@ class ChiPhiFunc:
 
     ''' I.1.2 Derivatives, integrals and related methods '''
 
-    # Input is not order-dependent, and permitted to be static.
-    # @partial(jit, static_argnums=(1,))
+    # Static argument
+    @partial(jit, static_argnums=(1,))
     def dchi(self, order=1):
-        ''' Derivative in chi. order gives order. '''
-        if self.is_special:
+        '''
+        Derivative in chi.
+
+        Input: -----
+
+        order: order of derivative.
+
+        Output: -----
+
+        ChiPhiFunc.
+        '''
+        if self.is_special():
             return(self)
         len_chi = self.content.shape[0]
         if order<0:
@@ -487,10 +632,15 @@ class ChiPhiFunc:
         mode_i = (1j*jnp.arange(-len_chi+1,len_chi+1,2)[:,None])**order
         return(ChiPhiFunc(mode_i * self.content, self.nfp))
 
-
     def antid_chi(self):
-        ''' Anti-derivative in chi. order gives order. '''
-        if self.is_special:
+        '''
+        Anti-derivative in chi. Ignores the m=0 component, if any.
+
+        Output: -----
+
+        ChiPhiFunc.
+        '''
+        if self.is_special():
             return(self)
         len_chi = self.content.shape[0]
         temp = jnp.arange(-len_chi+1,len_chi+1,2,dtype=jnp.float32)[:,None]
@@ -498,10 +648,10 @@ class ChiPhiFunc:
             temp = temp.at[len(temp)//2].set(jnp.inf)
         return(ChiPhiFunc(-1j * self.content/temp, self.nfp))
 
-    # Input is not order-dependent, and permitted to be static.
-    # @partial(jit, static_argnums=(1, 2,))
-    def dphi(self, order:int=1, mode=0):  # nfp-sensitive!!
-        if self.is_special:
+    # Static argument
+    @partial(jit, static_argnums=(1, 2,))
+    def dphi(self, order:int=1, mode=0):
+        if self.is_special():
             return(self)
         if order<0:
             return(ChiPhiFuncSpecial(-11))
@@ -521,36 +671,38 @@ class ChiPhiFunc:
             return(ChiPhiFuncSpecial(-11))
         return(ChiPhiFunc(out*self.nfp**order, self.nfp))
 
-
-    def dphi_iota_dchi(self, iota):  # not nfp-sensitive
-        if self.is_special:
-            return(self)
-        return(self.dphi()+iota*self.dchi())
-
-
     def exp(self):
         '''
         Used to calculate e**(ChiPhiFunc). Only support ChiPhiFunc with no
-        chi dependence
+        chi dependence.
+
+        Outputs: -----
+
+        ChiPhiFunc e**(self). Is chi-independent.
         '''
-        if self.is_special:
+        if self.is_special():
             return(self)
         if self.content.shape[0]!=1:
             return(ChiPhiFuncSpecial(-7))
         return(ChiPhiFunc(jnp.exp(self.content), self.nfp))
 
     # Input is not order-dependent, and permitted to be static.
-    # @partial(jit, static_argnums=(1,))
+    @partial(jit, static_argnums=(1,))
     def integrate_phi_fft(self, zero_avg):
         '''
-        Used for solvability condition. phi-integrate a ChiPhiFunc over 0 to
-        2pi or 0 to a given phi. The boundary condition output(phi=0) = 0 is enforced.
+        Phi-integrate a ChiPhiFunc over 0 to 2pi or 0 to a given phi.
+        Has two choices of initial conditions, output(phi=0) = 0 or
+        avg(output) = 0.
+
         Input: -----
-        zero_avg: whether the integration constant is set to have F(0)=0 or avg(F)=0
+
+        zero_avg: When True, use avg(output)=0. When False, use output(0)=0.
+
         Output: -----
-        a new ChiPhiFunc
+
+        ChiPhiFunc
         '''
-        if self.is_special:
+        if self.is_special():
             return(self)
         # number of phi grids
         len_chi = self.content.shape[0]
@@ -572,18 +724,25 @@ class ChiPhiFunc:
         return(ChiPhiFunc(out_content, self.nfp))
 
     ''' I.1.3 phi Filters '''
+    # Static arguments
     # @partial(jit, static_argnums=(1, 2,))
     def filter(self, arg, mode:int=0):
         '''
         An expandable filter. Now only low-pass is available.
+
         Inputs: -----
+
         mode: filtering mode. Available modes are:
             0: low_pass.
-        arg: a flexible type argument for the filter.
+
+        arg: filter for argument:
+            Low-pass: cutoff frequency.
+
         Output: -----
+
         The filtered ChiPhiFunc.
         '''
-        if self.is_special:
+        if self.is_special():
             return(self)
         if mode == 0:
             len_phi = self.content.shape[1]
@@ -603,93 +762,69 @@ class ChiPhiFunc:
         '''
         Low pass filter that reduces the length of a ChiPhiFunc.
         Inputs: -----
-        mode: filtering mode. Available modes are:
-            0: low_pass.
-        arg: a flexible type argument for the filter.
+
+        arg: cut-off frequency.
+
         Output: -----
+
         The filtered ChiPhiFunc.
         '''
-        if self.is_special:
+        if self.is_special():
             return(self)
         fft_content = jnp.fft.fft(self.content, axis = 1)
         short_fft_content = fft_filter(fft_content, arg*2, axis=1)
         short_content = jnp.fft.ifft(short_fft_content, axis=1)
         return(ChiPhiFunc(short_content, self.nfp))
 
-
-    # We will jit all iterations, but will not jit the equilibrium class.
-    # This will not be jitted at the moment.
-    def noise_filter(self, mode, arg):
-        '''
-        Measure the "noise" in a ChiPhiFunc by comparing it to the result of
-        a filter
-        '''
-        if self.is_special:
-            return(self)
-        return(self-self.filter(mode=mode, arg=arg))
-
     ''' I.1.4 Properties '''
-
     def get_amplitude(self):
-        ''' Getting the average amplitude of the content '''
+        '''
+        Getting the average amplitude of the content
+
+        Outputs:
+
+        A real scalar.
+        '''
         return(jnp.average(jnp.abs(self.content)))
 
-
     def real(self):
-        ''' Functions like jnp.imag() '''
-        if self.is_special:
+        '''
+        Functions like jnp.real()
+
+        Outputs:
+
+        A real scalar.
+        '''
+        if self.is_special():
             return(self)
         return(ChiPhiFunc(j(self.content), self.nfp))
 
-
     def imag(self):
-        ''' Functions like j() '''
-        if self.is_special:
+        '''
+        Functions like jnp.imag()
+
+        Outputs:
+
+        A real scalar.
+        '''
+        if self.is_special():
             return(self)
         return(ChiPhiFunc(jnp.imag(self.content), self.nfp))
 
+    def cap_m(self, m):
+        '''
+        Takes the center m+1 rows of content. If the ChiPhiFunc
+        contain less chi modes than m+1, It will be zero-padded.
 
-    def get_constant(self):
-        return(self[0])
+        Inputs: -----
 
+        m: number of m in the output.
 
-    def get_phi_zero(self):
-        ''' Returns the value when phi=0. Copies. '''
-        new_content = jnp.array([self.content[:,0]]).T
-        if len(new_content) == 1:
-            return(new_content[0][0])
-        return(ChiPhiFunc(jnp.array([self.content[:,0]]).T, 0))
+        Outputs: -----
 
-    #
-    # def match_m(self, other): # nfp-dependent!!
-    #     '''
-    #     Returns a padded/clipped copy of self that has the same number
-    #     of chi components as a provided ChiPhiFunc.
-    #     '''
-    #     if not isinstance(other, ChiPhiFunc):
-    #         return(ChiPhiFuncSpecial(-12))
-    #     if other.is_special:
-    #         return(ChiPhiFuncSpecial(-12))
-    #     target_chi = other.content.shape[0]
-    #     len_chi = self.content.shape[0]
-    #     # Check even-oddness
-    #     if len_chi%2!=target_chi%2:
-    #         return(ChiPhiFuncSpecial(-4))
-    #     # target chi comp # = current chi comp #
-    #     if target_chi == len_chi:
-    #         return(self)
-    #     # target chi comp # > current chi comp #
-    #     if target_chi > len_chi:
-    #         padding = ChiPhiFunc(jnp.zeros((target_chi, self.content.shape[1])), self.nfp)
-    #         return(self+padding)
-    #     # target chi comp # < current chi comp #
-    #     num_clip = len_chi - target_chi
-    #     return(ChiPhiFunc(self.content[num_clip//2:-num_clip//2], self.nfp))
-
-    # Takes the center m+1 rows of content. If the ChiPhiFunc
-    # contain less chi modes than m+1, It will be zero-padded.
-    def cap_m(self, m): # nfp-dependent!!
-        if self.is_special:
+        A ChiPhiFunc with maximum chi mode number m (and m+1 chi components)
+        '''
+        if self.is_special():
             return(self)
         target_chi = m+1
         len_chi = self.content.shape[0]
@@ -703,36 +838,60 @@ class ChiPhiFunc:
         return(ChiPhiFunc(self.content[num_clip//2:-num_clip//2], self.nfp))
 
     def pad_m(self,m):
+        '''
+        Alias for pad_chi to have a known maximum m instead. Recall that the
+        number of chi components in a ChiPhiFunc equals to m+1.
+        '''
         return self.pad_chi(m+1)
-
 
     def pad_chi(self, target_chi):
         '''
         Pads a ChiPhiFunc to be have a given total number of mode components.
-        Both self.content.shape[0] and  must be even/odd.
+        Both self.content.shape[0] and must be even/odd. target_chi MUST BE
+        larger than the current number of chi components in self.
         Note: This takes the total number of mode components, rather
         than m, because it's primarily used when solving the looped
         equations. It's sometimes less confusing to use the total number
-        of mode components (equations) than the m of the corresponding equations.
+        of mode components (equations) rather than the maximum mode number m
+        during equation-counting.
+
+        Input: -----
+
+        target_chi: number of chi components in output. Must be greater than the
+        number of chi components in self. Must have the same even/oddness as
+        self.
+
+        Outputs: -----
+
+        ChiPhiFunc with target_chi chi components.
         '''
-        if self.is_special:
+        if self.is_special():
             return(self)
         len_chi = self.content.shape[0]
         if len_chi%2!=target_chi%2:
             return(ChiPhiFuncSpecial(-4))
         if target_chi < len_chi:
             return(ChiPhiFuncSpecial(-12))
-        padding = ChiPhiFunc(jnp.zeros((target_chi, self.content.shape[1])), self.nfp)
+        padding = ChiPhiFunc(
+            jnp.zeros((target_chi, self.content.shape[1])),
+            self.nfp
+        )
         return(self+padding)
 
 
     ''' I.1.5 Output and plotting '''
     def get_lambda(self):
-        ''' Get a 2d vectorized function, f(chi, phi) for plotting a ChiPhiFunc '''
+        '''
+        Getting a 2d vectorized function, f(chi, phi) for plotting a ChiPhiFunc.
+
+        Output: -----
+
+        A vectorized callables f(chi, phi).
+        '''
         len_chi = self.content.shape[0]
         len_phi = self.content.shape[1]
 
-        # Create 'x' for interpolation. 'x' is 1 longer than lengths specified due to wrapping
+        # Create 'x' for interpolation. 'x' is wrapped for periodicity.
         phi_looped = jnp.linspace(0,2*jnp.pi/self.nfp, len_phi+1)
         # wrapping
         content_looped = wrap_grid_content_jit(self.content)
@@ -746,19 +905,21 @@ class ChiPhiFunc:
                 [jnp.e**(1j*(chi)*mode_chi[i]) * jnp.interp((phi)%(2*jnp.pi/self.nfp),
                  phi_looped, content_looped[i]) for i in range(len_chi)]
             )
-        )) # nfp-dependent!!
+        ))
 
-    def display_content(self, fourier_mode = False, colormap_mode = False):
+    def display_content(self, trig_mode = False, colormap_mode = False):
         '''
         Plot the content of a ChiPhiFunc.
+
         Input: -----
-        fourier_mode: bool. When True, plot the trig Chi fourier coefficients,
+
+        trig_mode: bool. When True, plot the trig Chi fourier coefficients,
         rather than exponential
 
         colormap_mode: bool. When True, make colormaps. Otherwise makes line plots.
         '''
 
-        if self.is_special:
+        if self.is_special():
             print('display_content(): input is ChiPhiFuncSpecial.')
             print(self)
             return()
@@ -768,8 +929,8 @@ class ChiPhiFunc:
             content = content*jnp.ones((1,100))
         len_phi = content.shape[1]
         phis = jnp.linspace(0,2*jnp.pi*(1-1/len_phi)/self.nfp, len_phi)
-        if fourier_mode:
-            fourier = ChiPhiFunc(content, self.nfp).exp_to_fourier()
+        if trig_mode:
+            fourier = ChiPhiFunc(content, self.nfp).exp_to_trig()
             if len(fourier.content)%2==0:
                 ax1 = plt.subplot(121)
                 ax1.set_title('cos, nfp='+str(self.nfp))
@@ -829,9 +990,13 @@ class ChiPhiFunc:
     def display(self, complex = False, size=(100,100), avg_clim = False):
         '''
         Plot a period in both chi and phi in colormap.
+
         Input: -----
+
         complex: bool, plot complex components
+
         size: (int, int), size of the plot
+
         avg_clim: limit color to only +- avg(self.content).
         '''
         plt.rcParams['figure.figsize'] = [4,3]
@@ -866,27 +1031,25 @@ class ChiPhiFunc:
             plt.show()
 
 
-    def fft(self): # nfp-dependent!!
-        ''' FFT the content and returns as a ChiPhiFunc '''
+    def fft(self):
+        ''' FFT the axis=1 of content and returns as a ChiPhiFunc '''
         return(ChiPhiFunc(jnp.fft.fft(self.content, axis=1), self.nfp))
 
 
-    def ifft(self): # nfp-dependent!!
-        ''' IFFT the content and returns a ChiPhiFunc '''
+    def ifft(self):
+        ''' IFFT the axis=1 of content and returns as a ChiPhiFunc '''
         return(ChiPhiFunc(jnp.fft.ifft(self.content, axis=1), self.nfp))
 
     ''' I.1.6 Utilities '''
-
-    # no need to jit
     def export_single_nfp(self):
-        ''' Outputs a ChiPhiFunc with just 1 nfp. '''
+        '''
+        Outputs a ChiPhiFunc with just 1 nfp.
+        '''
         new_content = jnp.tile(self.content, (1,self.nfp))
         return(ChiPhiFunc(new_content, 1))
 
-    # Input is order-dependent but the function is rarely used.
-    # Permitted to be static. Format: [sn, sn-1, ... cn-1, cn]
-
-    def fourier_to_exp(self):
+    def trig_to_exp(self):
+        ''' Converts a ChiPhiFunc from trig to exp fourier series. '''
         content=self.content
         n_dim = content.shape[0]
         ones = jnp.ones(n_dim//2)
@@ -898,10 +1061,8 @@ class ChiPhiFunc:
             arr_anti_diag = jnp.concatenate([-0.5j*ones, jnp.array([0.5]), 0.5*ones])[:, None]
         return(ChiPhiFunc(arr_diag*content + jnp.flip(arr_anti_diag*content, axis=0), self.nfp))
 
-    # Input is order-dependent but the function is rarely used.
-    # Permitted to be static.
-
-    def exp_to_fourier(self):
+    def exp_to_trig(self):
+        ''' Converts a ChiPhiFunc from exp to trig fourier series. '''
         content=self.content
         n_dim = content.shape[0]
         ones = jnp.ones(n_dim//2)
@@ -915,7 +1076,7 @@ class ChiPhiFunc:
             arr_anti_diag = jnp.concatenate([ones, jnp.array([0.5]), 1j*ones])[:, None]
         return(ChiPhiFunc(arr_diag*content + jnp.flip(arr_anti_diag*content, axis=0), self.nfp))
 
-# For JAX use
+# For JAX use. Registers ChiPhiFunc as a pytree.
 tree_util.register_pytree_node(ChiPhiFunc,
                                ChiPhiFunc._tree_flatten,
                                ChiPhiFunc._tree_unflatten)
@@ -969,7 +1130,6 @@ def dphi_op_pseudospectral(n:int):
     toeplitz = jnp.sum(toeplitz, axis=0)
     return(toeplitz)
 
-
 ''' II. Deconvolution ("dividing" chi-dependent terms) '''
 # @partial(jit, static_argnums=(2,))
 def get_O_O_einv_from_A_B(chiphifunc_A:ChiPhiFunc, chiphifunc_B:ChiPhiFunc, rank_rhs:int):
@@ -989,14 +1149,19 @@ def get_O_O_einv_from_A_B(chiphifunc_A:ChiPhiFunc, chiphifunc_B:ChiPhiFunc, rank
 
 
     Inputs: -----
+
     A, B: ChiPhiFunc coefficients
 
     rank_rhs: The number of rows in the RHS.
 
     Outputs: -----
+
     O_matrices,
+
     O_einv,
+
     vector_free_coef: A (n+1*len_phi)-component array
+
     Y_nfp: the nfp of Y.
     '''
     i_free = (rank_rhs+1)//2 # We'll always use Yn0 or Yn1p as the free var.
@@ -1028,44 +1193,40 @@ def get_O_O_einv_from_A_B(chiphifunc_A:ChiPhiFunc, chiphifunc_B:ChiPhiFunc, rank
 
     return(O_matrices, O_einv, -vector_free_coef)
 
-''' III. Grid 1D deconvolution (used for "dividing" a chi-dependent quantity)'''
-# This part solves the pointwise product function problem A*va = B*vb woth unknown va.
-# by chi mode matching. It treats both pointwise products as matrix
-# products of vectors (components are chi mode coeffs, which are rows in ChiPhiFunc.content)
-# with convolution matrices A@va = B@vb,
-# Where A, B are (m, n+1) (m, n) or (m, n) (m, n) matrices
-#    of rank     (n+1)    (n)    or (n)    (n)
-#    va, vb are  (n+1)    (n)    or (n)    (n)   -d vectors
-#
-# These type of equations underlies power-matched recursion relations:
-# a(chi, phi) * va(chi, phi) = b(chi, phi) * vb(chi, phi)
-# in grid realization.
-# where a, b has the same number of chi modes (let's say o), as pointwise product
-# with a, b are convolutions, which are (o+(n+1)-1, n+1) or (o+n-1, n) degenerate
-# matrices.
-# Codes written in this part are specifically for 1D deconvolution used for ChiPhiFunc.
+'''
+III. Grid 1D deconvolution (used for "dividing" a chi-dependent quantity)
+
+This part solves the pointwise product function problem A*va = B*vb woth unknown va.
+by chi mode matching. It treats both pointwise products as matrix
+products of vectors (components are chi mode coeffs, which are rows in ChiPhiFunc.content)
+with convolution matrices A@va = B@vb,
+Where A, B are (m, n+1) (m, n) or (m, n) (m, n) matrices
+   of rank     (n+1)    (n)    or (n)    (n)
+   va, vb are  (n+1)    (n)    or (n)    (n)   -d vectors
+
+These type of equations underlies power-matched recursion relations:
+a(chi, phi) * va(chi, phi) = b(chi, phi) * vb(chi, phi)
+in grid realization.
+where a, b has the same number of chi modes (let's say o), as pointwise product
+with a, b are convolutions, which are (o+(n+1)-1, n+1) or (o+n-1, n) degenerate
+matrices.
+Codes written in this part are specifically for 1D deconvolution used for ChiPhiFunc.
+'''
 
 ''' III.2 va has 1 more component than vb '''
-# Input is order-independent.
-
 def batch_matrix_inv_excluding_col(in_matrices:jnp.ndarray):
     '''
-    Invert an (n,n) submatrix of a (n+2,n+1) rectangular matrix by taking the center
-    n rows and excluding the rank_rhs column. "Taking the center n rows" is motivated
-    by the RHS being rank n-1.
-
-    in_matrices (n+2, n+1, len_phi) rank_rhs n
-
-        This is an under-determined problem. Here, Yn is an (n+1)-dim vector.
-        A and B are 2-d vectors. O is a known (n+2, n+1) convolution/differential
-        matrix with A and B as kernels. The RHS (not provided here) is a (n+2) vector
-        with (n) linearly-independent, phi-dependent components.
+    Invert an (n,n) submatrix of a (n+2,n+1) rectangular matrix by taking the
+    center n rows and excluding the rank_rhs column. "Taking the center n rows"
+    is motivated by the RHS being rank n-1. For solving for Yn. (a (n+1)-dim
+    vector)
 
     Input: -----
-    in_matrices
-    rank_rhs: n, order of Y.
+
+    in_matrices: (n+2, n+1, len_phi) rank_rhs n matrix to invert
 
     Return: -----
+
     (m,m,len_phi) matrix A_inv
     '''
     # Checking dimensions
@@ -1136,12 +1297,15 @@ batch_roll_fft_last_axis = jit(vmap(roll_fft_last_axis, in_axes=(-2,0), out_axes
 def fft_conv_tensor_batch(source):
     '''
     Generates a 4D convolution operator in the phi axis for a 3d "tensor coef"
-    (see looped_solver for explanation). Compared to the original implementation,
-    this is sped up 60x.
+    (see looped_solver for explanation).
+
     Input: -----
+
     An (a, b, len_phi) array, where a and b represents a matrix acting on the chi
     dependences of a content
+
     Output: -----
+
     An (a, b, len_phi, len_phi) array that acts on a content by transposing
     axis 1 and 2 and then tensordotting. (see explanation for a "tensor operator"
     in looped_solver)
@@ -1170,7 +1334,6 @@ def fft_conv_tensor_batch(source):
 ''' IV. Solving linear PDE in phi grids '''
 
 ''' IV.1 Solving the periodic linear PDE (a + b * dphi + c * dchi) y = f(phi, chi) '''
-#
 def solve_1d_asym(p_eff, f_eff): # not nfp-dependent
     '''
     Solves one linear ODE of form y' + p_eff*y = f_eff.
@@ -1338,9 +1501,13 @@ def fft_conv_op(source):
     ONLY USED IN solve_1d().
     A convolution operator acting convolving
     a fft of len_phi with source.
+
     Input: -----
+
     A 1d array
+
     Output: -----
+
     A convoution operators acting on the fft of
     a content along axis=1. Shape is [len_phi, len_phi].
     '''
@@ -1350,18 +1517,22 @@ def fft_conv_op(source):
     # Collapse the first two axes from a diagonal matrix to a 1d array by summing
     return(tensor_eff[0][0])
 
-# For solving the periodic linear 1st order ODE (coeff + coeff_dp*dphi + coeff_dc*dchi) y = f(phi, chi)
-# using integral factor.
-# -- Input --
-# coeffs are constants or contents. f is a content (see ChiPhiFunc's description).
-# Contant mode and offset are for evaluating the constant component equation
-# dphi y0 = f0.
-# -- Output --
-# y is a ChiPhiFunc's content
-
 @partial(jit, static_argnums=(4,))
-def solve_ODE_chi(coeff, coeff_dp, coeff_dc, f, fft_max_freq: int): # not nfp-dependent
+def solve_ODE_chi(coeff, coeff_dp, coeff_dc, f, fft_max_freq: int):
+    '''
+    For solving the periodic linear 1st order ODE
+    (coeff + coeff_dp*dphi + coeff_dc*dchi) y = f(phi, chi)
+    using Fourier method.
 
+    Input: -----
+
+    coeffs are constants or contents. f is a content (see ChiPhiFunc's description).
+    Contant mode and offset are for evaluating the constant component equation
+    dphi y0 = f0.
+
+    Output: -----
+    y is a ChiPhiFunc's content
+    '''
     len_chi = f.shape[0]
     len_phi = f.shape[1]
     # Chi harmonics
@@ -1375,17 +1546,24 @@ def solve_ODE_chi(coeff, coeff_dp, coeff_dc, f, fft_max_freq: int): # not nfp-de
             fft_max_freq=fft_max_freq)
     )
 
-# For solving the periodic linear 1st order ODE (dphi+iota*dchi) y = f(phi, chi)
-# using integral factor.
-# -- Input --
-# iota is a constant and f is a ChiPhiFunc.
-# Contant mode and offset are for evaluating the constant component equation
-# dphi y0 = f0.
-# -- Output --
-# y is a ChiPhiFunc's content
-
 @partial(jit, static_argnums=(2,))
-def solve_dphi_iota_dchi(iota, f, fft_max_freq: int): # not nfp-dependent
+def solve_dphi_iota_dchi(iota, f, fft_max_freq: int):
+    '''
+    For solving the periodic linear 1st order ODE
+    (dphi+iota*dchi) y = f(phi, chi)
+    using Fourier method.
+
+    Input: -----
+
+    iota is a constant and f is a ChiPhiFunc.
+
+    Contant mode and offset are for evaluating the constant component equation
+    dphi y0 = f0.
+
+    Output: -----
+
+    y is a ChiPhiFunc's content
+    '''
     return(
         solve_ODE_chi(
             coeff=0,
@@ -1406,11 +1584,17 @@ def fft_filter(fft_in:jnp.ndarray, target_length, axis): # not nfp-dependent
     (which correspond to a low-pass filter with k<target_length/2*nfp)
     by removing the highest frequency modes. The resulting array can be IFFT'ed.
     Target length is the number of harmonics to keep in one field period.
+
     Inputs: -----
+
     fft_in: ndarray to filter. Must already be in FFT representation.
+
     target_length: length of the output array
+
     axis: axis to filter along
+
     Output: -----
+
     Filtered array.
     '''
     if target_length>=fft_in.shape[axis]:
@@ -1428,11 +1612,17 @@ def fft_pad(fft_in, target_length, axis): # not nfp-dependent
     Pad an array in FFT representation to target_length elements.
     by adding zeroes as highest frequency modes.
     The resulting array can be IFFT'ed.
+
     Inputs: -----
+
     fft_in: ndarray to pad. Must already be in FFT representation.
+
     target_length: length of the output array
+
     axis: axis to filter along
+
     Output: -----
+
     Padded array.
     '''
     if target_length<fft_in.shape[axis]:
@@ -1450,46 +1640,57 @@ def fft_pad(fft_in, target_length, axis): # not nfp-dependent
     right = fft_in.take(indices=jnp.arange(-(original_length//2), 0), axis=axis)
     return(jnp.concatenate((left, center_array, right), axis=axis)*target_length/fft_in.shape[axis])
 
-''' V.2 Tensor construction for looped_solver.py '''
-# Theses methods are for constructing differential/convolution tensor
-# for solving the looped equations. They are only used in looped_solver.py and
-# lambda_coefs_B_psi.py.
+'''
+V.2 Tensor construction for looped_solver.py
+
+Theses methods are for constructing differential/convolution tensors
+'''
+
 @partial(jit, static_argnums=(1,))
 def to_tensor_fft_op(ChiPhiFunc_in:ChiPhiFunc, len_tensor:int):
+    '''
+    For solving the looped equations. They are only used in looped_solver.py and
+    lambda_coefs_B_psi.py.
+    '''
     tensor_coef = ChiPhiFunc_in.content[:, None, :]
     tensor_fft_coef = fft_filter(jnp.fft.fft(tensor_coef, axis = 2), len_tensor, axis=2)
     tensor_fft_op = fft_conv_tensor_batch(tensor_fft_coef)
     return(tensor_fft_op)
 
-
-# (n, n-2, len_tensor, len_tensor), acting on the FFT of
-# [
-#     [B_theta +n-1],
-#     ...
-#     [B_theta -n+1],
-# ]
-# Generating convolution tensors from B_theta coefficients.
-# These are only needed for n>2 (n_eval>3)
-# Inputs: -----
-# num_mode: the number of columns of the resulting tensor
-# (corresponds to input row number)
-# cap_axis0: the length of axis=0 for the resulting tensor,
-# used to remove outer components that are known to cancel.
-# Must have the same even/oddness and smaller than the row
-# number of the convolution tensor generated from ChiPhiFunc_in
-# and num_mode.
-# Output: -----
-# A tensor of shape (len_chi+num_mode-1, num_mode, len_tensor, len_tensor)
-# acting on a content by np.tensordot(operator, content, 2).
-# It first takes chi and phi derivatives of specified orders
-# and then multiplies
 @partial(jit, static_argnums=(1,2,3,4,5,6))
 def to_tensor_fft_op_multi_dim(
     ChiPhiFunc_in:ChiPhiFunc, dphi:int, dchi:int,
     num_mode:int, cap_axis0:int,
     len_tensor: int,
     nfp: int):
+    '''
+    (n, n-2, len_tensor, len_tensor), acting on the FFT of
+    [
+        [B_theta +n-1],
+        ...
+        [B_theta -n+1],
+    ]
+    Generating convolution tensors from B_theta coefficients.
+    These are only needed for n>2 (n_eval>3)
 
+    Inputs: -----
+
+    num_mode: the number of columns of the resulting tensor
+    (corresponds to input row number)
+
+    cap_axis0: the length of axis=0 for the resulting tensor,
+    used to remove outer components that are known to cancel.
+    Must have the same even/oddness and smaller than the row
+    number of the convolution tensor generated from ChiPhiFunc_in
+    and num_mode.
+
+    Output: -----
+
+    A tensor of shape (len_chi+num_mode-1, num_mode, len_tensor, len_tensor)
+    acting on a content by np.tensordot(operator, content, 2).
+    It first takes chi and phi derivatives of specified orders
+    and then multiplies
+    '''
     if ChiPhiFunc_in.nfp == 0:
         return(0)
     # A stack of convolution matrices

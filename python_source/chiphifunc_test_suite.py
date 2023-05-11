@@ -56,7 +56,7 @@ def ChiPhiFunc_from_splines(splines, nfp=1, dphi_order=0, len_phi=1000):
     points = np.linspace(0, 2*np.pi*(1-1/len_phi), len_phi)
     content = splines.derivative(dphi_order)(points)*nfp**dphi_order
 
-    return(ChiPhiFunc(content, nfp, fourier_mode=True))
+    return(ChiPhiFunc(content, nfp, trig_mode=True))
 
 def rand_ChiPhiFunc(len_chi, nfp=1, len_phi=1000, amp_range = (0.5,2), n_points=5):
     return(
@@ -117,12 +117,12 @@ def display(array, complex=True):
 
 # Plots the content of two ChiPhiFunc's and compare.
 # nfp-dependent!!
-def compare_chiphifunc(A, B, fourier_mode=False, simple_mode=True, colormap_mode=False):
+def compare_chiphifunc(A, B, trig_mode=False, simple_mode=True, colormap_mode=False):
     if not simple_mode:
         print('A')
-        A.display_content(fourier_mode=fourier_mode, colormap_mode=colormap_mode)
+        A.display_content(trig_mode=trig_mode, colormap_mode=colormap_mode)
         print('B')
-        B.display_content(fourier_mode=fourier_mode, colormap_mode=colormap_mode)
+        B.display_content(trig_mode=trig_mode, colormap_mode=colormap_mode)
     if A.content.shape[1]!=B.content.shape[1]:
         print('Phi grid number not matched.')
         return()
@@ -133,7 +133,7 @@ def compare_chiphifunc(A, B, fourier_mode=False, simple_mode=True, colormap_mode
             print('A.nfp =', A.nfp)
             print('B.nfp =', B.nfp)
             compare_chiphifunc(A.export_single_nfp(), B.export_single_nfp(),
-            fourier_mode, simple_mode, colormap_mode)
+            trig_mode, simple_mode, colormap_mode)
             return()
         elif A.nfp != 0 and B.nfp != 0:
             print('A, B has different non-zero, non-one nfp!')
@@ -156,12 +156,12 @@ def compare_chiphifunc(A, B, fourier_mode=False, simple_mode=True, colormap_mode
         diff_AB_trimmed = ChiPhiFunc(trimmed_content, nfp)
         print('A and B has different number of components.')
         print('Difference')
-        diff_AB_center.display_content(fourier_mode=fourier_mode)
+        diff_AB_center.display_content(trig_mode=trig_mode)
         print('Extra components')
-        diff_AB_trimmed.display_content(fourier_mode=fourier_mode)
+        diff_AB_trimmed.display_content(trig_mode=trig_mode)
     else:
         print('Difference')
-        diff_AB.display_content(fourier_mode=fourier_mode)
+        diff_AB.display_content(trig_mode=trig_mode)
 
     print('fractional errors b/w data and general formula')
 
@@ -324,12 +324,12 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
     Delta_1 = ChiPhiFunc(np.array([
         d11s,
         d11c
-    ]), nfp, fourier_mode = True)
+    ]), nfp, trig_mode = True)
 
     d20c = divide_by_nfp(np.loadtxt(path+'d20c.dat')[:-1], nfp)
     d22c = divide_by_nfp(np.loadtxt(path+'d22c.dat')[:-1], nfp)
     d22s = divide_by_nfp(np.loadtxt(path+'d22s.dat')[:-1], nfp)
-    Delta_2 = ChiPhiFunc(np.array([d22s, d20c, d22c]), nfp, fourier_mode = True)
+    Delta_2 = ChiPhiFunc(np.array([d22s, d20c, d22c]), nfp, trig_mode = True)
     Delta_coef_cp = ChiPhiEpsFunc([Delta_0, Delta_1, Delta_2], nfp, True)
 
     # P_perp --------------------------------------
@@ -340,12 +340,12 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
     p_perp_1 = ChiPhiFunc(np.array([
         np.zeros_like(pc1),
         pc1
-    ]), nfp, fourier_mode = True)
+    ]), nfp, trig_mode = True)
 
     p20c = divide_by_nfp(np.loadtxt(path+'p20c.dat')[:-1], nfp)
     p22s = divide_by_nfp(np.loadtxt(path+'p22s.dat')[:-1], nfp)
     p22c = divide_by_nfp(np.loadtxt(path+'p22c.dat')[:-1], nfp)
-    p_perp_2 = ChiPhiFunc(np.array([p22s,p20c,p22c]), nfp, fourier_mode = True)
+    p_perp_2 = ChiPhiFunc(np.array([p22s,p20c,p22c]), nfp, trig_mode = True)
     p_perp_coef_cp = ChiPhiEpsFunc([p_perp_0, p_perp_1, p_perp_2], nfp, True)
 
     # B psi ---------------------------------------
@@ -357,7 +357,7 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
     B_psi_1 = ChiPhiFunc(np.array([
         Bps11,
         Bpc11
-    ]), nfp, fourier_mode = True)
+    ]), nfp, trig_mode = True)
 
     B_psi_coef_cp = ChiPhiEpsFunc([B_psi_0, B_psi_1], nfp, True)
 
@@ -365,7 +365,7 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
     Btc20 = divide_by_nfp(np.loadtxt(path+'Btc20.dat')[:-1], nfp)
     B_theta_2 = ChiPhiFunc(np.array([
         Btc20
-    ]), nfp, fourier_mode = True)
+    ]), nfp, trig_mode = True)
     B_theta_coef_cp = ChiPhiEpsFunc([0, 0, B_theta_2], nfp, True)
 
     # X ---------------------------------------
@@ -373,7 +373,7 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
     X1 = ChiPhiFunc(np.array([
         np.zeros_like(Xc1), # sin coeff is zero
         Xc1,
-    ]), nfp, fourier_mode = True)
+    ]), nfp, trig_mode = True)
 
     X20 = divide_by_nfp(np.loadtxt(path+'X20c.dat')[:-1], nfp)
     X22c = divide_by_nfp(np.loadtxt(path+'X22c.dat')[:-1], nfp)
@@ -382,7 +382,7 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
         X22s,
         X20,
         X22c
-    ]), nfp, fourier_mode = True)
+    ]), nfp, trig_mode = True)
 
     X31c = divide_by_nfp(np.loadtxt(path+'X31c.dat')[:-1], nfp)
     X31s = divide_by_nfp(np.loadtxt(path+'X31s.dat')[:-1], nfp)
@@ -393,7 +393,7 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
         X31s,
         X31c,
         X33c
-    ]), nfp, fourier_mode = True)
+    ]), nfp, trig_mode = True)
 
     X_coef_cp = ChiPhiEpsFunc([0, X1, X2, X3], nfp, True)
 
@@ -403,7 +403,7 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
     Y1 = ChiPhiFunc(np.array([
         Ys1, # sin coeff is zero
         Yc1,
-    ]), nfp, fourier_mode = True)
+    ]), nfp, trig_mode = True)
 
     Y20 = divide_by_nfp(np.loadtxt(path+'Y20.dat')[:-1], nfp)
     Y22c = divide_by_nfp(np.loadtxt(path+'Y22c.dat')[:-1], nfp)
@@ -412,7 +412,7 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
         Y22s,
         Y20,
         Y22c
-    ]), nfp, fourier_mode = True)
+    ]), nfp, trig_mode = True)
 
     Y31c = divide_by_nfp(np.loadtxt(path+'Y31c.dat')[:-1], nfp)
     Y31s = divide_by_nfp(np.loadtxt(path+'Y31s.dat')[:-1], nfp)
@@ -423,7 +423,7 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
         Y31s,
         Y31c,
         Y33c
-    ]), nfp, fourier_mode = True)
+    ]), nfp, trig_mode = True)
 
     Y_coef_cp = ChiPhiEpsFunc([0, Y1, Y2, Y3], nfp, True)
 
@@ -435,7 +435,7 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
         Z22s,
         Z20,
         Z22c
-    ]), nfp, fourier_mode = True)
+    ]), nfp, trig_mode = True)
 
     Z31c = divide_by_nfp(np.loadtxt(path+'Z31c.dat')[:-1], nfp)
     Z31s = divide_by_nfp(np.loadtxt(path+'Z31s.dat')[:-1], nfp)
@@ -446,7 +446,7 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
         Z31s,
         Z31c,
         Z33c
-    ]), nfp, fourier_mode = True)
+    ]), nfp, trig_mode = True)
 
     Z_coef_cp = ChiPhiEpsFunc([0, 0, Z2, Z3], nfp, True)
 
@@ -459,13 +459,13 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
         [np.average(B22s)],
         [np.average(B20)],
         [np.average(B22c)]
-    ]), nfp, fourier_mode = True)
+    ]), nfp, trig_mode = True)
     B3 = ChiPhiFunc(np.array([
         [np.average(B33s)],
         [np.average(B31s)],
         [np.average(B31c)],
         [np.average(B33c)]
-    ]), nfp, fourier_mode = True)
+    ]), nfp, trig_mode = True)
     # B1 is given by first order jacobian equation, above 14 in the first
     # half of the 2-part paper
     B_denom_coef_c = ChiPhiEpsFunc([1, phi_avg(-X1*2*kap_p), B2, B3], nfp, True)
@@ -569,47 +569,47 @@ def import_from_stel(stel = Qsc.from_paper('r2 section 5.2'), len_phi=1000, nfp_
     X1 = ChiPhiFunc(np.array([
         to_phi(stel.varphi, stel.X1s), # sin coeff is zero
         to_phi(stel.varphi, stel.X1c),
-    ]), nfp, fourier_mode = True)*r_factor
+    ]), nfp, trig_mode = True)*r_factor
     X2 = ChiPhiFunc(np.array([
         to_phi(stel.varphi, stel.X2s),
         to_phi(stel.varphi, stel.X20),
         to_phi(stel.varphi, stel.X2c)
-    ]), nfp, fourier_mode = True)*r_factor**2
+    ]), nfp, trig_mode = True)*r_factor**2
     X3 = ChiPhiFunc(np.array([
         to_phi(stel.varphi, stel.X3s3),
         to_phi(stel.varphi, stel.X3s1),
         to_phi(stel.varphi, stel.X3c1),
         to_phi(stel.varphi, stel.X3c3)*r_factor**3
-    ]), nfp, fourier_mode = True)
+    ]), nfp, trig_mode = True)
     X_coef_cp = ChiPhiEpsFunc([0, X1, X2], nfp, True)
     Y1 = ChiPhiFunc(np.array([
         to_phi(stel.varphi, stel.Y1s), # sin coeff is zero
         to_phi(stel.varphi, stel.Y1c),
-    ]), nfp, fourier_mode = True)*r_factor
+    ]), nfp, trig_mode = True)*r_factor
     Y2 = ChiPhiFunc(np.array([
         to_phi(stel.varphi, stel.Y2s),
         to_phi(stel.varphi, stel.Y20),
         to_phi(stel.varphi, stel.Y2c)
-    ]), nfp, fourier_mode = True)*r_factor**2
+    ]), nfp, trig_mode = True)*r_factor**2
     Y3 = ChiPhiFunc(np.array([
         to_phi(stel.varphi, stel.Y3s3),
         to_phi(stel.varphi, stel.Y3s1),
         to_phi(stel.varphi, stel.Y3c1),
         to_phi(stel.varphi, stel.Y3c3)
-    ]), nfp, fourier_mode = True)*r_factor**3
+    ]), nfp, trig_mode = True)*r_factor**3
     Y_coef_cp = ChiPhiEpsFunc([0, Y1, Y2], nfp, True)
     Z2 = ChiPhiFunc(np.array([
         to_phi(stel.varphi, stel.Z2s),
         to_phi(stel.varphi, stel.Z20),
         to_phi(stel.varphi, stel.Z2c)
-    ]), nfp, fourier_mode = True)*r_factor**2
+    ]), nfp, trig_mode = True)*r_factor**2
     Z3 = ChiPhiFunc(np.array([
         to_phi(stel.varphi, stel.Z3s3),
         to_phi(stel.varphi, stel.Z3s1),
         to_phi(stel.varphi, stel.Z3c1),
         to_phi(stel.varphi, stel.Z3c3)
-    ]), nfp, fourier_mode = True)*r_factor**3
-    Z_coef_cp = ChiPhiEpsFunc([0, 0, Z2], nfp, fourier_mode = True)
+    ]), nfp, trig_mode = True)*r_factor**3
+    Z_coef_cp = ChiPhiEpsFunc([0, 0, Z2], nfp, trig_mode = True)
     # B components
 
     Btc20 = 2*stel.I2/stel.B0
@@ -617,13 +617,13 @@ def import_from_stel(stel = Qsc.from_paper('r2 section 5.2'), len_phi=1000, nfp_
         to_phi(stel.varphi, Btc20)
     ]), nfp)], nfp, True)
 
-    B_psi_coef_cp = ChiPhiEpsFunc([0], nfp, fourier_mode = True)
+    B_psi_coef_cp = ChiPhiEpsFunc([0], nfp, trig_mode = True)
 
     B1c = -2*B0*eta
     B1 = ChiPhiFunc(np.array([
         0,
         np.average(B1c)
-    ]), nfp, fourier_mode = True)
+    ]), nfp, trig_mode = True)
     B20 = (0.75*stel.etabar**2/np.sqrt(B0) - stel.B20)*4*B0**2
     B2c = (0.75*stel.etabar**2/np.sqrt(B0) - stel.B2c)*4*B0**2
     B2s = -4*stel.B2s*B0**2
@@ -631,7 +631,7 @@ def import_from_stel(stel = Qsc.from_paper('r2 section 5.2'), len_phi=1000, nfp_
         np.average(B2s),
         np.average(B20),
         np.average(B2c)
-    ]), nfp, fourier_mode = True)
+    ]), nfp, trig_mode = True)
     B_denom_coef_c = ChiPhiEpsFunc([
         B0,
         B1,

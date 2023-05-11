@@ -12,9 +12,6 @@
 from math import floor, ceil
 from math_utilities import *
 import chiphifunc
-from jax import jit
-from functools import partial
-@partial(jit, static_argnums=(0,))
 def eval_Xn_cp(n,
     X_coef_cp,
     Y_coef_cp,
@@ -194,5 +191,5 @@ def eval_Xn_cp(n,
         return(is_seq(0,n-i15)*diff(Z_coef_cp[2*i15-n],True,1)*iota_coef[n-i15]*is_integer(n-i15)*is_seq(n-i15,i15))
 
 
-    out = ((is_seq(0,n)*dl_p**2*is_integer(n)*py_sum(sum_arg_38,0,n)+is_seq(0,n)*dl_p**2*is_integer(n)*py_sum(sum_arg_37,0,n))*tau_p**2+(2*is_seq(0,n)*dl_p*is_integer(n)*py_sum(sum_arg_36,0,n)-2*is_seq(0,n)*dl_p*is_integer(n)*py_sum(sum_arg_35,0,n)+2*dl_p*py_sum(sum_arg_34,ceil(n/2),floor(n))-2*dl_p*py_sum(sum_arg_32,ceil(n/2),floor(n))+2*is_seq(0,n)*dl_p**2*kap_p*is_integer(n)*py_sum(sum_arg_30,0,n))*tau_p+2*dl_p*kap_p*py_sum(sum_arg_9,ceil(n/2),floor(n))-2*dl_p*kap_p*py_sum(sum_arg_7,ceil(n/2),floor(n))+2*py_sum(sum_arg_5,ceil(n/2),floor(n))+is_seq(0,n)*dl_p**2*kap_p**2*is_integer(n)*py_sum(sum_arg_3,0,n)+py_sum(sum_arg_29,ceil(n/2),floor(n))+py_sum(sum_arg_26,ceil(n/2),floor(n))+py_sum(sum_arg_23,ceil(n/2),floor(n))-py_sum(sum_arg_20,ceil(n/2),floor(n))+is_seq(0,n)*dl_p**2*kap_p**2*is_integer(n)*py_sum(sum_arg_2,0,n)+is_seq(0,n)*is_integer(n)*py_sum(sum_arg_18,0,n)+is_seq(0,n)*is_integer(n)*py_sum(sum_arg_17,0,n)+is_seq(0,n)*is_integer(n)*py_sum(sum_arg_16,0,n)+2*py_sum(sum_arg_15,ceil(n/2),floor(n))+2*py_sum(sum_arg_13,ceil(n/2),floor(n))+2*is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum(sum_arg_11,0,n)-2*is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum(sum_arg_10,0,n)+2*dl_p*py_sum(sum_arg_1,ceil(n/2),floor(n))+2*is_seq(0,n)*dl_p*is_integer(n)*diff(Z_coef_cp[n],False,1)-2*is_seq(0,n)*dl_p**2*kap_p*X_coef_cp[n]*is_integer(n))/(2*dl_p**2*kap_p)
+    out = ((is_seq(0,n)*dl_p**2*is_integer(n)*py_sum_parallel(sum_arg_38,0,n)+is_seq(0,n)*dl_p**2*is_integer(n)*py_sum_parallel(sum_arg_37,0,n))*tau_p**2+(2*is_seq(0,n)*dl_p*is_integer(n)*py_sum_parallel(sum_arg_36,0,n)-2*is_seq(0,n)*dl_p*is_integer(n)*py_sum_parallel(sum_arg_35,0,n)+2*dl_p*py_sum_parallel(sum_arg_34,ceil(n/2),floor(n))-2*dl_p*py_sum_parallel(sum_arg_32,ceil(n/2),floor(n))+2*is_seq(0,n)*dl_p**2*kap_p*is_integer(n)*py_sum_parallel(sum_arg_30,0,n))*tau_p+2*dl_p*kap_p*py_sum_parallel(sum_arg_9,ceil(n/2),floor(n))-2*dl_p*kap_p*py_sum_parallel(sum_arg_7,ceil(n/2),floor(n))+2*py_sum_parallel(sum_arg_5,ceil(n/2),floor(n))+is_seq(0,n)*dl_p**2*kap_p**2*is_integer(n)*py_sum_parallel(sum_arg_3,0,n)+py_sum_parallel(sum_arg_29,ceil(n/2),floor(n))+py_sum_parallel(sum_arg_26,ceil(n/2),floor(n))+py_sum_parallel(sum_arg_23,ceil(n/2),floor(n))-py_sum_parallel(sum_arg_20,ceil(n/2),floor(n))+is_seq(0,n)*dl_p**2*kap_p**2*is_integer(n)*py_sum_parallel(sum_arg_2,0,n)+is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_18,0,n)+is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_17,0,n)+is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_16,0,n)+2*py_sum_parallel(sum_arg_15,ceil(n/2),floor(n))+2*py_sum_parallel(sum_arg_13,ceil(n/2),floor(n))+2*is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum_parallel(sum_arg_11,0,n)-2*is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum_parallel(sum_arg_10,0,n)+2*dl_p*py_sum_parallel(sum_arg_1,ceil(n/2),floor(n))+2*is_seq(0,n)*dl_p*is_integer(n)*diff(Z_coef_cp[n],False,1)-2*is_seq(0,n)*dl_p**2*kap_p*X_coef_cp[n]*is_integer(n))/(2*dl_p**2*kap_p)
     return(out)

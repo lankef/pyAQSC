@@ -31,6 +31,10 @@ def py_sum(expr, lower, upper):
         out = out+item
     return(out)
 
+# In the JAX implementation, there is no distinction between how the outmost and
+# inner sums are evaluated.
+py_sum_parallel = py_sum
+
 ## Condition operators
 
 # Used to make sure new indices of terms and new upper bounds are within the

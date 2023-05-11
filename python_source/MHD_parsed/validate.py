@@ -2,6 +2,9 @@
 from math import floor, ceil
 from math_utilities import *
 import chiphifunc
+from jax import jit
+from functools import partial
+@partial(jit, static_argnums=(0,))
 def validate_J(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
     B_denom_coef_c, B_alpha_coef,
     kap_p, dl_p, tau_p, iota_coef):    
@@ -176,28 +179,29 @@ def validate_J(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
         return(is_seq(0,n-i15)*diff(Z_coef_cp[2*i15-n],True,1)*iota_coef[n-i15]*is_integer(n-i15)*is_seq(n-i15,i15))
     
     
-    out = (((-is_seq(0,n)*dl_p**2*is_integer(n)*py_sum(sum_arg_38,0,n))-is_seq(0,n)*dl_p**2*is_integer(n)*py_sum(sum_arg_37,0,n))*tau_p**2)\
-        +(((-2*is_seq(0,n)*dl_p*is_integer(n)*py_sum(sum_arg_36,0,n))+2*is_seq(0,n)*dl_p*is_integer(n)*py_sum(sum_arg_35,0,n)-2*dl_p*py_sum(sum_arg_34,ceil(n/2),floor(n))+2*dl_p*py_sum(sum_arg_32,ceil(n/2),floor(n))-2*is_seq(0,n)*dl_p**2*kap_p*is_integer(n)*py_sum(sum_arg_30,0,n))*tau_p)\
-        +(-2*dl_p*kap_p*py_sum(sum_arg_9,ceil(n/2),floor(n)))\
-        +(2*dl_p*kap_p*py_sum(sum_arg_7,ceil(n/2),floor(n)))\
-        +(-2*py_sum(sum_arg_5,ceil(n/2),floor(n)))\
-        +(-is_seq(0,n)*dl_p**2*kap_p**2*is_integer(n)*py_sum(sum_arg_3,0,n))\
-        +(-py_sum(sum_arg_29,ceil(n/2),floor(n)))\
-        +(-py_sum(sum_arg_26,ceil(n/2),floor(n)))\
-        +(-py_sum(sum_arg_23,ceil(n/2),floor(n)))\
-        +(py_sum(sum_arg_20,ceil(n/2),floor(n)))\
-        +(-is_seq(0,n)*dl_p**2*kap_p**2*is_integer(n)*py_sum(sum_arg_2,0,n))\
-        +(-is_seq(0,n)*is_integer(n)*py_sum(sum_arg_18,0,n))\
-        +(-is_seq(0,n)*is_integer(n)*py_sum(sum_arg_17,0,n))\
-        +(-is_seq(0,n)*is_integer(n)*py_sum(sum_arg_16,0,n))\
-        +(-2*py_sum(sum_arg_15,ceil(n/2),floor(n)))\
-        +(-2*py_sum(sum_arg_13,ceil(n/2),floor(n)))\
-        +(-2*is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum(sum_arg_11,0,n))\
-        +(2*is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum(sum_arg_10,0,n))\
-        +(-2*dl_p*py_sum(sum_arg_1,ceil(n/2),floor(n)))\
+    out = (((-is_seq(0,n)*dl_p**2*is_integer(n)*py_sum_parallel(sum_arg_38,0,n))-is_seq(0,n)*dl_p**2*is_integer(n)*py_sum_parallel(sum_arg_37,0,n))*tau_p**2)\
+        +(((-2*is_seq(0,n)*dl_p*is_integer(n)*py_sum_parallel(sum_arg_36,0,n))+2*is_seq(0,n)*dl_p*is_integer(n)*py_sum_parallel(sum_arg_35,0,n)-2*dl_p*py_sum_parallel(sum_arg_34,ceil(n/2),floor(n))+2*dl_p*py_sum_parallel(sum_arg_32,ceil(n/2),floor(n))-2*is_seq(0,n)*dl_p**2*kap_p*is_integer(n)*py_sum_parallel(sum_arg_30,0,n))*tau_p)\
+        +(-2*dl_p*kap_p*py_sum_parallel(sum_arg_9,ceil(n/2),floor(n)))\
+        +(2*dl_p*kap_p*py_sum_parallel(sum_arg_7,ceil(n/2),floor(n)))\
+        +(-2*py_sum_parallel(sum_arg_5,ceil(n/2),floor(n)))\
+        +(-is_seq(0,n)*dl_p**2*kap_p**2*is_integer(n)*py_sum_parallel(sum_arg_3,0,n))\
+        +(-py_sum_parallel(sum_arg_29,ceil(n/2),floor(n)))\
+        +(-py_sum_parallel(sum_arg_26,ceil(n/2),floor(n)))\
+        +(-py_sum_parallel(sum_arg_23,ceil(n/2),floor(n)))\
+        +(py_sum_parallel(sum_arg_20,ceil(n/2),floor(n)))\
+        +(-is_seq(0,n)*dl_p**2*kap_p**2*is_integer(n)*py_sum_parallel(sum_arg_2,0,n))\
+        +(-is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_18,0,n))\
+        +(-is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_17,0,n))\
+        +(-is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_16,0,n))\
+        +(-2*py_sum_parallel(sum_arg_15,ceil(n/2),floor(n)))\
+        +(-2*py_sum_parallel(sum_arg_13,ceil(n/2),floor(n)))\
+        +(-2*is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum_parallel(sum_arg_11,0,n))\
+        +(2*is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum_parallel(sum_arg_10,0,n))\
+        +(-2*dl_p*py_sum_parallel(sum_arg_1,ceil(n/2),floor(n)))\
         +(-2*is_seq(0,n)*dl_p*is_integer(n)*diff(Z_coef_cp[n],False,1))\
         +(2*is_seq(0,n)*dl_p**2*kap_p*X_coef_cp[n]*is_integer(n))
     return(out)
+@partial(jit, static_argnums=(0,))
 def validate_Cb(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
     B_denom_coef_c, B_alpha_coef,
     B_psi_coef_cp, B_theta_coef_cp,
@@ -327,8 +331,9 @@ def validate_Cb(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
         return(is_seq(0,n-i111)*diff(Z_coef_cp[2*i111-n],True,1)*iota_coef[n-i111]*is_integer(n-i111)*is_seq(n-i111,i111))
     
     
-    out = ((is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum(sum_arg_31,0,n+2)+is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum(sum_arg_29,0,n+2)-2*is_seq(0,n)*dl_p*is_integer(n)*py_sum(sum_arg_27,0,n)-2*is_seq(0,n)*dl_p*is_integer(n)*py_sum(sum_arg_25,0,n))*tau_p+is_seq(0,n+2)*is_integer(n+2)*py_sum(sum_arg_9,0,n+2)+py_sum(sum_arg_7,ceil(n/2)+1,floor(n)+2)-py_sum(sum_arg_4,ceil(n/2)+1,floor(n)+2)+2*is_seq(0,n)*is_integer(n)*py_sum(sum_arg_23,0,n)-2*is_seq(0,n)*is_integer(n)*py_sum(sum_arg_21,0,n)-is_seq(0,n+2)*is_integer(n+2)*py_sum(sum_arg_19,0,n+2)+is_seq(0,n+2)*dl_p*kap_p*is_integer(n+2)*py_sum(sum_arg_17,0,n+2)-2*is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum(sum_arg_15,0,n)+py_sum(sum_arg_13,ceil(n/2)+1,floor(n)+2)-py_sum(sum_arg_11,ceil(n/2)+1,floor(n)+2)-2*py_sum(sum_arg_1,ceil(n/2),floor(n))-2*is_seq(0,n)*is_integer(n)*diff(Z_coef_cp[n],False,1)+2*is_seq(0,n)*dl_p*kap_p*X_coef_cp[n]*is_integer(n))/2
+    out = ((is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum_parallel(sum_arg_31,0,n+2)+is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum_parallel(sum_arg_29,0,n+2)-2*is_seq(0,n)*dl_p*is_integer(n)*py_sum_parallel(sum_arg_27,0,n)-2*is_seq(0,n)*dl_p*is_integer(n)*py_sum_parallel(sum_arg_25,0,n))*tau_p+is_seq(0,n+2)*is_integer(n+2)*py_sum_parallel(sum_arg_9,0,n+2)+py_sum_parallel(sum_arg_7,ceil(n/2)+1,floor(n)+2)-py_sum_parallel(sum_arg_4,ceil(n/2)+1,floor(n)+2)+2*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_23,0,n)-2*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_21,0,n)-is_seq(0,n+2)*is_integer(n+2)*py_sum_parallel(sum_arg_19,0,n+2)+is_seq(0,n+2)*dl_p*kap_p*is_integer(n+2)*py_sum_parallel(sum_arg_17,0,n+2)-2*is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum_parallel(sum_arg_15,0,n)+py_sum_parallel(sum_arg_13,ceil(n/2)+1,floor(n)+2)-py_sum_parallel(sum_arg_11,ceil(n/2)+1,floor(n)+2)-2*py_sum_parallel(sum_arg_1,ceil(n/2),floor(n))-2*is_seq(0,n)*is_integer(n)*diff(Z_coef_cp[n],False,1)+2*is_seq(0,n)*dl_p*kap_p*X_coef_cp[n]*is_integer(n))/2
     return(out)
+@partial(jit, static_argnums=(0,))
 def validate_Ck(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
     B_denom_coef_c, B_alpha_coef,
     B_psi_coef_cp, B_theta_coef_cp,
@@ -450,25 +455,26 @@ def validate_Ck(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
         return(B_theta_coef_cp[i150]*(n-i150+2)*Y_coef_cp[n-i150+2])
     
     
-    out = (-(is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum(sum_arg_29,0,n+2)*tau_p)/2)\
-        +(is_seq(0,n)*dl_p*is_integer(n)*py_sum(sum_arg_27,0,n)*tau_p)\
+    out = (-(is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum_parallel(sum_arg_29,0,n+2)*tau_p)/2)\
+        +(is_seq(0,n)*dl_p*is_integer(n)*py_sum_parallel(sum_arg_27,0,n)*tau_p)\
         +(-is_seq(0,n)*dl_p*Y_coef_cp[n]*is_integer(n)*tau_p)\
-        +(-py_sum(sum_arg_8,ceil(0.5*n)+1,floor(n)+2)/2)\
-        +(py_sum(sum_arg_5,ceil(0.5*n)+1,floor(n)+2)/2)\
-        +(-is_seq(0,n)*is_integer(n)*py_sum(sum_arg_25,0,n))\
-        +(is_seq(0,n)*is_integer(n)*py_sum(sum_arg_23,0,n))\
-        +(-(is_seq(0,n+2)*is_integer(n+2)*py_sum(sum_arg_21,0,n+2))/2)\
-        +(-py_sum(sum_arg_2,ceil(0.5*n),floor(n)))\
-        +(-py_sum(sum_arg_19,ceil(0.5*n)+1,floor(n)+2)/2)\
-        +(is_seq(0,n)*dl_p*is_integer(n)*py_sum(sum_arg_17,0,n))\
-        +(py_sum(sum_arg_16,ceil(0.5*n)+1,floor(n)+2)/2)\
-        +((is_seq(0,n+2)*is_integer(n+2)*py_sum(sum_arg_14,0,n+2))/2)\
-        +((is_seq(0,n+2)*dl_p*kap_p*is_integer(n+2)*py_sum(sum_arg_12,0,n+2))/2)\
-        +(-is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum(sum_arg_10,0,n))\
-        +(-(is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum(sum_arg_1,0,n+2))/2)\
+        +(-py_sum_parallel(sum_arg_8,ceil(0.5*n)+1,floor(n)+2)/2)\
+        +(py_sum_parallel(sum_arg_5,ceil(0.5*n)+1,floor(n)+2)/2)\
+        +(-is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_25,0,n))\
+        +(is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_23,0,n))\
+        +(-(is_seq(0,n+2)*is_integer(n+2)*py_sum_parallel(sum_arg_21,0,n+2))/2)\
+        +(-py_sum_parallel(sum_arg_2,ceil(0.5*n),floor(n)))\
+        +(-py_sum_parallel(sum_arg_19,ceil(0.5*n)+1,floor(n)+2)/2)\
+        +(is_seq(0,n)*dl_p*is_integer(n)*py_sum_parallel(sum_arg_17,0,n))\
+        +(py_sum_parallel(sum_arg_16,ceil(0.5*n)+1,floor(n)+2)/2)\
+        +((is_seq(0,n+2)*is_integer(n+2)*py_sum_parallel(sum_arg_14,0,n+2))/2)\
+        +((is_seq(0,n+2)*dl_p*kap_p*is_integer(n+2)*py_sum_parallel(sum_arg_12,0,n+2))/2)\
+        +(-is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum_parallel(sum_arg_10,0,n))\
+        +(-(is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum_parallel(sum_arg_1,0,n+2))/2)\
         +(-is_seq(0,n)*is_integer(n)*diff(X_coef_cp[n],False,1))\
         +(-is_seq(0,n)*dl_p*kap_p*Z_coef_cp[n]*is_integer(n))
     return(out)
+@partial(jit, static_argnums=(0,))
 def validate_Ct(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
     B_denom_coef_c, B_alpha_coef,
     B_psi_coef_cp, B_theta_coef_cp,
@@ -606,26 +612,27 @@ def validate_Ct(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
         return(iota_coef[n-i1197+2]*py_sum(sum_arg_2,0,i1197))
     
     
-    out = (-(is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum(sum_arg_33,0,n+2)*tau_p)/2)\
-        +(is_seq(0,n)*dl_p*is_integer(n)*py_sum(sum_arg_31,0,n)*tau_p)\
+    out = (-(is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum_parallel(sum_arg_33,0,n+2)*tau_p)/2)\
+        +(is_seq(0,n)*dl_p*is_integer(n)*py_sum_parallel(sum_arg_31,0,n)*tau_p)\
         +(is_seq(0,n)*dl_p*X_coef_cp[n]*is_integer(n)*tau_p)\
-        +(-py_sum(sum_arg_8,ceil(0.5*n),floor(n)))\
-        +((is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum(sum_arg_7,0,n+2))/2)\
-        +(-py_sum(sum_arg_6,ceil(0.5*n)+1,floor(n)+2)/2)\
-        +(py_sum(sum_arg_3,ceil(0.5*n)+1,floor(n)+2)/2)\
-        +(is_seq(0,n)*is_integer(n)*py_sum(sum_arg_29,0,n))\
-        +(-is_seq(0,n)*is_integer(n)*py_sum(sum_arg_27,0,n))\
-        +(-(is_seq(0,n+2)*is_integer(n+2)*py_sum(sum_arg_25,0,n+2))/2)\
-        +((is_seq(0,n+2)*is_integer(n+2)*py_sum(sum_arg_23,0,n+2))/2)\
-        +(-(is_seq(0,n+2)*dl_p*kap_p*is_integer(n+2)*py_sum(sum_arg_21,0,n+2))/2)\
-        +(-(is_seq(0,n+2)*dl_p*kap_p*is_integer(n+2)*py_sum(sum_arg_19,0,n+2))/2)\
-        +(is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum(sum_arg_17,0,n))\
-        +(is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum(sum_arg_15,0,n))\
-        +(-py_sum(sum_arg_13,ceil(0.5*n)+1,floor(n)+2)/2)\
-        +(-is_seq(0,n)*dl_p*is_integer(n)*py_sum(sum_arg_11,0,n))\
-        +(py_sum(sum_arg_10,ceil(0.5*n)+1,floor(n)+2)/2)\
+        +(-py_sum_parallel(sum_arg_8,ceil(0.5*n),floor(n)))\
+        +((is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum_parallel(sum_arg_7,0,n+2))/2)\
+        +(-py_sum_parallel(sum_arg_6,ceil(0.5*n)+1,floor(n)+2)/2)\
+        +(py_sum_parallel(sum_arg_3,ceil(0.5*n)+1,floor(n)+2)/2)\
+        +(is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_29,0,n))\
+        +(-is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_27,0,n))\
+        +(-(is_seq(0,n+2)*is_integer(n+2)*py_sum_parallel(sum_arg_25,0,n+2))/2)\
+        +((is_seq(0,n+2)*is_integer(n+2)*py_sum_parallel(sum_arg_23,0,n+2))/2)\
+        +(-(is_seq(0,n+2)*dl_p*kap_p*is_integer(n+2)*py_sum_parallel(sum_arg_21,0,n+2))/2)\
+        +(-(is_seq(0,n+2)*dl_p*kap_p*is_integer(n+2)*py_sum_parallel(sum_arg_19,0,n+2))/2)\
+        +(is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum_parallel(sum_arg_17,0,n))\
+        +(is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum_parallel(sum_arg_15,0,n))\
+        +(-py_sum_parallel(sum_arg_13,ceil(0.5*n)+1,floor(n)+2)/2)\
+        +(-is_seq(0,n)*dl_p*is_integer(n)*py_sum_parallel(sum_arg_11,0,n))\
+        +(py_sum_parallel(sum_arg_10,ceil(0.5*n)+1,floor(n)+2)/2)\
         +(-is_seq(0,n)*is_integer(n)*diff(Y_coef_cp[n],False,1))
     return(out)
+@partial(jit, static_argnums=(0,))
 def validate_I(n, B_denom_coef_c,
     p_perp_coef_cp, Delta_coef_cp,
     iota_coef):    
@@ -670,8 +677,9 @@ def validate_I(n, B_denom_coef_c,
         return(is_seq(0,n-i1875)*iota_coef[n-i1875]*is_integer(n-i1875)*is_seq(n-i1875,i1875)*py_sum(sum_arg_1,0,2*i1875-n))
     
     
-    out = (2*py_sum(sum_arg_8,ceil(n/2),floor(n))+2*py_sum(sum_arg_5,ceil(n/2),floor(n))+2*is_seq(0,n)*is_integer(n)*py_sum(sum_arg_3,0,n)-py_sum(sum_arg_2,ceil(n/2),floor(n))+2*is_seq(0,n)*is_integer(n)*py_sum(sum_arg_10,0,n))/2
+    out = (2*py_sum_parallel(sum_arg_8,ceil(n/2),floor(n))+2*py_sum_parallel(sum_arg_5,ceil(n/2),floor(n))+2*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_3,0,n)-py_sum_parallel(sum_arg_2,ceil(n/2),floor(n))+2*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_10,0,n))/2
     return(out)
+@partial(jit, static_argnums=(0,))
 def validate_II(n, 
     B_theta_coef_cp, B_alpha_coef, B_denom_coef_c, 
     p_perp_coef_cp, Delta_coef_cp, iota_coef):    
@@ -768,8 +776,9 @@ def validate_II(n,
         return(is_seq(0,n-i1891)*B_alpha_coef[n-i1891]*is_integer(n-i1891)*is_seq(n-i1891,i1891)*py_sum(sum_arg_2,0,2*i1891-n))
     
     
-    out = (py_sum(sum_arg_9,ceil(n/2),floor(n))+2*py_sum(sum_arg_7,ceil(n/2),floor(n))-2*py_sum(sum_arg_3,ceil(n/2),floor(n))+2*is_seq(0,n)*is_integer(n)*py_sum(sum_arg_23,0,n)-2*py_sum(sum_arg_20,ceil(n/2),floor(n))-2*is_seq(0,n)*is_integer(n)*py_sum(sum_arg_17,0,n)+2*py_sum(sum_arg_15,ceil(n/2),floor(n))+2*is_seq(0,n)*is_integer(n)*py_sum(sum_arg_13,0,n)-py_sum(sum_arg_12,ceil(n/2),floor(n)))/2
+    out = (py_sum_parallel(sum_arg_9,ceil(n/2),floor(n))+2*py_sum_parallel(sum_arg_7,ceil(n/2),floor(n))-2*py_sum_parallel(sum_arg_3,ceil(n/2),floor(n))+2*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_23,0,n)-2*py_sum_parallel(sum_arg_20,ceil(n/2),floor(n))-2*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_17,0,n)+2*py_sum_parallel(sum_arg_15,ceil(n/2),floor(n))+2*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_13,0,n)-py_sum_parallel(sum_arg_12,ceil(n/2),floor(n)))/2
     return(out)
+@partial(jit, static_argnums=(0,))
 def validate_III(n,
     B_theta_coef_cp, B_psi_coef_cp,
     B_alpha_coef, B_denom_coef_c,
@@ -892,8 +901,9 @@ def validate_III(n,
         return((is_seq(0,n-i2357+2)*B_denom_coef_c[(-n)+2*i2357-2]*n+(2*is_seq(0,n-i2357+2)-is_seq(0,n-i2357+2)*i2357)*B_denom_coef_c[(-n)+2*i2357-2])*B_alpha_coef[n-i2357+2]*is_integer(n-i2357+2)*is_seq(n-i2357+2,i2357))
     
     
-    out = (4*py_sum(sum_arg_9,ceil(n/2)+1,floor(n)+2)-4*py_sum(sum_arg_4,ceil(n/2)+1,floor(n)+2)+4*is_seq(0,n)*is_integer(n)*py_sum(sum_arg_29,0,n)+4*py_sum(sum_arg_27,ceil(n/2),floor(n))+4*py_sum(sum_arg_24,ceil(n/2),floor(n))+4*is_seq(0,n)*is_integer(n)*py_sum(sum_arg_21,0,n)+2*py_sum(sum_arg_19,ceil(n/2)+1,floor(n)+2)-4*py_sum(sum_arg_16,ceil(n/2),floor(n))-4*is_seq(0,n)*is_integer(n)*py_sum(sum_arg_14,0,n)-4*py_sum(sum_arg_13,ceil(n/2)+1,floor(n)+2)-py_sum(sum_arg_11,ceil(n/2)+1,floor(n)+2)+4*py_sum(sum_arg_1,ceil(n/2)+1,floor(n)+2))/4
+    out = (4*py_sum_parallel(sum_arg_9,ceil(n/2)+1,floor(n)+2)-4*py_sum_parallel(sum_arg_4,ceil(n/2)+1,floor(n)+2)+4*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_29,0,n)+4*py_sum_parallel(sum_arg_27,ceil(n/2),floor(n))+4*py_sum_parallel(sum_arg_24,ceil(n/2),floor(n))+4*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_21,0,n)+2*py_sum_parallel(sum_arg_19,ceil(n/2)+1,floor(n)+2)-4*py_sum_parallel(sum_arg_16,ceil(n/2),floor(n))-4*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_14,0,n)-4*py_sum_parallel(sum_arg_13,ceil(n/2)+1,floor(n)+2)-py_sum_parallel(sum_arg_11,ceil(n/2)+1,floor(n)+2)+4*py_sum_parallel(sum_arg_1,ceil(n/2)+1,floor(n)+2))/4
     return(out)
+@partial(jit, static_argnums=(0,))
 def validate_E6(n,
     B_theta_coef_cp, B_psi_coef_cp,
     B_alpha_coef, B_denom_coef_c,
@@ -1016,8 +1026,9 @@ def validate_E6(n,
         return((is_seq(0,n-i2393+2)*B_denom_coef_c[(-n)+2*i2393-2]*n+(2*is_seq(0,n-i2393+2)-is_seq(0,n-i2393+2)*i2393)*B_denom_coef_c[(-n)+2*i2393-2])*B_alpha_coef[n-i2393+2]*is_integer(n-i2393+2)*is_seq(n-i2393+2,i2393))
     
     
-    out = ((-4*py_sum(sum_arg_9,ceil(n/2)+1,floor(n)+2))+4*py_sum(sum_arg_6,ceil(n/2)+1,floor(n)+2)+4*is_seq(0,n)*is_integer(n)*py_sum(sum_arg_29,0,n)+4*is_seq(0,n)*is_integer(n)*py_sum(sum_arg_27,0,n)+4*py_sum(sum_arg_25,ceil(n/2),floor(n))+4*py_sum(sum_arg_22,ceil(n/2),floor(n))-4*py_sum(sum_arg_19,ceil(n/2)+1,floor(n)+2)-4*py_sum(sum_arg_17,ceil(n/2),floor(n))-4*is_seq(0,n)*is_integer(n)*py_sum(sum_arg_15,0,n)-py_sum(sum_arg_14,ceil(n/2)+1,floor(n)+2)+2*py_sum(sum_arg_12,ceil(n/2)+1,floor(n)+2)+4*py_sum(sum_arg_1,ceil(n/2)+1,floor(n)+2))/4
+    out = ((-4*py_sum_parallel(sum_arg_9,ceil(n/2)+1,floor(n)+2))+4*py_sum_parallel(sum_arg_6,ceil(n/2)+1,floor(n)+2)+4*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_29,0,n)+4*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_27,0,n)+4*py_sum_parallel(sum_arg_25,ceil(n/2),floor(n))+4*py_sum_parallel(sum_arg_22,ceil(n/2),floor(n))-4*py_sum_parallel(sum_arg_19,ceil(n/2)+1,floor(n)+2)-4*py_sum_parallel(sum_arg_17,ceil(n/2),floor(n))-4*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_15,0,n)-py_sum_parallel(sum_arg_14,ceil(n/2)+1,floor(n)+2)+2*py_sum_parallel(sum_arg_12,ceil(n/2)+1,floor(n)+2)+4*py_sum_parallel(sum_arg_1,ceil(n/2)+1,floor(n)+2))/4
     return(out)
+@partial(jit, static_argnums=(0,))
 def validate_D2(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
     B_denom_coef_c, B_alpha_coef,
     B_psi_coef_cp, B_theta_coef_cp,
@@ -1083,8 +1094,9 @@ def validate_D2(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
         return((X_coef_cp[i2442]*n+(2-i2442)*X_coef_cp[i2442])*Z_coef_cp[n-i2442+2])
     
     
-    out = -((is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum(sum_arg_15,0,n+2)-is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum(sum_arg_14,0,n+2))*tau_p+py_sum(sum_arg_9,ceil(n/2)+1,floor(n)+2)+is_seq(0,n+2)*is_integer(n+2)*py_sum(sum_arg_7,0,n+2)+is_seq(0,n+2)*is_integer(n+2)*py_sum(sum_arg_6,0,n+2)+is_seq(0,n+2)*is_integer(n+2)*py_sum(sum_arg_5,0,n+2)-2*py_sum(sum_arg_4,ceil(n/2),floor(n))+is_seq(0,n+2)*dl_p*kap_p*is_integer(n+2)*py_sum(sum_arg_2,0,n+2)+py_sum(sum_arg_13,ceil(n/2)+1,floor(n)+2)+py_sum(sum_arg_11,ceil(n/2)+1,floor(n)+2)-is_seq(0,n+2)*dl_p*kap_p*is_integer(n+2)*py_sum(sum_arg_1,0,n+2)+(is_seq(0,n+2)*dl_p*n+2*is_seq(0,n+2)*dl_p)*Z_coef_cp[n+2]*is_integer(n+2))/2
+    out = -((is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum_parallel(sum_arg_15,0,n+2)-is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum_parallel(sum_arg_14,0,n+2))*tau_p+py_sum_parallel(sum_arg_9,ceil(n/2)+1,floor(n)+2)+is_seq(0,n+2)*is_integer(n+2)*py_sum_parallel(sum_arg_7,0,n+2)+is_seq(0,n+2)*is_integer(n+2)*py_sum_parallel(sum_arg_6,0,n+2)+is_seq(0,n+2)*is_integer(n+2)*py_sum_parallel(sum_arg_5,0,n+2)-2*py_sum_parallel(sum_arg_4,ceil(n/2),floor(n))+is_seq(0,n+2)*dl_p*kap_p*is_integer(n+2)*py_sum_parallel(sum_arg_2,0,n+2)+py_sum_parallel(sum_arg_13,ceil(n/2)+1,floor(n)+2)+py_sum_parallel(sum_arg_11,ceil(n/2)+1,floor(n)+2)-is_seq(0,n+2)*dl_p*kap_p*is_integer(n+2)*py_sum_parallel(sum_arg_1,0,n+2)+(is_seq(0,n+2)*dl_p*n+2*is_seq(0,n+2)*dl_p)*Z_coef_cp[n+2]*is_integer(n+2))/2
     return(out)
+@partial(jit, static_argnums=(0,))
 def validate_D3(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
     B_denom_coef_c, B_alpha_coef,
     B_psi_coef_cp, B_theta_coef_cp,
@@ -1150,18 +1162,19 @@ def validate_D3(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
         return(is_seq(0,n-i209)*B_alpha_coef[n-i209]*is_integer(n-i209)*py_sum(sum_arg_1,0,i209))
     
     
-    out = ((is_seq(0,n)*dl_p*is_integer(n)*py_sum(sum_arg_15,0,n)-is_seq(0,n)*dl_p*is_integer(n)*py_sum(sum_arg_14,0,n))*tau_p)\
-        +(-is_seq(0,n)*is_integer(n)*py_sum(sum_arg_9,0,n))\
-        +(-py_sum(sum_arg_8,ceil(n/2),floor(n)))\
-        +(-is_seq(0,n)*is_integer(n)*py_sum(sum_arg_6,0,n))\
-        +(-py_sum(sum_arg_5,ceil(n/2),floor(n)))\
-        +(-is_seq(0,n)*is_integer(n)*py_sum(sum_arg_3,0,n))\
-        +(py_sum(sum_arg_2,ceil(n/2),floor(n)))\
-        +(is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum(sum_arg_13,0,n))\
-        +(-is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum(sum_arg_12,0,n))\
-        +(-py_sum(sum_arg_11,ceil(n/2),floor(n)))\
+    out = ((is_seq(0,n)*dl_p*is_integer(n)*py_sum_parallel(sum_arg_15,0,n)-is_seq(0,n)*dl_p*is_integer(n)*py_sum_parallel(sum_arg_14,0,n))*tau_p)\
+        +(-is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_9,0,n))\
+        +(-py_sum_parallel(sum_arg_8,ceil(n/2),floor(n)))\
+        +(-is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_6,0,n))\
+        +(-py_sum_parallel(sum_arg_5,ceil(n/2),floor(n)))\
+        +(-is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_3,0,n))\
+        +(py_sum_parallel(sum_arg_2,ceil(n/2),floor(n)))\
+        +(is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum_parallel(sum_arg_13,0,n))\
+        +(-is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum_parallel(sum_arg_12,0,n))\
+        +(-py_sum_parallel(sum_arg_11,ceil(n/2),floor(n)))\
         +(-is_seq(0,n)*dl_p*is_integer(n)*diff(Z_coef_cp[n],True,1))
     return(out)
+@partial(jit, static_argnums=(0,))
 def validate_kt(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
     B_denom_coef_c, B_alpha_coef,
     B_psi_coef_cp, B_theta_coef_cp,
@@ -1415,5 +1428,5 @@ def validate_kt(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
         return(is_seq(0,n-i199)*diff(Y_coef_cp[2*i199-n],True,1)*iota_coef[n-i199]*is_integer(n-i199)*is_seq(n-i199,i199))
     
     
-    out = (-Y_coef_cp[1]*((-(is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum(sum_arg_62,0,n+2)*tau_p)/2)+is_seq(0,n)*dl_p*is_integer(n)*py_sum(sum_arg_60,0,n)*tau_p+is_seq(0,n)*is_integer(n)*py_sum(sum_arg_58,0,n)-is_seq(0,n)*is_integer(n)*py_sum(sum_arg_56,0,n)-(is_seq(0,n+2)*is_integer(n+2)*py_sum(sum_arg_54,0,n+2))/2+(is_seq(0,n+2)*is_integer(n+2)*py_sum(sum_arg_52,0,n+2))/2-(is_seq(0,n+2)*dl_p*kap_p*is_integer(n+2)*py_sum(sum_arg_50,0,n+2))/2-(is_seq(0,n+2)*dl_p*kap_p*is_integer(n+2)*py_sum(sum_arg_48,0,n+2))/2+is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum(sum_arg_46,0,n)+is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum(sum_arg_44,0,n)-py_sum(sum_arg_42,ceil(0.5*n)+1,floor(n)+2)/2-is_seq(0,n)*dl_p*is_integer(n)*py_sum(sum_arg_40,0,n)+py_sum(sum_arg_39,ceil(0.5*n)+1,floor(n)+2)/2+(is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum(sum_arg_37,0,n+2))/2-py_sum(sum_arg_36,ceil(0.5*n)+1,floor(n)+2)/2+py_sum(sum_arg_33,ceil(0.5*n)+1,floor(n)+2)/2))-X_coef_cp[1]*((-(is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum(sum_arg_30,0,n+2)*tau_p)/2)+is_seq(0,n)*dl_p*is_integer(n)*py_sum(sum_arg_28,0,n)*tau_p-py_sum(sum_arg_9,ceil(0.5*n)+1,floor(n)+2)/2+py_sum(sum_arg_6,ceil(0.5*n)+1,floor(n)+2)/2-(is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum(sum_arg_3,0,n+2))/2-is_seq(0,n)*is_integer(n)*py_sum(sum_arg_26,0,n)+is_seq(0,n)*is_integer(n)*py_sum(sum_arg_24,0,n)-(is_seq(0,n+2)*is_integer(n+2)*py_sum(sum_arg_22,0,n+2))/2-py_sum(sum_arg_20,ceil(0.5*n)+1,floor(n)+2)/2+is_seq(0,n)*dl_p*is_integer(n)*py_sum(sum_arg_18,0,n)+py_sum(sum_arg_17,ceil(0.5*n)+1,floor(n)+2)/2+(is_seq(0,n+2)*is_integer(n+2)*py_sum(sum_arg_15,0,n+2))/2+(is_seq(0,n+2)*dl_p*kap_p*is_integer(n+2)*py_sum(sum_arg_13,0,n+2))/2-is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum(sum_arg_11,0,n))+X_coef_cp[1]*(is_seq(0,n)*dl_p*Y_coef_cp[n]*is_integer(n)*tau_p+py_sum(sum_arg_2,ceil(0.5*n),floor(n))+is_seq(0,n)*is_integer(n)*diff(X_coef_cp[n],False,1)+is_seq(0,n)*dl_p*kap_p*Z_coef_cp[n]*is_integer(n))+Y_coef_cp[1]*((-is_seq(0,n)*dl_p*X_coef_cp[n]*is_integer(n)*tau_p)+py_sum(sum_arg_1,ceil(0.5*n),floor(n))+is_seq(0,n)*is_integer(n)*diff(Y_coef_cp[n],False,1))
+    out = (-Y_coef_cp[1]*((-(is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum_parallel(sum_arg_62,0,n+2)*tau_p)/2)+is_seq(0,n)*dl_p*is_integer(n)*py_sum_parallel(sum_arg_60,0,n)*tau_p+is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_58,0,n)-is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_56,0,n)-(is_seq(0,n+2)*is_integer(n+2)*py_sum_parallel(sum_arg_54,0,n+2))/2+(is_seq(0,n+2)*is_integer(n+2)*py_sum_parallel(sum_arg_52,0,n+2))/2-(is_seq(0,n+2)*dl_p*kap_p*is_integer(n+2)*py_sum_parallel(sum_arg_50,0,n+2))/2-(is_seq(0,n+2)*dl_p*kap_p*is_integer(n+2)*py_sum_parallel(sum_arg_48,0,n+2))/2+is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum_parallel(sum_arg_46,0,n)+is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum_parallel(sum_arg_44,0,n)-py_sum_parallel(sum_arg_42,ceil(0.5*n)+1,floor(n)+2)/2-is_seq(0,n)*dl_p*is_integer(n)*py_sum_parallel(sum_arg_40,0,n)+py_sum_parallel(sum_arg_39,ceil(0.5*n)+1,floor(n)+2)/2+(is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum_parallel(sum_arg_37,0,n+2))/2-py_sum_parallel(sum_arg_36,ceil(0.5*n)+1,floor(n)+2)/2+py_sum_parallel(sum_arg_33,ceil(0.5*n)+1,floor(n)+2)/2))-X_coef_cp[1]*((-(is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum_parallel(sum_arg_30,0,n+2)*tau_p)/2)+is_seq(0,n)*dl_p*is_integer(n)*py_sum_parallel(sum_arg_28,0,n)*tau_p-py_sum_parallel(sum_arg_9,ceil(0.5*n)+1,floor(n)+2)/2+py_sum_parallel(sum_arg_6,ceil(0.5*n)+1,floor(n)+2)/2-(is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum_parallel(sum_arg_3,0,n+2))/2-is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_26,0,n)+is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_24,0,n)-(is_seq(0,n+2)*is_integer(n+2)*py_sum_parallel(sum_arg_22,0,n+2))/2-py_sum_parallel(sum_arg_20,ceil(0.5*n)+1,floor(n)+2)/2+is_seq(0,n)*dl_p*is_integer(n)*py_sum_parallel(sum_arg_18,0,n)+py_sum_parallel(sum_arg_17,ceil(0.5*n)+1,floor(n)+2)/2+(is_seq(0,n+2)*is_integer(n+2)*py_sum_parallel(sum_arg_15,0,n+2))/2+(is_seq(0,n+2)*dl_p*kap_p*is_integer(n+2)*py_sum_parallel(sum_arg_13,0,n+2))/2-is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum_parallel(sum_arg_11,0,n))+X_coef_cp[1]*(is_seq(0,n)*dl_p*Y_coef_cp[n]*is_integer(n)*tau_p+py_sum_parallel(sum_arg_2,ceil(0.5*n),floor(n))+is_seq(0,n)*is_integer(n)*diff(X_coef_cp[n],False,1)+is_seq(0,n)*dl_p*kap_p*Z_coef_cp[n]*is_integer(n))+Y_coef_cp[1]*((-is_seq(0,n)*dl_p*X_coef_cp[n]*is_integer(n)*tau_p)+py_sum_parallel(sum_arg_1,ceil(0.5*n),floor(n))+is_seq(0,n)*is_integer(n)*diff(Y_coef_cp[n],False,1))
     return(out)
