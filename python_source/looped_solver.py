@@ -314,16 +314,11 @@ def generate_tensor_operator(
     O_einv, vector_free_coef,
     max_freq, # Maximum number of frequencies to consider
     # Filter off-diagonal comps of the linear diff operator before inverting
-    max_k_diff_pre_inv = None,
+    max_k_diff_pre_inv = -1,
     # Filter off-diagonal comps of the linear diff operator after inverting
-    max_k_diff_post_inv = None,
+    max_k_diff_post_inv = -1,
 
 ):
-    # Default: not filtering off-diagonal components.
-    if max_k_diff_pre_inv is None:
-        max_k_diff_pre_inv = max_freq*2+1
-    if max_k_diff_post_inv is None:
-        max_k_diff_post_inv = max_freq*2+1
 
     out_dict_tensor = {}
     # Tilde II has n_unknown components at order n_unknown.
@@ -1322,8 +1317,8 @@ def iterate_looped(
     # lambda for the coefficient of the scalar free parameter in RHS
     max_freq,
     # B_theta_np10_avg = 0,
-    max_k_diff_pre_inv=None,
-    max_k_diff_post_inv=None
+    max_k_diff_pre_inv=-1,
+    max_k_diff_post_inv=-1
 ):
     # if target_len_phi<max_freq*2:
     #     raise ValueError('target_len_phi must >= max_freq*2.')
@@ -1928,11 +1923,16 @@ def mode_difference_matrix(len_phi):
 # Edits the original array.
 def filter_operator(operator, max_k_diff):
     len_phi = operator.shape[1]
-    if max_k_diff >= len_phi:
-        return(operator)
     operator = jnp.transpose(operator, (0,2,1,3))
     mode_diff_mat = mode_difference_matrix(len_phi)
-    operator = operator.at[:,:,mode_diff_mat>max_k_diff].set(0)
+    # operator = operator.at[:,:,mode_diff_mat>max_k_diff].set(0)
+    operator = jnp.where(
+        jnp.logical_or(
+            mode_diff_mat[None, None, :]<max_k_diff,
+            max_k_diff==-1
+        ),
+        operator, 0
+    )
     return(jnp.transpose(operator, (0,2,1,3)))
 
 # Cyclic import

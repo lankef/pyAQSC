@@ -833,7 +833,7 @@ def iterate_2_magnetic_only(equilibrium,
         magnetic_only=True
     ))
 
-# @partial(jit, static_argnums=(5, 6, 7, 8,))
+# @partial(jit, static_argnums=(5, 6, ))
 def iterate_2(equilibrium,
     B_alpha_nb2,
     B_denom_nm1, B_denom_n,
@@ -845,17 +845,19 @@ def iterate_2(equilibrium,
     iota_new, # arg 4
     n_eval=None,
     max_freq=None,
-    max_k_diff_pre_inv=None,
-    max_k_diff_post_inv=None
+    # -1 represents no filtering (default). This value is chosen so that
+    # turning on or off off-diagonal filtering does not require recompiles.
+    max_k_diff_pre_inv=(-1, -1),
+    max_k_diff_post_inv=(-1, -1)
     ):
 
     len_phi = equilibrium.unknown['X_coef_cp'][1].content.shape[1]
     if max_freq==None:
         max_freq = (len_phi//2, len_phi//2)
-    if max_k_diff_pre_inv==None:
-        max_k_diff_pre_inv = (len_phi, len_phi)
-    if max_k_diff_post_inv==None:
-        max_k_diff_post_inv = (len_phi, len_phi)
+    # if max_k_diff_pre_inv==None:
+    #     max_k_diff_pre_inv = (len_phi, len_phi)
+    # if max_k_diff_post_inv==None:
+    #     max_k_diff_post_inv = (len_phi, len_phi)
     # If no order is supplied, then iterate to the next order. the Equilibrium
     # will be edited directly.
     if n_eval == None:
