@@ -725,7 +725,7 @@ class ChiPhiFunc:
 
     ''' I.1.3 phi Filters '''
     # Static arguments
-    # @partial(jit, static_argnums=(1, 2,))
+    # @partial(jit, static_argnums=(2,))
     def filter(self, arg, mode:int=0):
         '''
         An expandable filter. Now only low-pass is available.
@@ -736,7 +736,7 @@ class ChiPhiFunc:
             0: low_pass.
 
         arg: filter for argument:
-            Low-pass: cutoff frequency.
+            Low-pass: cutoff frequency. If arg is -1, then skip filtering.
 
         Output: -----
 
@@ -746,19 +746,26 @@ class ChiPhiFunc:
             return(self)
         if mode == 0:
             len_phi = self.content.shape[1]
-            if arg*2>=len_phi:
-                return(self)
             W = jnp.abs(jit_fftfreq_int(len_phi))
             f_signal = jnp.fft.fft(self.content, axis = 1)
             # If our original signal time was in seconds, this is now in Hz
             cut_f_signal = f_signal.copy()
-            cut_f_signal = jnp.where(W[None, :]>arg, 0, cut_f_signal)
+            cut_f_signal = jnp.where(
+                jnp.logical_or(
+                    W[None, :]<arg,
+                    jnp.logical_or(
+                        arg*2>len_phi,
+                        arg<0
+                    )
+                ),
+                cut_f_signal, 0
+            )
             return(ChiPhiFunc(jnp.fft.ifft(cut_f_signal, axis=1), self.nfp))
         else:
             return(ChiPhiFuncSpecial())
 
     # @partial(jit, static_argnums=(1,))
-    def filter_reduced_length(self, arg):
+    def filter_reduce_length(self, arg):
         '''
         Low pass filter that reduces the length of a ChiPhiFunc.
         Inputs: -----
@@ -772,7 +779,7 @@ class ChiPhiFunc:
         if self.is_special():
             return(self)
         fft_content = jnp.fft.fft(self.content, axis = 1)
-        short_fft_content = fft_filter(fft_content, arg*2, axis=1)
+        short_fft_content = fft_filter_reduce_length(fft_content, arg*2, axis=1)
         short_content = jnp.fft.ifft(short_fft_content, axis=1)
         return(ChiPhiFunc(short_content, self.nfp))
 
@@ -1030,11 +1037,9 @@ class ChiPhiFunc:
                 plt.colorbar()
             plt.show()
 
-
     def fft(self):
         ''' FFT the axis=1 of content and returns as a ChiPhiFunc '''
         return(ChiPhiFunc(jnp.fft.fft(self.content, axis=1), self.nfp))
-
 
     def ifft(self):
         ''' IFFT the axis=1 of content and returns as a ChiPhiFunc '''
@@ -1372,8 +1377,8 @@ def solve_1d_asym(p_eff, f_eff): # not nfp-dependent
 
     return(jnp.sum(asym_series, axis=0))
 
-@partial(jit, static_argnums=(2,))
-def solve_1d_fft(p_eff, f_eff, fft_max_freq: int=None): # not nfp-dependent
+# @partial(jit, static_argnums=(3,))
+def solve_1d_fft(p_eff, f_eff, cutoff_freq: int, hard_cutoff_freq: int): # not nfp-dependent
     '''
     Solves one linear ODE of form y' + p_eff*y = f_eff.
     Assumes non-zero p.
@@ -1390,28 +1395,42 @@ def solve_1d_fft(p_eff, f_eff, fft_max_freq: int=None): # not nfp-dependent
     statement.
     '''
     len_phi = len(f_eff)
+    if hard_cutoff_freq*2>len_phi or hard_cutoff_freq<0:
+        len_tensor = len_phi
+    else:
+        len_tensor = hard_cutoff_freq*2
+    # The coefficient is allowed to be a scalar.
     if jnp.isscalar(p_eff):
         p_eff = p_eff*jnp.ones_like(f_eff)
+    elif p_eff.ndim == 0:
+        p_eff = p_eff*jnp.ones_like(f_eff)
 
-    if fft_max_freq is None:
-        target_length = len(f_eff)
-    else:
-        target_length = fft_max_freq*2
-    p_fft = fft_filter(jnp.fft.fft(p_eff), target_length, axis=0)
-    f_fft = fft_filter(jnp.fft.fft(f_eff), target_length, axis=0)
 
-    # Both are (len_phi, len_phi) matrices
-    diff_matrix = fft_dphi_op(target_length)
+    p_fft = fft_filter_reduce_length(jnp.fft.fft(p_eff, axis=0), len_tensor, axis=0)
+    f_fft = fft_filter_reduce_length(jnp.fft.fft(f_eff, axis=0), len_tensor, axis=0)
+    # Both are (len_tensor, len_tensor) matrices
+    diff_matrix = fft_dphi_op(len_tensor)
     conv_matrix = fft_conv_op(p_fft)
-    inv_dxpp = jnp.linalg.inv(diff_matrix + conv_matrix)
+    tot_matrix = diff_matrix + conv_matrix
+    tot_matrix = filter_low_pass_tensor(
+        tot_matrix[None, :, None, :],
+        cutoff_freq,
+        insert_ones=True
+    )[0, :, 0, :]
+    inv_dxpp = jnp.linalg.inv(tot_matrix)
+    inv_dxpp = filter_low_pass_tensor(
+        inv_dxpp[None, :, None, :],
+        cutoff_freq,
+        insert_ones=False
+    )[0, :, 0, :]
+    # TODO: filter diff_matrix + conv_matrix.
     sln_fft = inv_dxpp@f_fft
-    sln = jnp.fft.ifft(fft_pad(sln_fft, len_phi, axis=0), axis=0)
-
+    sln = jnp.fft.ifft(fft_pad(sln_fft, len_phi, axis=0))
     return(sln)
 
-solve_1d_fft_batch = vmap(solve_1d_fft, in_axes=(0, 0, None), out_axes=0)
-@partial(jit, static_argnums=(3,))
-def solve_ODE(coeff_arr, coeff_dp_arr, f_arr, fft_max_freq: int=None): # not nfp-dependent
+solve_1d_fft_batch = vmap(solve_1d_fft, in_axes=(0, 0, None, None), out_axes=0)
+# @partial(jit, static_argnums=(4,))
+def solve_ODE(coeff_arr, coeff_dp_arr, f_arr, cutoff_freq: int=-1, hard_cutoff_freq: int=-1): # not nfp-dependent
     '''
     Solves simple linear first order ODE systems in batch:
     (coeff_phi d/dphi + coeff) y = f. ( y' + p_eff*y = f_eff )
@@ -1426,7 +1445,7 @@ def solve_ODE(coeff_arr, coeff_dp_arr, f_arr, fft_max_freq: int=None): # not nfp
     Axis=0 is equation indices and axis=1 is phi dependences. All quantities are
     assumed periodic
 
-    fft_max_freq: Maximum number of Fourier harmonics used.
+    cutoff_freq: Maximum number of Fourier harmonics used.
 
     Output: -----
 
@@ -1434,9 +1453,6 @@ def solve_ODE(coeff_arr, coeff_dp_arr, f_arr, fft_max_freq: int=None): # not nfp
     '''
     len_phi = f_arr.shape[1]
     len_chi = f_arr.shape[0]
-
-    if fft_max_freq is None:
-        fft_max_freq = len_phi//2
 
     # Rescale the eq into y'+py=f
     f_eff = f_arr/coeff_dp_arr
@@ -1446,31 +1462,34 @@ def solve_ODE(coeff_arr, coeff_dp_arr, f_arr, fft_max_freq: int=None): # not nfp
     # f_eff = f_eff/f_eff_scaling
 
     if jnp.isscalar(p_eff):
-        p_eff = p_eff+jnp.zeros_like(f_arr)
-
+        p_eff = p_eff*jnp.ones_like(f_eff)
+    elif p_eff.ndim == 0:
+        p_eff = p_eff*jnp.ones_like(f_eff)
     # We always assume f is phi-dependent.
     if p_eff.shape[1] != f_eff.shape[1]:
         if p_eff.shape[1]==1:
             p_eff = p_eff*jnp.ones_like(f_arr)
         else:
             return(jnp.nan) # Mismatch
-
     # Uneven component number
     if p_eff.shape[0]!=f_eff.shape[0]:
         return(jnp.nan)
-
     # Asymptotic series is depreciated. It only works well when
     # minimum amplitude is large. In this case, the FFT method also works well.
     out_arr = jnp.where(
         (jnp.all(p_eff == 0, axis=1))[:, None],
         ChiPhiFunc(f_eff, nfp=1).\
             integrate_phi_fft(zero_avg=True).\
-            filter(fft_max_freq).content,
-        solve_1d_fft_batch(p_eff, f_eff, fft_max_freq)
+            filter(cutoff_freq).content,
+        solve_1d_fft_batch(
+            p_eff,
+            f_eff,
+            cutoff_freq,
+            hard_cutoff_freq
+        )
     )
     # return(out_arr*f_eff_scaling)
     return(out_arr)
-
 
 ''' ONLY USED IN solve_1d(). '''
 # @partial(jit, static_argnums=(0,))
@@ -1517,8 +1536,8 @@ def fft_conv_op(source):
     # Collapse the first two axes from a diagonal matrix to a 1d array by summing
     return(tensor_eff[0][0])
 
-@partial(jit, static_argnums=(4,))
-def solve_ODE_chi(coeff, coeff_dp, coeff_dc, f, fft_max_freq: int):
+@partial(jit, static_argnums=(5))
+def solve_ODE_chi(coeff, coeff_dp, coeff_dc, f, cutoff_freq: int, hard_cutoff_freq: int):
     '''
     For solving the periodic linear 1st order ODE
     (coeff + coeff_dp*dphi + coeff_dc*dchi) y = f(phi, chi)
@@ -1542,12 +1561,15 @@ def solve_ODE_chi(coeff, coeff_dp, coeff_dc, f, fft_max_freq: int):
     coeff_eff = (coeff_dc*mode_chi + coeff)
 
     return(
-        solve_ODE(coeff_eff, coeff_dp, f, \
-            fft_max_freq=fft_max_freq)
+        solve_ODE(
+            coeff_eff, coeff_dp, f,
+            cutoff_freq=cutoff_freq,
+            hard_cutoff_freq=hard_cutoff_freq
+        )
     )
 
-@partial(jit, static_argnums=(2,))
-def solve_dphi_iota_dchi(iota, f, fft_max_freq: int):
+@partial(jit, static_argnums=(3))
+def solve_dphi_iota_dchi(iota, f, cutoff_freq: int, hard_cutoff_freq: int):
     '''
     For solving the periodic linear 1st order ODE
     (dphi+iota*dchi) y = f(phi, chi)
@@ -1568,9 +1590,10 @@ def solve_dphi_iota_dchi(iota, f, fft_max_freq: int):
         solve_ODE_chi(
             coeff=0,
             coeff_dp=1,
-            coeff_dc = iota,
+            coeff_dc=iota,
             f=f,
-            fft_max_freq=fft_max_freq
+            cutoff_freq=cutoff_freq,
+            hard_cutoff_freq=hard_cutoff_freq
         )
     )
 
@@ -1578,7 +1601,7 @@ def solve_dphi_iota_dchi(iota, f, fft_max_freq: int):
 
 ''' V.1. Low-pass filter for simplifying tensor to invert '''
 # @partial(jit, static_argnums=(1,2,))
-def fft_filter(fft_in:jnp.ndarray, target_length, axis): # not nfp-dependent
+def fft_filter_reduce_length(fft_in:jnp.ndarray, target_length, axis): # not nfp-dependent
     '''
     Shorten an array in FFT representation to leave only target_length elements.
     (which correspond to a low-pass filter with k<target_length/2*nfp)
@@ -1597,8 +1620,9 @@ def fft_filter(fft_in:jnp.ndarray, target_length, axis): # not nfp-dependent
 
     Filtered array.
     '''
-    if target_length>=fft_in.shape[axis]:
+    if target_length>=fft_in.shape[axis] or target_length<0:
         return(fft_in)
+
     # FFT of an array contains mode amplitude in the order given by
     # fftfreq(length)*length. For example, for length=7,
     # [ 0.,  1.,  2.,  3., -3., -2., -1.]
@@ -1639,29 +1663,36 @@ def fft_pad(fft_in, target_length, axis): # not nfp-dependent
     left = fft_in.take(indices=jnp.arange(0, (original_length+1)//2), axis=axis)
     right = fft_in.take(indices=jnp.arange(-(original_length//2), 0), axis=axis)
     return(jnp.concatenate((left, center_array, right), axis=axis)*target_length/fft_in.shape[axis])
-
 '''
 V.2 Tensor construction for looped_solver.py
 
 Theses methods are for constructing differential/convolution tensors
 '''
 
-@partial(jit, static_argnums=(1,))
-def to_tensor_fft_op(ChiPhiFunc_in:ChiPhiFunc, len_tensor:int):
+@partial(jit, static_argnums=(1, 2,))
+def to_tensor_fft_op(ChiPhiFunc_in:ChiPhiFunc, len_tensor:int, dphi:int=0):
     '''
-    For solving the looped equations. They are only used in looped_solver.py and
-    lambda_coefs_B_psi.py.
+    Equivalent to:
+    to_tensor_fft_op_multi_dim(
+        ChiPhiFunc_in=ChiPhiFunc_in,
+        dphi=0, dchi=0,
+        num_mode=1, cap_axis0=ChiPhiFunc_in.content.shape[0],
+        nfp=ChiPhiFunc_in.nfp
+    )
     '''
-    tensor_coef = ChiPhiFunc_in.content[:, None, :]
-    tensor_fft_coef = fft_filter(jnp.fft.fft(tensor_coef, axis = 2), len_tensor, axis=2)
-    tensor_fft_op = fft_conv_tensor_batch(tensor_fft_coef)
+    tensor_fft_op = to_tensor_fft_op_multi_dim(
+        ChiPhiFunc_in=ChiPhiFunc_in, len_tensor=len_tensor,
+        dphi=dphi, dchi=0,
+        num_mode=1, cap_axis0=ChiPhiFunc_in.content.shape[0],
+        nfp=ChiPhiFunc_in.nfp
+    )
     return(tensor_fft_op)
 
-@partial(jit, static_argnums=(1,2,3,4,5,6))
+@partial(jit, static_argnums=(1,2,3,4,5))
 def to_tensor_fft_op_multi_dim(
-    ChiPhiFunc_in:ChiPhiFunc, dphi:int, dchi:int,
+    ChiPhiFunc_in:ChiPhiFunc, len_tensor:int,
+    dphi:int, dchi:int,
     num_mode:int, cap_axis0:int,
-    len_tensor: int,
     nfp: int):
     '''
     (n, n-2, len_tensor, len_tensor), acting on the FFT of
@@ -1686,58 +1717,113 @@ def to_tensor_fft_op_multi_dim(
 
     Output: -----
 
-    A tensor of shape (len_chi+num_mode-1, num_mode, len_tensor, len_tensor)
+    A tensor of shape (len_chi+num_mode-1, num_mode, len_phi, len_phi)
     acting on a content by np.tensordot(operator, content, 2).
     It first takes chi and phi derivatives of specified orders
-    and then multiplies
+    and then multiplies it with ChiPhiFunc_in.
     '''
     if ChiPhiFunc_in.nfp == 0:
         return(0)
     # A stack of convolution matrices
-    # shape is (len_chi+num_mode-1, num_mode, len_phi)
-
-    tensor_coef_nD = conv_tensor(ChiPhiFunc_in.content, num_mode)
+    # shape is (len_chi+num_mode-1, num_mode, len_tensor)
+    len_phi = ChiPhiFunc_in.content.shape[1]
+    if len_tensor<0 or len_tensor>len_phi:
+        len_tensor=len_phi
+    tensor_coef = conv_tensor(
+        fft_filter_reduce_length(ChiPhiFunc_in.content, len_tensor, axis=1),
+        num_mode
+    )
     # Putting in dchi
     # The outmost component of B_theta is 0.
     # B_theta coeffs carried by B_psi has 3 components,
     # and the convolution matrix is n_unknown+2 * n_unknown-1
-    if cap_axis0%2!=tensor_coef_nD.shape[0]%2:
-        return(jnp.full((len_chi+num_mode-1, num_mode, len_tensor, len_tensor),jnp.nan))
-    if cap_axis0>tensor_coef_nD.shape[0]:
-        return(jnp.full((len_chi+num_mode-1, num_mode, len_tensor, len_tensor),jnp.nan))
-    if tensor_coef_nD.shape[0]>cap_axis0:
-        tensor_coef_nD = tensor_coef_nD[
-            (tensor_coef_nD.shape[0]-cap_axis0)//2:
-            (tensor_coef_nD.shape[0]+cap_axis0)//2
+    if cap_axis0%2!=tensor_coef.shape[0]%2:
+        return(jnp.nan)
+    if cap_axis0>tensor_coef.shape[0]:
+        return(jnp.nan)
+    if tensor_coef.shape[0]>cap_axis0:
+        tensor_coef = tensor_coef[
+            (tensor_coef.shape[0]-cap_axis0)//2:
+            (tensor_coef.shape[0]+cap_axis0)//2
         ]
     if dchi!=0:
         dchi_array_temp = (1j*jnp.arange(-num_mode+1,num_mode+1,2)[None, :, None])
         if dchi>0:
-            tensor_coef_nD = tensor_coef_nD*dchi_array_temp**dchi
+            tensor_coef = tensor_coef*dchi_array_temp**dchi
         elif dchi<0:
             if num_mode%2==0: # chi integrals are only supported when there is no constant componemnt
-                tensor_coef_nD = tensor_coef_nD/dchi_array_temp**(-dchi)
+                tensor_coef = tensor_coef/dchi_array_temp**(-dchi)
             else:
                 # This helper method does not support calculating
                 # chi integrals (dchi<0) when the content being acted on
                 # has chi-indep component (num_mode is odd)
-                return(jnp.full((len_chi+num_mode-1, num_mode, len_tensor, len_tensor),jnp.nan))
+                return(jnp.nan)
     # Applying FFT
     # A stack of convolution matrices, but now axis=2 is
     # in frequency space and capped to len_tensor elements.
     # shape is (len_chi+num_mode-1, num_mode, len_tensor)
-    tensor_fft_coef_B_theta = fft_filter(jnp.fft.fft(tensor_coef_nD, axis = 2), len_tensor, axis=2)
-    # 'Tensor coefficients', dimension is (n_eval-1, n_eval-3, len_phi)
+    tensor_fft_coef = jnp.fft.fft(tensor_coef, axis = 2)
+    # 'Tensor coefficients', dimension is (n_eval-1, n_eval-3, len_tensor)
     # Last 2 dimensions are for convolving phi cells.
     # shape is (len_chi+num_mode-1, num_mode, len_tensor, len_tensor)
-    tensor_fft_op_B_theta = fft_conv_tensor_batch(tensor_fft_coef_B_theta)
+    tensor_fft_op = fft_conv_tensor_batch(tensor_fft_coef)
     # Applying dphi
     if dphi!=0:
         if dphi<0:
             # dphi must be positive
-            return(jnp.full((len_chi+num_mode-1, num_mode, len_tensor, len_tensor),jnp.nan))
+            return(jnp.nan)
         # dphi matrix
         fft_freq = jit_fftfreq_int(len_tensor)
         dphi_array = jnp.ones((len_tensor,len_tensor)) * 1j * fft_freq * nfp
-        tensor_fft_op_B_theta = tensor_fft_op_B_theta*(dphi_array**dphi)
-    return(tensor_fft_op_B_theta)
+        tensor_fft_op = tensor_fft_op*(dphi_array**dphi)
+    return(tensor_fft_op)
+
+@partial(jit, static_argnums=(2))
+def filter_low_pass_tensor(tensor_fft_op, cutoff_freq, insert_ones):
+    '''
+    Apply a low-pass filter on a (m, len_phi, n, len_phi) tensor to remove
+    any coupling with phi frequencies above cutoff_freq. This is done by replacing all
+    corresponding non-diagonal elements with 0's, and then replacing all
+    corresponding diagonal elements with 1. Numerically, this is identical to
+    fft_filter_reduce_length(ma_freq), but uses a dynamic argument. As a result,
+    this implementation is more time consuming, but requires no recompile to
+    sweep the cut-off freqency.
+
+    Input: -----
+
+    tensor_fft_op: a tensor of shape
+    (m, len_phi, n, len_phi)
+    acting on a content by np.tensordot(operator, content, 2).
+
+    cutoff_freq: the cut-off frequency. When set to -1, does not apply filter.
+
+    Output:
+
+    '''
+    # return(tensor_fft_op)
+    len_phi = tensor_fft_op.shape[-1]
+    fft_freq_1d = jit_fftfreq_int(len_phi)
+    iden = jnp.identity(len_phi)[None, :, None, :]
+    # The maximum frequency a matrix element is coupling
+    max_coupling_freq = jnp.maximum(
+        jnp.abs(fft_freq_1d[None, :]),
+        jnp.abs(fft_freq_1d[:, None])
+    )[None, :, None, :]
+    tensor_fft_op = jnp.where(
+        jnp.logical_and(
+            max_coupling_freq>cutoff_freq,
+            jnp.logical_and(cutoff_freq>0, cutoff_freq*2<len_phi) # Filter enabled
+        ),
+        0,
+        tensor_fft_op
+    )
+    if insert_ones:
+        tensor_fft_op = jnp.where(
+            jnp.logical_and(
+                jnp.logical_and(max_coupling_freq>cutoff_freq, iden==1),
+                jnp.logical_and(cutoff_freq>0, cutoff_freq*2<len_phi) # Filter enabled
+            ),
+            1,
+            tensor_fft_op
+        )
+    return(tensor_fft_op)

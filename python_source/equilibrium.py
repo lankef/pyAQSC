@@ -124,10 +124,10 @@ def iterate_Yn_cp_magnetic(n_unknown,
     B_denom_coef_c,
     kap_p, dl_p, tau_p,
     iota_coef,
-    max_freq,
+    cutoff_freq,
     Yn0=None):
 
-    len_tensor = max_freq*2
+    len_tensor = cutoff_freq*2
     nfp = X_coef_cp.nfp
     n_eval = n_unknown+1
 
@@ -147,7 +147,7 @@ def iterate_Yn_cp_magnetic(n_unknown,
         kap_p=kap_p,
         dl_p=dl_p,
         tau_p=tau_p,
-        iota_coef=iota_coef).filter(max_freq)
+        iota_coef=iota_coef).filter(cutoff_freq)
     Yn_rhs_content = Yn_rhs.content
     new_Y_n_no_unknown = ChiPhiFunc(jnp.einsum('ijk,jk->ik',O_einv,Yn_rhs_content), Yn_rhs.nfp)
     Y_coef_cp_no_unknown = Y_coef_cp.mask(n_eval-2)
@@ -192,7 +192,7 @@ def iterate_Yn_cp_magnetic(n_unknown,
             coeff_arr=coef_Yn1p_in_D3.content,
             coeff_dp_arr=coef_dp_Yn1p_in_D3.content*nfp,
             f_arr=D3_RHS_no_unknown.content,
-            fft_max_freq=max_freq)
+            cutoff_freq=cutoff_freq)
 
     Yn = new_Y_n_no_unknown + ChiPhiFunc(vector_free_coef*Yn_free_content, nfp)
     return(Yn)
@@ -288,7 +288,8 @@ def iterate_delta_n_0_offset(n_eval,
     p_perp_coef_cp,
     Delta_coef_cp,
     iota_coef,
-    max_freq=None,
+    cutoff_freq=-1,
+    hard_cutoff_freq=-1,
     no_iota_masking = False): # nfp-dependent!!
 
     # At even orders, the free parameter is Delta_offset (the average of Delta n0)
@@ -320,7 +321,8 @@ def iterate_delta_n_0_offset(n_eval,
     content = solve_dphi_iota_dchi(
         iota=iota_coef[0]/Delta_n_inhomog_component.nfp,
         f=Delta_n_inhomog_component.content/Delta_n_inhomog_component.nfp,
-        fft_max_freq=max_freq
+        cutoff_freq=cutoff_freq,
+        hard_cutoff_freq=hard_cutoff_freq
     )
     Delta_out = ChiPhiFunc(content, Delta_n_inhomog_component.nfp).cap_m(n_eval)
     if n_eval%2==0:
@@ -615,12 +617,12 @@ def iterate_2_magnetic_only(equilibrium,
     B_alpha_nb2,
     B_denom_nm1, B_denom_n,
     iota_nm2b2,
-    max_freq=None,
+    cutoff_freq=None,
     n_eval=None,
 ):
-    if max_freq == None:
+    if cutoff_freq == None:
         len_phi = equilibrium.unknown['X_coef_cp'][1].content.shape[1]
-        max_freq = (len_phi//2, len_phi//2)
+        cutoff_freq = (len_phi//2, len_phi//2)
 
     # If no order is supplied, then iterate to the next order. the equilibrium
     # will be edited directly.
@@ -677,7 +679,7 @@ def iterate_2_magnetic_only(equilibrium,
         tau_p=tau_p,
         iota_coef=iota_coef
         ).antid_chi()
-    B_psi_coef_cp = B_psi_coef_cp.append(B_psi_nm3.filter(max_freq[0]))
+    B_psi_coef_cp = B_psi_coef_cp.append(B_psi_nm3.filter(cutoff_freq[0]))
 
     # Requires:
     # X_{n-1}, Y_{n-1}, Z_{n-1},
@@ -697,7 +699,7 @@ def iterate_2_magnetic_only(equilibrium,
         tau_p=tau_p,
         iota_coef=iota_coef
         )
-    Z_coef_cp = Z_coef_cp.append(Znm1.filter(max_freq[0]))
+    Z_coef_cp = Z_coef_cp.append(Znm1.filter(cutoff_freq[0]))
 
     # Requires:
     # X_{n-1}, Y_{n-1}, Z_n,
@@ -714,7 +716,7 @@ def iterate_2_magnetic_only(equilibrium,
         tau_p=tau_p,
         iota_coef=iota_coef
         )
-    X_coef_cp = X_coef_cp.append(Xnm1.filter(max_freq[0]))
+    X_coef_cp = X_coef_cp.append(Xnm1.filter(cutoff_freq[0]))
 
     # Requires:
     # X_{n}, Y_{n-1}, Z_{n-1},
@@ -732,9 +734,9 @@ def iterate_2_magnetic_only(equilibrium,
         dl_p=dl_p,
         tau_p=tau_p,
         iota_coef=iota_coef,
-        max_freq=max_freq[0]
+        cutoff_freq=cutoff_freq[0]
     )
-    Y_coef_cp = Y_coef_cp.append(Ynm1.filter(max_freq[0]))
+    Y_coef_cp = Y_coef_cp.append(Ynm1.filter(cutoff_freq[0]))
 
 
 
@@ -755,7 +757,7 @@ def iterate_2_magnetic_only(equilibrium,
         ).antid_chi()
     B_psi_nm2_content_new = B_psi_nm2.content.at[B_psi_nm2.content.shape[0]//2].set(B_psi_nm20)
     B_psi_nm2 = ChiPhiFunc(B_psi_nm2_content_new, B_psi_nm2.nfp)
-    B_psi_coef_cp = B_psi_coef_cp.append(B_psi_nm2.filter(max_freq[1]))
+    B_psi_coef_cp = B_psi_coef_cp.append(B_psi_nm2.filter(cutoff_freq[1]))
 
     Zn = iterate_Zn_cp(n_eval=n_eval,
         X_coef_cp=X_coef_cp,
@@ -769,7 +771,7 @@ def iterate_2_magnetic_only(equilibrium,
         tau_p=tau_p,
         iota_coef=iota_coef
         )
-    Z_coef_cp = Z_coef_cp.append(Zn.filter(max_freq[1]))
+    Z_coef_cp = Z_coef_cp.append(Zn.filter(cutoff_freq[1]))
 
     Xn = iterate_Xn_cp(n_eval=n_eval,
         X_coef_cp=X_coef_cp,
@@ -782,7 +784,7 @@ def iterate_2_magnetic_only(equilibrium,
         tau_p=tau_p,
         iota_coef=iota_coef
         )
-    X_coef_cp = X_coef_cp.append(Xn.filter(max_freq[1]))
+    X_coef_cp = X_coef_cp.append(Xn.filter(cutoff_freq[1]))
 
     Yn = iterate_Yn_cp_magnetic(n_unknown=n_eval,
         X_coef_cp=X_coef_cp,
@@ -796,10 +798,10 @@ def iterate_2_magnetic_only(equilibrium,
         dl_p=dl_p,
         tau_p=tau_p,
         iota_coef=iota_coef,
-        max_freq=max_freq[1],
+        cutoff_freq=cutoff_freq[1],
         Yn0=Yn0
     )
-    Y_coef_cp = Y_coef_cp.append(Yn.filter(max_freq[1]))
+    Y_coef_cp = Y_coef_cp.append(Yn.filter(cutoff_freq[1]))
 
     # return(X_coef_cp,
     #     Y_coef_cp,
@@ -844,7 +846,8 @@ def iterate_2(equilibrium,
     # Now only implemented avg(B_theta_n0)=0 and given iota.
     iota_new, # arg 4
     n_eval=None,
-    max_freq=None,
+    hard_cutoff_freq=(-1, -1),
+    cutoff_freq=(-1, -1),
     # -1 represents no filtering (default). This value is chosen so that
     # turning on or off off-diagonal filtering does not require recompiles.
     max_k_diff_pre_inv=(-1, -1),
@@ -852,8 +855,8 @@ def iterate_2(equilibrium,
     ):
 
     len_phi = equilibrium.unknown['X_coef_cp'][1].content.shape[1]
-    if max_freq==None:
-        max_freq = (len_phi//2, len_phi//2)
+    # if cutoff_freq==None:
+    #     cutoff_freq = (len_phi//2, len_phi//2)
     # if max_k_diff_pre_inv==None:
     #     max_k_diff_pre_inv = (len_phi, len_phi)
     # if max_k_diff_post_inv==None:
@@ -895,7 +898,6 @@ def iterate_2(equilibrium,
     solution_nm1_known_iota = looped_solver.iterate_looped(
         n_unknown = n_eval-1,
         nfp = equilibrium.nfp,
-        target_len_phi = 1000,
         X_coef_cp = X_coef_cp,
         Y_coef_cp = Y_coef_cp,
         Z_coef_cp = Z_coef_cp,
@@ -909,17 +911,17 @@ def iterate_2(equilibrium,
         tau_p = tau_p,
         dl_p = dl_p,
         iota_coef = iota_coef,
-        max_freq = max_freq[0],
+        cutoff_freq = cutoff_freq[0],
         max_k_diff_pre_inv = max_k_diff_pre_inv[0],
         max_k_diff_post_inv = max_k_diff_post_inv[0],
     )
-    B_theta_coef_cp = B_theta_coef_cp.append(solution_nm1_known_iota['B_theta_n']) # .filter(max_freq[0]))
-    B_psi_coef_cp = B_psi_coef_cp.append(solution_nm1_known_iota['B_psi_nm2']) # .filter(max_freq[0]))
-    X_coef_cp = X_coef_cp.append(solution_nm1_known_iota['Xn']) # .filter(max_freq[0]))
-    Y_coef_cp = Y_coef_cp.append(solution_nm1_known_iota['Yn']) # .filter(max_freq[0]))
-    Z_coef_cp = Z_coef_cp.append(solution_nm1_known_iota['Zn']) # .filter(max_freq[0]))
-    p_perp_coef_cp = p_perp_coef_cp.append(solution_nm1_known_iota['pn']) # .filter(max_freq[0]))
-    Delta_coef_cp = Delta_coef_cp.append(solution_nm1_known_iota['Deltan']) # .filter(max_freq[0]))
+    B_theta_coef_cp = B_theta_coef_cp.append(solution_nm1_known_iota['B_theta_n']) # .filter(cutoff_freq[0]))
+    B_psi_coef_cp = B_psi_coef_cp.append(solution_nm1_known_iota['B_psi_nm2']) # .filter(cutoff_freq[0]))
+    X_coef_cp = X_coef_cp.append(solution_nm1_known_iota['Xn']) # .filter(cutoff_freq[0]))
+    Y_coef_cp = Y_coef_cp.append(solution_nm1_known_iota['Yn']) # .filter(cutoff_freq[0]))
+    Z_coef_cp = Z_coef_cp.append(solution_nm1_known_iota['Zn']) # .filter(cutoff_freq[0]))
+    p_perp_coef_cp = p_perp_coef_cp.append(solution_nm1_known_iota['pn']) # .filter(cutoff_freq[0]))
+    Delta_coef_cp = Delta_coef_cp.append(solution_nm1_known_iota['Deltan']) # .filter(cutoff_freq[0]))
 
     # This "partial" solution will be fed into
     # iterate_looped. This is already filtered.
@@ -945,7 +947,6 @@ def iterate_2(equilibrium,
     solution_n = looped_solver.iterate_looped(
         n_unknown = n_eval,
         nfp=equilibrium.nfp,
-        target_len_phi = 1000,
         X_coef_cp = X_coef_cp,
         Y_coef_cp = Y_coef_cp,
         Z_coef_cp = Z_coef_cp,
@@ -959,7 +960,7 @@ def iterate_2(equilibrium,
         tau_p = tau_p,
         dl_p = dl_p,
         iota_coef = iota_coef,
-        max_freq = max_freq[1],
+        cutoff_freq = cutoff_freq[1],
         max_k_diff_pre_inv = max_k_diff_pre_inv[1],
         max_k_diff_post_inv = max_k_diff_post_inv[1],
     )
@@ -968,17 +969,17 @@ def iterate_2(equilibrium,
     # This only reassigns the pointer B_psi. Need to re-assign equilibrium.unknown[]
     # too.
     B_psi_coef_cp = B_psi_coef_cp.mask(n_eval-3)
-    B_psi_coef_cp = B_psi_coef_cp.append(solution_n['B_psi_nm2'].filter(max_freq[1]))
+    B_psi_coef_cp = B_psi_coef_cp.append(solution_n['B_psi_nm2'].filter(cutoff_freq[1]))
     # This only reassigns the pointer B_theta. Need to re-assign equilibrium.unknown[]
     # too.
     B_theta_coef_cp = B_theta_coef_cp.mask(n_eval-1)
-    B_theta_coef_cp = B_theta_coef_cp.append(solution_n['B_theta_n'].filter(max_freq[1]))
+    B_theta_coef_cp = B_theta_coef_cp.append(solution_n['B_theta_n'].filter(cutoff_freq[1]))
 
-    X_coef_cp = X_coef_cp.append(solution_n['Xn']) # .filter(max_freq[1])
-    Z_coef_cp = Z_coef_cp.append(solution_n['Zn']) # .filter(max_freq[1])
-    p_perp_coef_cp = p_perp_coef_cp.append(solution_n['pn']) # .filter(max_freq[1])
-    Delta_coef_cp = Delta_coef_cp.append(solution_n['Deltan']) # .filter(max_freq[1])
-    Y_coef_cp = Y_coef_cp.append(solution_n['Yn']) # .filter(max_freq[1])
+    X_coef_cp = X_coef_cp.append(solution_n['Xn']) # .filter(cutoff_freq[1])
+    Z_coef_cp = Z_coef_cp.append(solution_n['Zn']) # .filter(cutoff_freq[1])
+    p_perp_coef_cp = p_perp_coef_cp.append(solution_n['pn']) # .filter(cutoff_freq[1])
+    Delta_coef_cp = Delta_coef_cp.append(solution_n['Deltan']) # .filter(cutoff_freq[1])
+    Y_coef_cp = Y_coef_cp.append(solution_n['Yn']) # .filter(cutoff_freq[1])
 
     return(Equilibrium.from_known(
         X_coef_cp=X_coef_cp,

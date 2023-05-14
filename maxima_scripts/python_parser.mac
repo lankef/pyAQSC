@@ -45,7 +45,7 @@ readable_string(expr):=block(
     return(string(expr))
 )$
 
-change_to_parallel(string_in):=ssubst("py_sum","py_sum",out_string)$
+change_to_parallel(string_in):=ssubst("py_sum_parallel","py_sum",out_string)$
 /* Indent every lines in string. For printf*/
 indent(string_in):= sconcat("    ", ssubst("~%    ","~%",string_in))$
 
@@ -177,7 +177,7 @@ block([
     expr_string_list: split(expr_string, "py_sum_marked["),
     expr_string: first(expr_string_list),
     for i: 2 thru length(expr_string_list) do(
-        expr_string: sconcat(expr_string, "py_sum", substring(expr_string_list[i], 1+sposition("]", expr_string_list [i])))
+        expr_string: sconcat(expr_string, "py_sum_parallel", substring(expr_string_list[i], 1+sposition("]", expr_string_list [i])))
     ),
 
     return(sconcat(out_string,expr_string))
@@ -206,8 +206,8 @@ package(string, name, arguments):=sconcat(
     "from math import floor, ceil~%",
     "from math_utilities import *~%",
     "import chiphifunc~%",
-    "from jax import jit~%",
-    "from functools import partial~%",
+    /*"from jax import jit~%",*/
+    /*"from functools import partial~%",*/
     pack_method(string, name, arguments)
 );
 
@@ -215,7 +215,7 @@ package(string, name, arguments):=sconcat(
 /* Package a series of parsed commands into a method */
 pack_method(string, name, arguments):=(
     sconcat(
-        "@partial(jit, static_argnums=(0,))~%",
+        /*"@partial(jit, static_argnums=(0,))~%",*/
         "def ",name,"(",arguments,"):",
         indent(string), "~%",
         "    return(out)~%"

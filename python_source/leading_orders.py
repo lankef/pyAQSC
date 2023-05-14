@@ -11,12 +11,12 @@ def circular_axis():
     Rc, Rs = ([1, 0, 0.0001], [0, 0, 0])
     Zc, Zs = ([0, 0, 0], [0, 0, 0.001])
     return(leading_orders(
-        nfp = 1,
-        Rc = Rc,
-        Rs = Rs,
-        Zc = Zc,
-        Zs = Zs,
-        p0 = ChiPhiFunc(
+        nfp=1,
+        Rc=Rc,
+        Rs=Rs,
+        Zc=Zc,
+        Zs=Zs,
+        p0=ChiPhiFunc(
             jnp.array([[
                 1.2       +0.j, 1.1999901 +0.j, 1.1999605 +0.j, 1.1999112 +0.j,
                 1.1998421 +0.j, 1.1997533 +0.j, 1.1996448 +0.j, 1.1995167 +0.j,
@@ -271,22 +271,24 @@ def circular_axis():
             ]]),
             nfp=1
         ),
-        Delta_0_avg = 0,
-        iota_0 = 0.52564852,
-        B_theta_20_avg = 1.5125089,
-        B_alpha_1 = 0.1,
-        B0 = 1,
-        B11c = -1.8,
-        B2 = ChiPhiFunc(
+        Delta_0_avg=0,
+        iota_0=0.52564852,
+        B_theta_20_avg=1.5125089,
+        B_alpha_1=0.1,
+        B0=1,
+        B11c=-1.8,
+        B2=ChiPhiFunc(
             jnp.array([[0.005+0.005j],
                      [0.01 +0.j   ],
                      [0.005-0.005j]]),
             nfp=1
         ),
-        len_phi = 1000,
-        fft_max_freq = (15, 20)
+        len_phi=1000,
+        cutoff_freq=(15, 20),
+        hard_cutoff_freq=(15, 20),
     ))
 
+# @partial(jit, static_argnums=(0,13,15))
 def leading_orders(
     nfp, # Field period
     Rc, Rs, Zc, Zs, # Axis shape
@@ -297,7 +299,8 @@ def leading_orders(
     B_alpha_1,  # B_alpha
     B0, B11c, B2, # Magnetic field strength
     len_phi,
-    fft_max_freq,
+    cutoff_freq=(-1, -1),
+    hard_cutoff_freq=(-1, -1),
 ):
     '''
     Axis length, tau and kappa
@@ -482,7 +485,7 @@ def leading_orders(
     X1 = ChiPhiFunc(jnp.array([
         jnp.zeros_like(X11c.content[0]), # sin coeff is zero
         X11c.content[0],
-    ]), nfp, trig_mode = True).filter(fft_max_freq[0])
+    ]), nfp, trig_mode = True).filter(cutoff_freq[0])
     X_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), X1], nfp)
     # p1 and Delta1 has the same formula as higher orders.
     p1 = iterate_p_perp_n(1,
@@ -492,14 +495,15 @@ def leading_orders(
         B_denom_coef_c,
         p_perp_coef_cp,
         Delta_coef_cp,
-        iota_coef).filter(fft_max_freq[0])
+        iota_coef).filter(cutoff_freq[0])
     p_perp_coef_cp = p_perp_coef_cp.append(p1)
     Delta_1 = iterate_delta_n_0_offset(1,
         B_denom_coef_c,
         p_perp_coef_cp,
         Delta_coef_cp,
         iota_coef,
-        max_freq=None).filter(fft_max_freq[0])
+        cutoff_freq=cutoff_freq[0],
+        hard_cutoff_freq=hard_cutoff_freq[0])
     Delta_coef_cp = Delta_coef_cp.append(Delta_1)
 
     '''
@@ -517,7 +521,7 @@ def leading_orders(
     then solves the linear 2nd order homogenous form of D3 for Yc[1,1].
     '''
     ''' II m = 0 '''
-    shortened_length = fft_max_freq[0]*2
+    # shortened_length = cutoff_freq[0]*2
     # RHS of II[1][0]
     II_2_inhomog = -B_alpha_coef[0]/2*(
         4*B0*B1*p_perp_coef_cp[1].dchi()
@@ -530,20 +534,36 @@ def leading_orders(
     # and a BC is provided.
     p_eff = (coef_B_theta_20.content/coef_dp_B_theta_20.content)[0]
     f_eff = (II_2_inhomog.content/coef_dp_B_theta_20.content)[0]
-    p_fft = fft_filter(jnp.fft.fft(p_eff), shortened_length, axis=0)
-    f_fft = fft_filter(jnp.fft.fft(f_eff), shortened_length, axis=0)
+    # p_fft = fft_filter_reduce_length(jnp.fft.fft(p_eff), shortened_length, axis=0)
+    # f_fft = fft_filter_reduce_length(jnp.fft.fft(f_eff), shortened_length, axis=0)
+    p_fft = jnp.fft.fft(p_eff)
+    f_fft = jnp.fft.fft(f_eff)
+    p_fft = fft_filter_reduce_length(p_fft, hard_cutoff_freq[0]*2, axis=0)
+    f_fft = fft_filter_reduce_length(f_fft, hard_cutoff_freq[0]*2, axis=0)
     # Creating differential operator and convolution operator
     # as in solve_ODE
-    diff_matrix = fft_dphi_op(shortened_length)
+    diff_matrix = fft_dphi_op(len(p_fft))
     conv_matrix = fft_conv_op(p_fft)
     tot_matrix = diff_matrix + conv_matrix
+    tot_matrix = filter_low_pass_tensor(
+        tot_matrix[None, :, None, :],
+        cutoff_freq[0],
+        insert_ones=True
+    )[0, :, 0, :]
     # The average of B_theta[2,0] is its zeroth element in FFT representation.
     # The zeroth column of B_theta[2,0] acts on this element.
     # By adding 1 to all elements in this column will result in
     # adding B_theta_20_average to all elements in the RHS.
     tot_matrix = tot_matrix.at[:, 0].set(tot_matrix[:, 0]+1)
-    f_fft = f_fft+B_theta_20_avg*shortened_length
-    sln_fft = jnp.linalg.solve(tot_matrix, f_fft)
+    # f_fft = f_fft+B_theta_20_avg*len_phi
+    f_fft = f_fft+B_theta_20_avg*len(p_fft)
+    tot_matrix_inv = jnp.linalg.inv(tot_matrix)
+    tot_matrix_inv = filter_low_pass_tensor(
+        tot_matrix_inv[None, :, None, :],
+        cutoff_freq[0],
+        insert_ones=False
+    )[0, :, 0, :]
+    sln_fft = tot_matrix_inv@f_fft
     B_theta_20 = ChiPhiFunc(jnp.fft.ifft(fft_pad(sln_fft, len_phi, axis=0), axis=0)[None, :], nfp)
     B_theta_coef_cp = B_theta_coef_cp.append(B_theta_20)
 
@@ -560,30 +580,46 @@ def leading_orders(
     # u''-R(x)u'+S(x)u=0, where y =
     S_lin = q0*q2
     R_lin = q1+q2.dphi()/q2
-    u_avg = 1 # Doesn't actually impact Y! That's crazy.
+
+    S_lin = S_lin.filter_reduce_length(hard_cutoff_freq[0])
+    R_lin = R_lin.filter_reduce_length(hard_cutoff_freq[0])
+
+    # An initial condition for the homogenous ODE. Does not impact
+    # the actual value of Y.
+    u_avg = 1
     # The differential operator is:
-    R_fft = fft_filter(jnp.fft.fft(R_lin.content[0]), shortened_length, axis=0)
-    S_fft = fft_filter(jnp.fft.fft(S_lin.content[0]), shortened_length, axis=0)
+    R_fft = jnp.fft.fft(R_lin.content[0])
+    S_fft = jnp.fft.fft(S_lin.content[0])
     R_conv_matrix = fft_conv_op(R_fft)
     S_conv_matrix = fft_conv_op(S_fft)
     riccati_matrix = diff_matrix**2 - R_conv_matrix@diff_matrix + S_conv_matrix
+    riccati_matrix = filter_low_pass_tensor(riccati_matrix[None, :, None, :], cutoff_freq[0], insert_ones=True)[0, :, 0, :]
     # BC
     riccati_matrix = riccati_matrix.at[:, 0].set(riccati_matrix[:, 0]+1)
-    riccati_RHS = jnp.ones(shortened_length)*u_avg*shortened_length
+    # The inhomogenous component is 0, and the RHS only contains info on the
+    # initial condition u_avg=1.
+    riccati_RHS = jnp.ones_like(R_fft)*u_avg*len_phi
     # Solution
-    riccati_sln_fft = jnp.linalg.solve(riccati_matrix, riccati_RHS)
+    riccati_matrix_inv = jnp.linalg.inv(riccati_matrix)
+    riccati_matrix_inv = filter_low_pass_tensor(
+        riccati_matrix_inv[None, :, None, :],
+        cutoff_freq[0],
+        insert_ones=False
+    )[0, :, 0, :]
+    riccati_sln_fft = riccati_matrix_inv@riccati_RHS
     riccati_u = ChiPhiFunc(jnp.fft.ifft(fft_pad(riccati_sln_fft, len_phi, axis=0), axis=0)[None, :], nfp)
     Y11c = (-riccati_u.dphi()/(q2*riccati_u))
     Y1 = ChiPhiFunc(jnp.array([
         Y11s.content[0], # sin coeff is zero
         Y11c.content[0],
-    ]), nfp, trig_mode = True).filter(fft_max_freq[0])
+    ]), nfp, trig_mode = True).filter(cutoff_freq[0])
     Y_coef_cp = Y_coef_cp.append(Y1)
 
     ''' 2nd order quantities '''
     # Starting from order 2, the general recursion relations apply.
+    print('hard_cutoff_freq', type(hard_cutoff_freq[1]))
     solution2 = iterate_looped(
-        n_unknown=2, max_freq=fft_max_freq[1], target_len_phi=1000,
+        n_unknown=2,
         X_coef_cp=X_coef_cp,
         Y_coef_cp=Y_coef_cp,
         Z_coef_cp=Z_coef_cp,
@@ -598,6 +634,8 @@ def leading_orders(
         dl_p=dl_p,
         iota_coef=iota_coef,
         nfp=nfp,
+        cutoff_freq=cutoff_freq[1],
+        hard_cutoff_freq=hard_cutoff_freq[1],
     )
     B_psi_coef_cp = B_psi_coef_cp.append(solution2['B_psi_nm2'])
     X_coef_cp = X_coef_cp.append(solution2['Xn'])
