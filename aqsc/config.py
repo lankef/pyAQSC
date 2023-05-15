@@ -1,4 +1,4 @@
-''' Import settings '''
+''' Where global settings are defined '''
 # APES can run without pyQSC, but can have additional features
 #  when pyQSC is available. Setting to True enables:
 # chiphifunc.py
@@ -10,7 +10,7 @@ use_pyQSC = True
 
 ''' Numerical settings (chiphifunc.py) '''
 double_precision = True
-diff_mode = 'fft'
+diff_mode = 1 # 1 for fft, 2 for pseudo_spectral
 # Currently, It takes ~1hr to compile iterate_2 (most of the time taken by
 # looped_solver.py) to order 4 for each combination of nfp and number of
 # harmonics. Compiling to higher order may require ~10 hrs.

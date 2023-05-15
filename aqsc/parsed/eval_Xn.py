@@ -10,8 +10,7 @@
 #
 # Must provide X_coef_cp[n]=0 using ChPhiEpsFunc.zero_append().
 from math import floor, ceil
-from math_utilities import *
-import chiphifunc
+from aqsc.math_utilities import *
 def eval_Xn_cp(n,
     X_coef_cp,
     Y_coef_cp,

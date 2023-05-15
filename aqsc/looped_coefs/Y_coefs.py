@@ -1,4 +1,4 @@
-from math_utilities import *
+from aqsc.math_utilities import *
 
 def eval_y_coefs(n_eval, X_coef_cp, Y_coef_cp,
     Delta_coef_cp, B_alpha_coef, dl_p, tau_p, iota_coef):

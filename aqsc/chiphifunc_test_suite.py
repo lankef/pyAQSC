@@ -2,24 +2,22 @@ import numpy as np
 import timeit
 import scipy.signal
 from matplotlib import pyplot as plt
-
-# Used for loading stel.
 from scipy import interpolate
 
 # for importing parsed codes
-from chiphifunc import *
-from chiphiepsfunc import *
-from equilibrium import *
-from math_utilities import is_seq,py_sum,is_integer,diff
-import config
+from .chiphifunc import *
+from .chiphiepsfunc import *
+from .equilibrium import *
+from .math_utilities import is_seq,py_sum,is_integer,diff
+from .config import *
 
 # Detect whether pyQSC is enabled.
-if config.use_pyQSC:
+if use_pyQSC:
     from qsc import Qsc
 
 # Size of the chi and phi grid used for evaluation
-n_grid_phi = config.n_grid_phi
-n_grid_chi = config.n_grid_chi
+n_grid_phi = n_grid_phi
+n_grid_chi = n_grid_chi
 points = jnp.linspace(0, 2*np.pi*(1-1/n_grid_phi), n_grid_phi)
 chi = np.linspace(0, 2*np.pi*(1-1/n_grid_chi), n_grid_chi)
 phi = points
@@ -290,7 +288,7 @@ def rodriguez_to_landreman(in_array, nfp):
 # X22s.dat		Y22c.dat	Ys1.dat		Z33s.dat
 # nfp-dependent!!
 def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_enabled=False):
-    if not config.use_pyQSC:
+    if not use_pyQSC:
         raise AttributeError(
             'use_pyQSC must be enabled to use test datasets from Eduardo Rodriguez.'
         )
@@ -529,7 +527,7 @@ def chiphifunc_debug_plot():
 
 # nfp-dependent!!
 def import_from_stel(stel = Qsc.from_paper('r2 section 5.2'), len_phi=1000, nfp_enabled=False):
-    if not config.use_pyQSC:
+    if not use_pyQSC:
         raise AttributeError(
             'use_pyQSC must be enabled to use test datasets from qyPSC.'
         )

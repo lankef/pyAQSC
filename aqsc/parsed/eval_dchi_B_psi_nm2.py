@@ -2,8 +2,7 @@
 # Uses Xn-1, Yn-1, Zn-1,  B_theta_n, B_psi_n-3, iota_coef (n-1)/2 or (n-2)/2
 # Must be evaluated with Z_coef_cp[n] = 0 and B_psi_coef_cp[n-2] = 0
 from math import floor, ceil
-from math_utilities import *
-import chiphifunc
+from aqsc.math_utilities import *
 def eval_dchi_B_psi_cp_nm2(n, X_coef_cp, Y_coef_cp, Z_coef_cp, \
     B_theta_coef_cp, B_psi_coef_cp, B_alpha_coef, B_denom_coef_c, \
     kap_p, dl_p, tau_p, iota_coef):

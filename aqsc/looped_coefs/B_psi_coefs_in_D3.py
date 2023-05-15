@@ -1,5 +1,5 @@
-from math_utilities import *
-from chiphifunc import *
+from aqsc.math_utilities import *
+from aqsc.chiphifunc import *
 from jax import jit
 from functools import partial
 @partial(jit, static_argnums=(0, 10, 11, 12, 13))

@@ -1,10 +1,10 @@
 import jax.numpy as jnp
 from jax import jit
 
-from looped_solver import *
-from chiphifunc import *
-from chiphiepsfunc import *
-from equilibrium import *
+from .looped_solver import *
+from .chiphifunc import *
+from .chiphiepsfunc import *
+from .equilibrium import *
 
 # Generate the circular axis case in Rodriguez Bhattacharjee
 def circular_axis():
@@ -331,7 +331,7 @@ def leading_orders(
     # where phi is the cartesian toroidal angle. Contains 2pi/nfp,
     # TODO: need to made static.
     mode_num = jnp.arange(RZ_max_len)*nfp
-    phi = jnp.linspace(0,2*np.pi/nfp*(len_phi-1)/len_phi, len_phi)
+    phi = jnp.linspace(0,2*jnp.pi/nfp*(len_phi-1)/len_phi, len_phi)
     d_phi = phi[1]-phi[0]
     phi_times_mode = mode_num[:, None]*phi[None, :]
 
@@ -359,7 +359,7 @@ def leading_orders(
 
     # l on cartesian phi grid
     # Setting the first element to 0. Removing the last element.
-    l_phi = jnp.cumsum(d_l_d_phi)/len_phi*np.pi*2/nfp
+    l_phi = jnp.cumsum(d_l_d_phi)/len_phi*jnp.pi*2/nfp
     l_phi = jnp.roll(l_phi, 1)
     l_phi = l_phi.at[0].set(0)
 
@@ -422,10 +422,10 @@ def leading_orders(
     binormal_cylindrical = jnp.cross(tangent_cylindrical, normal_cylindrical)
 
     ''' Calculating axis quantities in Boozer coordinate '''
-    kap_p_content = jnp.interp(phi, varphi, curvature, period = 2*np.pi/nfp)[None, :]
+    kap_p_content = jnp.interp(phi, varphi, curvature, period = 2*jnp.pi/nfp)[None, :]
     kap_p = ChiPhiFunc(kap_p_content, nfp)
     # Note: Rodriguez's paper uses an opposite sign for tau compared to Landreman's.
-    tau_p_content = -jnp.interp(phi, varphi, torsion, period = 2*np.pi/nfp)[None, :]
+    tau_p_content = -jnp.interp(phi, varphi, torsion, period = 2*jnp.pi/nfp)[None, :]
     tau_p = ChiPhiFunc(tau_p_content, nfp)
 
     # Storing axis info. All quantities are identically defined to pyQSC.
@@ -619,8 +619,9 @@ def leading_orders(
         kap_p=kap_p,
         dl_p=dl_p,
         tau_p=tau_p,
-        p_perp_coef_cp = p_perp_coef_cp.mask(2), # no pressure or delta
-        Delta_coef_cp = Delta_coef_cp.mask(2),
+        p_perp_coef_cp=p_perp_coef_cp.mask(2), # no pressure or delta
+        Delta_coef_cp=Delta_coef_cp.mask(2),
+        # axis_info=axis_info,
         magnetic_only=False
     )
 

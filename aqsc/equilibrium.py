@@ -4,19 +4,18 @@
 import jax.numpy as jnp
 from jax import jit, vmap, tree_util
 from functools import partial # for JAX jit with static params
-
-# ChiPhiFunc and ChiPhiEpsFunc
-from chiphifunc import *
-from chiphiepsfunc import *
-from math_utilities import *
-import looped_solver
-import numpy as np
 from matplotlib import pyplot as plt
 
+# ChiPhiFunc and ChiPhiEpsFunc
+from .chiphifunc import *
+from .chiphiepsfunc import *
+from .math_utilities import *
+import aqsc.looped_solver as looped_solver
+
 # parsed relations
-import parsed
-import MHD_parsed
-import looped_coefs
+import aqsc.parsed as parsed
+import aqsc.MHD_parsed as MHD_parsed
+import aqsc.looped_coefs as looped_coefs
 
 ''' I. Magnetic equations '''
 # The magnetic equations alone can serve as a set of recursion relations,
@@ -338,6 +337,7 @@ class Equilibrium:
         self.constant = constant
         self.nfp = nfp
         self.magnetic_only = magnetic_only
+        # self.axis_info = constant
 
         # Check if every term is on the same order
         # self.check_order_consistency()
@@ -346,7 +346,9 @@ class Equilibrium:
     def _tree_flatten(self):
         children = (
             self.unknown,
-            self.constant,)  # arrays / dynamic values
+            self.constant,
+            # self.axis_info,
+        )  # arrays / dynamic values
         aux_data = {
             'nfp': self.nfp,
             'magnetic_only': self.magnetic_only
@@ -380,6 +382,7 @@ class Equilibrium:
         constant = {}
 
         nfp = X_coef_cp.nfp
+        print(nfp)
 
         unknown['X_coef_cp'] = X_coef_cp
         unknown['Y_coef_cp'] = Y_coef_cp
@@ -402,7 +405,12 @@ class Equilibrium:
         if not unknown['Delta_coef_cp']:
             unknown['Delta_coef_cp'] = ChiPhiEpsFunc.zeros_like(X_coef_cp)
 
-        return(Equilibrium(unknown, constant, nfp, magnetic_only))
+        return(Equilibrium(
+            unknown=unknown,
+            constant=constant,
+            nfp=nfp,
+            magnetic_only=magnetic_only,
+        ))
 
     def save(self, file_name):
 
@@ -426,7 +434,8 @@ class Equilibrium:
             'unknown':unknown_to_content_list,
             'constant':const_to_content_list,
             'nfp':self.nfp,
-            'magnetic_only': self.magnetic_only
+            'magnetic_only': self.magnetic_only,
+            'axis_info': self.axis_info,
         }
         jnp.savez(file_name, big_dict)
 
@@ -438,6 +447,7 @@ class Equilibrium:
         raw_constant = big_dict['constant']
         nfp = big_dict['nfp']
         magnetic_only = big_dict['magnetic_only']
+        axis_info = big_dict['axis_info']
         print('nfp', nfp)
 
         unknown = {}
@@ -459,7 +469,7 @@ class Equilibrium:
         constant['tau_p']\
             = ChiPhiFunc(raw_constant['tau_p'], nfp)
 
-        return(Equilibrium(unknown, constant, magnetic_only, nfp))
+        return(Equilibrium(unknown, constant, magnetic_only, nfp, axis_info))
 
     # Order consistency check --------------------------------------------------
     # Get the current order of an equilibrium
@@ -618,6 +628,9 @@ def iterate_2_magnetic_only(equilibrium,
     max_freq=None,
     n_eval=None,
 ):
+
+    if not equilibrium.magnetic_only:
+        return()
     if max_freq == None:
         len_phi = equilibrium.unknown['X_coef_cp'][1].content.shape[1]
         max_freq = (len_phi//2, len_phi//2)
@@ -830,7 +843,8 @@ def iterate_2_magnetic_only(equilibrium,
         iota_coef=iota_coef,
         p_perp_coef_cp=p_perp_coef_cp,
         Delta_coef_cp=Delta_coef_cp,
-        magnetic_only=True
+        magnetic_only=True,
+        axis_info=equilibrium.axis_info
     ))
 
 # @partial(jit, static_argnums=(5, 6, ))
@@ -850,7 +864,8 @@ def iterate_2(equilibrium,
     max_k_diff_pre_inv=(-1, -1),
     max_k_diff_post_inv=(-1, -1)
     ):
-
+    if equilibrium.magnetic_only:
+        return()
     len_phi = equilibrium.unknown['X_coef_cp'][1].content.shape[1]
     if max_freq==None:
         max_freq = (len_phi//2, len_phi//2)
@@ -994,5 +1009,6 @@ def iterate_2(equilibrium,
         iota_coef=iota_coef,
         p_perp_coef_cp=p_perp_coef_cp,
         Delta_coef_cp=Delta_coef_cp,
-        magnetic_only=False
+        magnetic_only=False,
+        axis_info=equilibrium.axis_info
     ))

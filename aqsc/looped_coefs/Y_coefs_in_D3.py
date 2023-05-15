@@ -1,7 +1,6 @@
 from math import floor, ceil
-from math_utilities import *
-from equilibrium import *
-from chiphifunc import *
+from aqsc.math_utilities import *
+from aqsc.chiphifunc import *
 
 def lambda_coef_Yn1p_in_D3(vector_free_coef, X_coef_cp, Y_coef_cp, iota_coef, dl_p, tau_p, nfp:int):
     coef_Yn1p = (

@@ -3,8 +3,7 @@ from jax import jit, vmap, tree_util
 from functools import partial # for JAX jit with static params
 
 from math import floor, ceil
-from chiphifunc import *
-from functools import lru_cache
+from .chiphifunc import *
 
 # Sum: implemented as a function taking in a single-argument func and the lower/upper bounds
 # expr should be non-dynamic.

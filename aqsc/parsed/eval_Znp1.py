@@ -4,8 +4,7 @@
 # iota_coef [..., (n-1)/2 or (n-2)/2]
 # kap_p, dl_p, tau_p
 from math import floor, ceil
-from math_utilities import *
-import chiphifunc
+from aqsc.math_utilities import *
 def eval_Znp1_cp(n, X_coef_cp, Y_coef_cp, Z_coef_cp, \
     B_theta_coef_cp, B_psi_coef_cp, \
     B_alpha_coef, \

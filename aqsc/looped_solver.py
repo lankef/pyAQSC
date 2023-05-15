@@ -4,13 +4,13 @@ from functools import partial
 from jax import jit
 
 # ChiPhiFunc and ChiPhiEpsFunc
-from chiphifunc import *
-from chiphiepsfunc import *
-from math_utilities import *
+from .chiphifunc import *
+from .chiphiepsfunc import *
+from .math_utilities import *
 
 # parsed relations
-import MHD_parsed
-import looped_coefs
+import aqsc.MHD_parsed as MHD_parsed
+import aqsc.looped_coefs as looped_coefs
 
 # TODO: make delta and B_theta coefficients constants carried by the equilibrium.
 
@@ -711,7 +711,6 @@ def generate_tensor_operator(
         # Should be (n_unknown, n_unknown, len_phi, len_phi) at odd orders,
         # and (n_unknown, n_unknown-1, len_phi, len_phi) at even orders,
         full_tensor_fft_op = jnp.concatenate((full_tensor_fft_op_B_theta, full_tensor_fft_op), axis=1)
-
     if n_unknown%2==0:
         ''' B_psi m=0 coefs in Y '''
         # This padding ...?
@@ -1936,4 +1935,4 @@ def filter_operator(operator, max_k_diff):
     return(jnp.transpose(operator, (0,2,1,3)))
 
 # Cyclic import
-import equilibrium
+import aqsc.equilibrium as equilibrium

@@ -1,6 +1,6 @@
-from math_utilities import *
+from aqsc.math_utilities import *
 from jax import jit
-from chiphifunc import *
+from aqsc.chiphifunc import *
 
 
 coef_B_psi_dphi_0_dchi_0_all_but_Y = jit(lambda n_eval, X_coef_cp, Y_coef_cp,\

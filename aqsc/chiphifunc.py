@@ -10,24 +10,17 @@ import scipy.integrate
 import scipy.interpolate
 
 # Configurations
-import config
+from .config import *
 
 ''' Debug options and loading configs '''
 
 # Loading configurations
-if config.double_precision:
+if double_precision:
     import jax.config
     jax.config.update("jax_enable_x64", True)
 
-# Loading default diff modes
-# Converting differential mode string to an int for jitting.
-if config.diff_mode=='fft':
-    diff_mode=1
-if config.diff_mode=='pseudo_spectral':
-    diff_mode=2
-
 # Maximum allowed asymptotic series order for y'+py=f
-# This feature is depreciated and no longer included in config.py.
+# This feature is depreciated and no longer included in py.
 asymptotic_order = 6
 
 ''' I. Representing functions of chi and phi (ChiPhiFunc subclasses) '''
@@ -288,7 +281,7 @@ class ChiPhiFunc:
                 # self.is_special = False
                 self.nfp = nfp
                 # Forcing complex128 type
-                if config.double_precision:
+                if double_precision:
                     content = content.astype(jnp.complex128)
                 else:
                     content = content.astype(jnp.complex64)
@@ -707,7 +700,7 @@ class ChiPhiFunc:
         # number of phi grids
         len_chi = self.content.shape[0]
         len_phi = self.content.shape[1]
-        if config.double_precision:
+        if double_precision:
             phis = jnp.linspace(0, 2*jnp.pi*(1-1/len_phi), len_phi, dtype=jnp.complex128)
         else:
             phis = jnp.linspace(0, 2*jnp.pi*(1-1/len_phi), len_phi, dtype=jnp.complex64)

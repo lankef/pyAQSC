@@ -1,7 +1,8 @@
-from chiphifunc import *
 import jax.numpy as jnp
 from functools import partial
 from jax import jit, tree_util
+
+from .chiphifunc import *
 
 '''ChiPhiEpsFunc'''
 # A container for lists of ChiPhiFuncs. Primarily used to handle array index out of bound
