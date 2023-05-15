@@ -1,0 +1,5 @@
+numpy
+jax
+matplotlib
+mkdocs >= 1.2.2
+python_source/
