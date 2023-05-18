@@ -3,10 +3,7 @@ This code constructs globally quasi-symmetric stellarator equilibria with
 anisotropic pressure near axis expansion to any order.
 
 ## Dependencies
-The python codes requires Numpy, Matplotlib, and JAX. 
-
-
-
+The python codes requires Numpy, Matplotlib, and JAX.
 
 The Maxima notebooks requires wxMaxima to view. The notebooks are not required to
 run the main code, but contains source expressions much of code is parsed from.
@@ -19,48 +16,48 @@ run the main code, but contains source expressions much of code is parsed from.
 ├── examples/                               -> Jupyter notebooks with use cases for the code.
 ├── magnetic_recursion_relations/           -> Maxima notebooks for iterating the
 │   │                                          magnetic equations
-│   ├── <Quantity name>.wxmx                -> Maxima notebooks for the recursion relations.
-│   └── general_formulae/                   -> Maxima notebooks directly expanding
-│                                              the governing equations. for reference only.
+│   ├── <Quantity name>.wxmx                -> Maxima notebooks for the recursion relations.
+│   └── general_formulae/                   -> Maxima notebooks directly expanding
+│                                              the governing equations. for reference only.
 ├── MHD_recursion_relations/                -> Maxima notebooks for iterating the
 │   │                                          magnetic and force balance equations
-│   ├── looped.lisp                         -> Variables associated with the "looped equation"[2].
+│   ├── looped.lisp                         -> Variables associated with the "looped equation"[2].
 │   │                                          see Looped.wxmx and Looped study simplified.wxmx
 │   │                                          see for details.
-│   ├── <Quantity name>.wxmx                -> ...
-│   └── general_formulae/                   -> ...
-│                                          
+│   ├── <Quantity name>.wxmx                -> ...
+│   └── general_formulae/                   -> ...
+│                                          
 ├── maxima_scripts/                         -> Maxima libraries
-│   ├── near_axis_expansion.mac             -> Stores the governing equations and
-│   │                                          variable dependencies.
-│   ├── power_mode_matching/                -> A standalone, symbolic infinite/finite
-│   │   │                                      power/Fourier series order/mode matcher.
-│   │   ├── power_matching.mac              -> The power series order matcher
-│   │   └── trig_fourier_order_matching.mac -> The Fourier series mode matcher
-│   ├── python_parser.mac                   -> A code translating maxima summations
-│   │                                          to python codes. Works with
-│   │                                          python_source/math_utilities.py
-│   ├── sbatch_maxima.mac                   -> A code generating slurm jobscripts for
-│   │                                          evaluating maxima expressions in parallel
-│   └── test_cases/                         -> Test cases for Maxima scripts.
+│   ├── near_axis_expansion.mac             -> Stores the governing equations and
+│   │                                          variable dependencies.
+│   ├── power_mode_matching/                -> A standalone, symbolic infinite/finite
+│   │   │                                      power/Fourier series order/mode matcher.
+│   │   ├── power_matching.mac              -> The power series order matcher
+│   │   └── trig_fourier_order_matching.mac -> The Fourier series mode matcher
+│   ├── python_parser.mac                   -> A code translating maxima summations
+│   │                                          to python codes. Works with
+│   │                                          python_source/math_utilities.py
+│   ├── sbatch_maxima.mac                   -> A code generating slurm jobscripts for
+│   │                                          evaluating maxima expressions in parallel
+│   └── test_cases/                         -> Test cases for Maxima scripts.
 └── python_source/                          -> Python source for the main code.
-    ├── config.py                           -> Configurations. (numerical, run-time, ...)
+    ├── config.py                           -> Configurations. (numerical, run-time, ...)
     ├── equilibrium.py                      -> Contains the Equilibrium object that manages
-    │                                          the iteration of an equilibrium represented
-    │                                          by near axis expansion. Also contains wrappers
-    │                                          for methods in parsed/ and MHD_parsed/.
-    ├── chiphiepsfunc.py                    -> A list-like data structure for storing power coeffs.
-    ├── chiphifunc.py                       -> A data structure representing f(chi,phi)
-    │                                          as chi Fourier coeffs on phi grids, implementation
-    │                                          for operators, and some solvers/utilities.
-    ├── chiphifunc_test_suite.py            -> A test suite for chiphifunc and plotting.
-    ├── math_utilities.py                   -> More numerical operations needed to run
-    │                                          python methods in python_source/parsed/
-    ├── looped_solver.py                    -> Solver for the "looped equation" [2, 3]
-    ├── looped_B_psi_lambdas_full.py        -> Hand-calculated B_psi coefficients in the
-    │                                          looped equation. Stored as lambda(order).
-    ├── looped_coef_lambdas.py              -> Hand-calculated B_psi coefficients for other terms  
-    │                                          in the looped equation. Stored as lambda(order).
+    │                                          the iteration of an equilibrium represented
+    │                                          by near axis expansion. Also contains wrappers
+    │                                          for methods in parsed/ and MHD_parsed/.
+    ├── chiphiepsfunc.py                    -> A list-like data structure for storing power coeffs.
+    ├── chiphifunc.py                       -> A data structure representing f(chi,phi)
+    │                                          as chi Fourier coeffs on phi grids, implementation
+    │                                          for operators, and some solvers/utilities.
+    ├── chiphifunc_test_suite.py            -> A test suite for chiphifunc and plotting.
+    ├── math_utilities.py                   -> More numerical operations needed to run
+    │                                          python methods in python_source/parsed/
+    ├── looped_solver.py                    -> Solver for the "looped equation" [2, 3]
+    ├── looped_B_psi_lambdas_full.py        -> Hand-calculated B_psi coefficients in the
+    │                                          looped equation. Stored as lambda(order).
+    ├── looped_coef_lambdas.py              -> Hand-calculated B_psi coefficients for other terms  
+    │                                          in the looped equation. Stored as lambda(order).
     ├-- parsed/                             -> Parsed expressions for the magnetic-only
     │                                          recursion relations [1]. All generated by notebooks
     │                                          in magnetic_recursion_relations/
