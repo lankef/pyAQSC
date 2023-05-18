@@ -1031,7 +1031,6 @@ def generate_tensor_operator(
             full_tensor_fft_op.at[n_unknown//2, :n_unknown-1].set(
                 tensor_fft_op_B_theta_n_in_II[0]
             )
-
         ''' B_theta [n+1,0] in II '''
         # coef_B_theta_np10 = -B_denom_coef_c[0]**2*p_perp_coef_cp[0].dphi()
         # coef_dp_B_theta_np10 = B_denom_coef_c[0]*(Delta_coef_cp[0]-1)

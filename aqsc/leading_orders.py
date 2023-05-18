@@ -433,22 +433,22 @@ def leading_orders(
     axis_info['varphi'] = varphi # Done
     axis_info['phi'] = phi # Done
     axis_info['d_phi'] = d_phi # Done
-    axis_info['R0'] = R0 # Done
-    axis_info['Z0'] = Z0 # Done
-    axis_info['R0p'] = R0p # Done
-    axis_info['Z0p'] = Z0p # Done
-    axis_info['R0pp'] = R0pp # Done
-    axis_info['Z0pp'] = Z0pp # Done
-    axis_info['R0ppp'] = R0ppp # Done
-    axis_info['Z0ppp'] = Z0ppp # Done
+    axis_info['R0'] = R0[:, 0] # Done
+    axis_info['Z0'] = Z0[:, 0] # Done
+    axis_info['R0p'] = R0p[:, 0] # Done
+    axis_info['Z0p'] = Z0p[:, 0] # Done
+    axis_info['R0pp'] = R0pp[:, 0] # Done
+    axis_info['Z0pp'] = Z0pp[:, 0] # Done
+    axis_info['R0ppp'] = R0ppp[:, 0] # Done
+    axis_info['Z0ppp'] = Z0ppp[:, 0] # Done
     # Note to self: cartesian. (dl_p = dl/dphi (Boozer) is important in Eduardo's forumlation.)
-    axis_info['d_l_d_phi'] = d_l_d_phi # Done.
+    axis_info['d_l_d_phi'] = d_l_d_phi[:, 0] # Done.
     axis_info['axis_length'] = axis_length # Done
     axis_info['curvature'] = curvature # Done
     axis_info['torsion'] = torsion # Done
-    axis_info['tangent_cylindrical'] = tangent_cylindrical # Done
-    axis_info['normal_cylindrical'] = normal_cylindrical # Done
-    axis_info['binormal_cylindrical'] = binormal_cylindrical # Done
+    axis_info['tangent_cylindrical'] = tangent_cylindrical # R, phi, Z
+    axis_info['normal_cylindrical'] = normal_cylindrical # R, phi, Z
+    axis_info['binormal_cylindrical'] = binormal_cylindrical # R, phi, Z
     # The following variables will not be included in a pyAQSC equilibrium.
     # self.G0 = G0 # NA. GBC is different from Boozer Coordinate.
     # self.Bbar = self.spsi * self.B0 # NA
@@ -537,6 +537,7 @@ def leading_orders(
     diff_matrix = fft_dphi_op(shortened_length)
     conv_matrix = fft_conv_op(p_fft)
     tot_matrix = diff_matrix + conv_matrix
+    print('det', jnp.linalg.det(tot_matrix))
     # The average of B_theta[2,0] is its zeroth element in FFT representation.
     # The zeroth column of B_theta[2,0] acts on this element.
     # By adding 1 to all elements in this column will result in
@@ -621,7 +622,7 @@ def leading_orders(
         tau_p=tau_p,
         p_perp_coef_cp=p_perp_coef_cp.mask(2), # no pressure or delta
         Delta_coef_cp=Delta_coef_cp.mask(2),
-        # axis_info=axis_info,
+        axis_info=axis_info,
         magnetic_only=False
     )
 

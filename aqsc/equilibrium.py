@@ -332,12 +332,12 @@ def iterate_delta_n_0_offset(n_eval,
 # All coef inputs must be ChiPhiEpsFunc's.
 class Equilibrium:
     # nfp-dependent!!
-    def __init__(self, unknown, constant, nfp, magnetic_only):
+    def __init__(self, unknown, constant, nfp, magnetic_only, axis_info={}):
         self.unknown = unknown
         self.constant = constant
         self.nfp = nfp
         self.magnetic_only = magnetic_only
-        # self.axis_info = constant
+        self.axis_info = axis_info
 
         # Check if every term is on the same order
         # self.check_order_consistency()
@@ -347,7 +347,7 @@ class Equilibrium:
         children = (
             self.unknown,
             self.constant,
-            # self.axis_info,
+            self.axis_info,
         )  # arrays / dynamic values
         aux_data = {
             'nfp': self.nfp,
@@ -359,8 +359,6 @@ class Equilibrium:
     def _tree_unflatten(cls, aux_data, children):
         return cls(*children, **aux_data)
 
-    # cannot be jitted because of the lambda functions.
-    @partial(jit, static_argnums=(13,))
     def from_known(
         X_coef_cp,
         Y_coef_cp,
@@ -373,6 +371,7 @@ class Equilibrium:
         iota_coef,
         p_perp_coef_cp,
         Delta_coef_cp,
+        axis_info={},
         magnetic_only=False
         ):
 
@@ -389,15 +388,16 @@ class Equilibrium:
         unknown['Z_coef_cp'] = Z_coef_cp
         unknown['B_psi_coef_cp'] = B_psi_coef_cp
         unknown['B_theta_coef_cp'] = B_theta_coef_cp
-        unknown['iota_coef'] = iota_coef
         unknown['p_perp_coef_cp'] = p_perp_coef_cp
         unknown['Delta_coef_cp'] = Delta_coef_cp
 
+        constant['iota_coef'] = iota_coef
         constant['B_denom_coef_c'] = B_denom_coef_c
         constant['B_alpha_coef'] = B_alpha_coef
         constant['kap_p'] = kap_p
         constant['dl_p'] = dl_p
         constant['tau_p'] = tau_p
+        print('dicts defined')
 
         # Pressure can be trivial
         if not unknown['p_perp_coef_cp']:
@@ -405,34 +405,36 @@ class Equilibrium:
         if not unknown['Delta_coef_cp']:
             unknown['Delta_coef_cp'] = ChiPhiEpsFunc.zeros_like(X_coef_cp)
 
+        print('pre constructor')
         return(Equilibrium(
             unknown=unknown,
             constant=constant,
             nfp=nfp,
             magnetic_only=magnetic_only,
+            axis_info=axis_info,
         ))
 
     def save(self, file_name):
-
-        unknown_to_content_list = {}
+        unknown_dict = {}
         for key in self.unknown.keys():
-            unknown_to_content_list[key] = self.unknown[key].to_content_list()
-
-        const_to_content_list={}
-        const_to_content_list['B_denom_coef_c']\
+            unknown_dict[key] = self.unknown[key].to_content_list()
+        constant_dict={}
+        constant_dict['B_denom_coef_c']\
             = self.constant['B_denom_coef_c'].to_content_list()
-        const_to_content_list['B_alpha_coef']\
+        constant_dict['B_alpha_coef']\
             = self.constant['B_alpha_coef'].to_content_list()
-        const_to_content_list['kap_p']\
+        constant_dict['iota_coef']\
+            = self.constant['iota_coef'].to_content_list()
+        constant_dict['kap_p']\
             = self.constant['kap_p'].content
-        const_to_content_list['dl_p']\
+        constant_dict['dl_p']\
             = self.constant['dl_p']
-        const_to_content_list['tau_p']\
+        constant_dict['tau_p']\
             = self.constant['tau_p'].content
 
         big_dict = {\
-            'unknown':unknown_to_content_list,
-            'constant':const_to_content_list,
+            'unknown':unknown_dict,
+            'constant':constant_dict,
             'nfp':self.nfp,
             'magnetic_only': self.magnetic_only,
             'axis_info': self.axis_info,
@@ -511,7 +513,7 @@ class Equilibrium:
         check_order_individial(self.unknown['B_theta_coef_cp'], 'B_theta_coef_cp', n)
         check_order_individial(self.constant['B_denom_coef_c'], 'B_denom_coef_c', n)
         check_order_individial(self.constant['B_alpha_coef'], 'B_alpha_coef', n//2)
-        check_order_individial(self.unknown['iota_coef'], 'iota_coef', (n-2)//2)
+        check_order_individial(self.constant['iota_coef'], 'iota_coef', (n-2)//2)
         check_order_individial(self.unknown['p_perp_coef_cp'], 'p_perp_coef_cp', n)
         check_order_individial(self.unknown['Delta_coef_cp'], 'Delta_coef_cp', n)
 
@@ -529,7 +531,7 @@ class Equilibrium:
         Z_coef_cp = self.unknown['Z_coef_cp']
         B_theta_coef_cp = self.unknown['B_theta_coef_cp']
         B_psi_coef_cp = self.unknown['B_psi_coef_cp']
-        iota_coef = self.unknown['iota_coef']
+        iota_coef = self.constant['iota_coef']
         p_perp_coef_cp = self.unknown['p_perp_coef_cp']
         Delta_coef_cp = self.unknown['Delta_coef_cp']
         B_denom_coef_c = self.constant['B_denom_coef_c']
@@ -650,7 +652,7 @@ def iterate_2_magnetic_only(equilibrium,
     Z_coef_cp = equilibrium.unknown['Z_coef_cp'].mask(n_eval-2)
     B_theta_coef_cp = equilibrium.unknown['B_theta_coef_cp'].mask(n_eval-2)
     B_psi_coef_cp = equilibrium.unknown['B_psi_coef_cp'].mask(n_eval-4)
-    iota_coef = equilibrium.unknown['iota_coef'].mask((n_eval-4)//2)
+    iota_coef = equilibrium.constant['iota_coef'].mask((n_eval-4)//2)
     p_perp_coef_cp = equilibrium.unknown['p_perp_coef_cp'].mask(n_eval-2)
     Delta_coef_cp = equilibrium.unknown['Delta_coef_cp'].mask(n_eval-2)
 
@@ -888,7 +890,7 @@ def iterate_2(equilibrium,
     Z_coef_cp = equilibrium.unknown['Z_coef_cp'].mask(n_eval-2)
     B_theta_coef_cp = equilibrium.unknown['B_theta_coef_cp'].mask(n_eval-2)
     B_psi_coef_cp = equilibrium.unknown['B_psi_coef_cp'].mask(n_eval-4)
-    iota_coef = equilibrium.unknown['iota_coef'].mask((n_eval-4)//2)
+    iota_coef = equilibrium.constant['iota_coef'].mask((n_eval-4)//2)
     p_perp_coef_cp = equilibrium.unknown['p_perp_coef_cp'].mask(n_eval-2)
     Delta_coef_cp = equilibrium.unknown['Delta_coef_cp'].mask(n_eval-2)
 

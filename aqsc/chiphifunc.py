@@ -4,10 +4,6 @@ from functools import partial # for JAX jit with static params
 
 import math # factorial in dphi_direct
 from matplotlib import pyplot as plt
-# Numba doesn't support scipy methods. Therefore, scipy integrals are sped up
-# with joblib.
-import scipy.integrate
-import scipy.interpolate
 
 # Configurations
 from .config import *
@@ -28,6 +24,8 @@ asymptotic_order = 6
 # Manages an complex128[m, n] 2d array called content.
 # Axis 0 represents "m". Its length is n+1 for a nth-order term:
 # each n-th order known term has n+1 non-zero coeffs due to regularity cond.
+# F(chi, phi) = sum of Chi_coeff_-m*exp(-im phi) + Chi_coeff_-m*exp(-im phi)
+# m=0, 2, 4... n or 1, 3, ... n)
 # [                           # [
 #     [Chi_coeff_-n(phi)],    #     [Chi_coeff_-n(phi)],
 #     ...                     #     ...
