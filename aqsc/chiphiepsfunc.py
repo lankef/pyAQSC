@@ -163,14 +163,13 @@ class ChiPhiEpsFunc:
     def from_content_list(content_list, nfp): # nfp-dependent!!
         chiphifunc_list = []
         for item in content_list:
-            if item==0:
-                chiphifunc_list.append(ChiPhiFuncSpecial(0))
-            elif jnp.all(jnp.isnan(item)):
+            if jnp.all(jnp.isnan(item)):
                 chiphifunc_list.append(ChiPhiFuncSpecial(-2))
-            elif jnp.isscalar(item): # Scalar
-                chiphifunc_list.append(item)
-            elif item.ndim==0: # JAX scalar
-                chiphifunc_list.append(item)
+            elif jnp.array(item).ndim==0: # JAX scalar
+                if item==0:
+                    chiphifunc_list.append(ChiPhiFuncSpecial(0))
+                else:
+                    chiphifunc_list.append(item)
             else:
                 chiphifunc_list.append(ChiPhiFunc(item, nfp))
         out_chiphiepsfunc = ChiPhiEpsFunc(chiphifunc_list, nfp)

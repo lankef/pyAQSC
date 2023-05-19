@@ -374,15 +374,11 @@ class Equilibrium:
         axis_info={},
         magnetic_only=False
         ):
-
         # Variables being solved for are stored in dicts for
         # convenience of plotting and saving
         unknown = {}
         constant = {}
-
         nfp = X_coef_cp.nfp
-        print(nfp)
-
         unknown['X_coef_cp'] = X_coef_cp
         unknown['Y_coef_cp'] = Y_coef_cp
         unknown['Z_coef_cp'] = Z_coef_cp
@@ -390,22 +386,17 @@ class Equilibrium:
         unknown['B_theta_coef_cp'] = B_theta_coef_cp
         unknown['p_perp_coef_cp'] = p_perp_coef_cp
         unknown['Delta_coef_cp'] = Delta_coef_cp
-
         constant['iota_coef'] = iota_coef
         constant['B_denom_coef_c'] = B_denom_coef_c
         constant['B_alpha_coef'] = B_alpha_coef
         constant['kap_p'] = kap_p
         constant['dl_p'] = dl_p
         constant['tau_p'] = tau_p
-        print('dicts defined')
-
         # Pressure can be trivial
         if not unknown['p_perp_coef_cp']:
             unknown['p_perp_coef_cp'] = ChiPhiEpsFunc.zeros_like(X_coef_cp)
         if not unknown['Delta_coef_cp']:
             unknown['Delta_coef_cp'] = ChiPhiEpsFunc.zeros_like(X_coef_cp)
-
-        print('pre constructor')
         return(Equilibrium(
             unknown=unknown,
             constant=constant,
@@ -454,16 +445,15 @@ class Equilibrium:
 
         unknown = {}
         for key in raw_unknown.keys():
-            if key == 'iota_coef':
-                unknown[key] = ChiPhiEpsFunc.from_content_list(raw_unknown[key], 0)
-            else:
-                unknown[key] = ChiPhiEpsFunc.from_content_list(raw_unknown[key], nfp)
+            unknown[key] = ChiPhiEpsFunc.from_content_list(raw_unknown[key], nfp)
 
         constant={}
         constant['B_denom_coef_c']\
-            = ChiPhiEpsFunc.from_content_list(raw_constant['B_denom_coef_c'], 0)
+            = ChiPhiEpsFunc.from_content_list(raw_constant['B_denom_coef_c'], nfp)
+        constant['iota_coef']\
+            = ChiPhiEpsFunc.from_content_list(raw_constant['iota_coef'], nfp)
         constant['B_alpha_coef']\
-            = ChiPhiEpsFunc.from_content_list(raw_constant['B_alpha_coef'], 0)
+            = ChiPhiEpsFunc.from_content_list(raw_constant['B_alpha_coef'], nfp)
         constant['kap_p']\
             = ChiPhiFunc(raw_constant['kap_p'], nfp)
         constant['dl_p']\
@@ -471,7 +461,13 @@ class Equilibrium:
         constant['tau_p']\
             = ChiPhiFunc(raw_constant['tau_p'], nfp)
 
-        return(Equilibrium(unknown, constant, magnetic_only, nfp, axis_info))
+        return(Equilibrium(
+            unknown=unknown,
+            constant=constant,
+            nfp=nfp,
+        magnetic_only=magnetic_only,
+            axis_info=axis_info
+        ))
 
     # Order consistency check --------------------------------------------------
     # Get the current order of an equilibrium
