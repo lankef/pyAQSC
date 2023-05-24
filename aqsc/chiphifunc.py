@@ -802,29 +802,29 @@ class ChiPhiFunc:
         '''
         return(jnp.average(jnp.abs(self.content)))
 
-    def real(self):
-        '''
-        Functions like jnp.real()
+    # def real(self):
+    #     '''
+    #     Functions like jnp.real()
 
-        Outputs:
+    #     Outputs:
 
-        A real scalar.
-        '''
-        if self.is_special():
-            return(self)
-        return(ChiPhiFunc(j(self.content), self.nfp))
+    #     A real scalar.
+    #     '''
+    #     if self.is_special():
+    #         return(self)
+    #     return(ChiPhiFunc(j(self.content), self.nfp))
 
-    def imag(self):
-        '''
-        Functions like jnp.imag()
+    # def imag(self):
+    #     '''
+    #     Functions like jnp.imag()
 
-        Outputs:
+    #     Outputs:
 
-        A real scalar.
-        '''
-        if self.is_special():
-            return(self)
-        return(ChiPhiFunc(jnp.imag(self.content), self.nfp))
+    #     A real scalar.
+    #     '''
+    #     if self.is_special():
+    #         return(self)
+    #     return(ChiPhiFunc(jnp.imag(self.content), self.nfp))
 
     def cap_m(self, m):
         '''
@@ -1101,7 +1101,7 @@ def dphi_op_pseudospectral(n:int):
     n2 = n//2
     if n%2 == 0:
         topc = 1 / jnp.tan(jnp.arange(1, n2 + 1) * h / 2)
-        temp = jnp.concatenate((topc, -np.flip(topc[0:n1])))
+        temp = jnp.concatenate((topc, -jnp.flip(topc[0:n1])))
     else:
         topc = 1 / jnp.sin(jnp.arange(1, n2 + 1) * h / 2)
         temp = jnp.concatenate((topc, jnp.flip(topc[0:n1])))
@@ -1708,7 +1708,7 @@ def to_tensor_fft_op_multi_dim(
         return(0)
     # A stack of convolution matrices
     # shape is (len_chi+num_mode-1, num_mode, len_phi)
-
+    len_chi = ChiPhiFunc_in.content.shape[0]
     tensor_coef_nD = conv_tensor(ChiPhiFunc_in.content, num_mode)
     # Putting in dchi
     # The outmost component of B_theta is 0.
