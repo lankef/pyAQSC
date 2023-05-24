@@ -62,6 +62,30 @@ def dchi_op(len_chi:int):
     mode_chi = jnp.linspace(-ind_chi, ind_chi, len_chi)
     return jnp.diag(1j*mode_chi)
 
+def trig_to_exp_op(n_dim):
+    ''' Converts a ChiPhiFunc from trig to exp fourier series. '''
+    ones = jnp.ones(n_dim//2)
+    if n_dim%2==0:
+        arr_diag = jnp.concatenate([0.5j*ones, 0.5*ones])
+        arr_anti_diag = jnp.concatenate([-0.5j*ones, 0.5*ones])
+    if n_dim%2==1:
+        arr_diag = jnp.concatenate([0.5j*ones, jnp.array([0.5]), 0.5*ones])
+        arr_anti_diag = jnp.concatenate([-0.5j*ones, jnp.array([0.5]), 0.5*ones])
+    return(jnp.diag(arr_diag)+jnp.flipud(jnp.diag(arr_anti_diag)))
+
+def exp_to_trig_op(n_dim):
+    ''' Converts a ChiPhiFunc from exp to trig fourier series. '''
+    ones = jnp.ones(n_dim//2)
+    # sin:  +0.5je^-ix-0.5je^ix
+    # cos:  +0.5e^-ix+0.5e^ix
+    if n_dim%2==0:
+        arr_diag = jnp.concatenate([-1j*ones, ones])
+        arr_anti_diag = jnp.concatenate([ones, 1j*ones])
+    if n_dim%2==1:
+        arr_diag = jnp.concatenate([-1j*ones, jnp.array([0.5]), ones])
+        arr_anti_diag = jnp.concatenate([ones, jnp.array([0.5]), 1j*ones])
+    return(jnp.diag(arr_diag)+jnp.flipud(jnp.diag(arr_anti_diag)))
+
 def wrap_grid_content_jit(content:jnp.ndarray):
     '''
     Used for wrapping grid content. Defined outside the ChiPhiFunc class so that
@@ -1043,29 +1067,13 @@ class ChiPhiFunc:
         ''' Converts a ChiPhiFunc from trig to exp fourier series. '''
         content=self.content
         n_dim = content.shape[0]
-        ones = jnp.ones(n_dim//2)
-        if n_dim%2==0:
-            arr_diag = jnp.concatenate([0.5j*ones, 0.5*ones])[:, None]
-            arr_anti_diag = jnp.concatenate([-0.5j*ones, 0.5*ones])[:, None]
-        if n_dim%2==1:
-            arr_diag = jnp.concatenate([0.5j*ones, jnp.array([0.5]), 0.5*ones])[:, None]
-            arr_anti_diag = jnp.concatenate([-0.5j*ones, jnp.array([0.5]), 0.5*ones])[:, None]
-        return(ChiPhiFunc(arr_diag*content + jnp.flip(arr_anti_diag*content, axis=0), self.nfp))
+        return(ChiPhiFunc(trig_to_exp_op(n_dim)@content, self.nfp))
 
     def exp_to_trig(self):
         ''' Converts a ChiPhiFunc from exp to trig fourier series. '''
         content=self.content
         n_dim = content.shape[0]
-        ones = jnp.ones(n_dim//2)
-        # sin:  +0.5je^-ix-0.5je^ix
-        # cos:  +0.5e^-ix+0.5e^ix
-        if n_dim%2==0:
-            arr_diag = jnp.concatenate([-1j*ones, ones])[:, None]
-            arr_anti_diag = jnp.concatenate([ones, 1j*ones])[:, None]
-        if n_dim%2==1:
-            arr_diag = jnp.concatenate([-1j*ones, jnp.array([0.5]), ones])[:, None]
-            arr_anti_diag = jnp.concatenate([ones, jnp.array([0.5]), 1j*ones])[:, None]
-        return(ChiPhiFunc(arr_diag*content + jnp.flip(arr_anti_diag*content, axis=0), self.nfp))
+        return(ChiPhiFunc(exp_to_trig_op(n_dim)@content, self.nfp))
 
 # For JAX use. Registers ChiPhiFunc as a pytree.
 tree_util.register_pytree_node(ChiPhiFunc,
@@ -1123,11 +1131,11 @@ def dphi_op_pseudospectral(n:int):
 
 ''' II. Deconvolution ("dividing" chi-dependent terms) '''
 # @partial(jit, static_argnums=(2,))
-def get_O_O_einv_from_A_B(chiphifunc_A:ChiPhiFunc, chiphifunc_B:ChiPhiFunc, rank_rhs:int):
+def get_O_O_einv_from_A_B(chiphifunc_A:ChiPhiFunc, chiphifunc_B:ChiPhiFunc, rank_rhs:int, Y1c_mode:bool):
     '''
     Get O, O_einv and vector_free_coef that solves the eqaution system
     O Yn = (A + B dchi) Yn = RHS <=>
-      Yn = O_einv - (Yn0 or Yn1p) * vec_free_coef
+      Yn = O_einv@RHS - (Yn0 or Yn1p) * vec_free_coef
 
     This is an under-determined problem. Here, Yn is an (n+1)-dim vector.
     A and B are 2-d vectors. O is a known (n+2, n+1) convolution/differential
@@ -1175,12 +1183,26 @@ def get_O_O_einv_from_A_B(chiphifunc_A:ChiPhiFunc, chiphifunc_B:ChiPhiFunc, rank
     B_conv_matrices = conv_tensor(chiphifunc_B_content, rank_rhs+1)
     O_matrices = O_matrices + jnp.einsum('ijk,jl->ilk',B_conv_matrices,dchi_matrix)
 
+    if Y1c_mode:
+        # This O, when inverted, yields an O_einv acting on the trig
+        # representation of RHS and vec_free_coef:
+        # Yn_trig = O_einv@RHS_trig - (Yn0 or Yn1c) * vec_free_coef
+        O_matrices = O_matrices@trig_to_exp_op(O_matrices.shape[1])
+
     O_einv = batch_matrix_inv_excluding_col(O_matrices)
     O_einv = jnp.concatenate((O_einv[:i_free], jnp.zeros((1,O_einv.shape[1],O_einv.shape[2])), O_einv[i_free:]))
     O_free_col = O_matrices[:,i_free,:]
 
     vector_free_coef = jnp.einsum('ijk,jk->ik',O_einv, O_free_col)#A_einv@A_free_col
     vector_free_coef = vector_free_coef.at[i_free].set(-jnp.ones((vector_free_coef.shape[1])))
+
+    if Y1c_mode:
+        #             Yn_trig =             O_einv@            RHS_trig - (Yn0 or Yn1c) *             vec_free_coef
+        # trig_to_exp@Yn_trig = trig_to_exp@O_einv@            RHS_trig - (Yn0 or Yn1c) * trig_to_exp@vec_free_coef
+        #             Yn      = trig_to_exp@O_einv@            RHS_trig - (Yn0 or Yn1c) * trig_to_exp@vec_free_coef
+        #             Yn      = trig_to_exp@O_einv@exp_to_trig@RHS      - (Yn0 or Yn1c) * trig_to_exp@vec_free_coef
+        O_einv = trig_to_exp_op(O_einv.shape[0])@O_einv@exp_to_trig_op(O_einv.shape[1])
+        vec_free_coef = trig_to_exp_op(O_einv.shape[0])@vec_free_coef
 
     return(O_matrices, O_einv, -vector_free_coef)
 
@@ -1732,3 +1754,20 @@ def to_tensor_fft_op_multi_dim(
         dphi_array = jnp.ones((len_tensor,len_tensor)) * 1j * fft_freq * nfp
         tensor_fft_op_B_theta = tensor_fft_op_B_theta*(dphi_array**dphi)
     return(tensor_fft_op_B_theta)
+
+''' V.3. Others '''
+def linear_least_sq_2d_svd(A, b):
+    '''
+    Solves the linear least square problem minimizing ||Ax-b||
+
+    Inputs: -----
+
+    A, b: (n,m) and (n)
+
+    Output: -----
+
+    x
+    '''
+    u, s, vh = jnp.linalg.svd(A, full_matrices=False)
+    Eps_inv = jnp.diag(1/s)
+    return(vh.T@Eps_inv@u.T@b)

@@ -43,7 +43,7 @@ def generate_RHS(
     out_dict_RHS = {}
     ''' O_einv and vec_free for Y. Y is unknown at all orders '''
     # but solved from different equations (II tilde/D3) at each (even/odd) order.
-    O_matrices, O_einv, vector_free_coef = \
+    _, O_einv, vector_free_coef = \
         equilibrium.iterate_Yn_cp_operators(
             n_unknown=n_unknown,
             X_coef_cp=X_coef_cp,
@@ -1204,8 +1204,8 @@ def generate_tensor_operator(
     # Filter off-diagonal elements in the inverted linear differential operator.
     filtered_inv_looped_fft_operator = filter_operator(filtered_inv_looped_fft_operator, max_k_diff_post_inv)
     # (n_unknown(+1), len_tensor, n_unknown(+1), len_tensor)
-    # out_dict_tensor['filtered_looped_fft_operator']= filtered_looped_fft_operator
-    out_dict_tensor['filtered_inv_looped_fft_operator']= filtered_inv_looped_fft_operator
+    out_dict_tensor['filtered_looped_fft_operator'] = filtered_looped_fft_operator
+    out_dict_tensor['filtered_inv_looped_fft_operator'] = filtered_inv_looped_fft_operator
     return(out_dict_tensor)
 
 ''' III. Calculating Delta_offset and padding solution '''
@@ -1367,17 +1367,67 @@ def iterate_looped(
     filtered_inv_looped_fft_operator = out_dict_tensor['filtered_inv_looped_fft_operator']
     # Even order
     if n_unknown%2==0:
-        # Solve for Delta n0.
-        coef_Delta_offset = lambda_coef_delta(n_unknown+1, B_alpha_coef, B_denom_coef_c)
-        solve_result = solve_free_param(
-            n_unknown=n_unknown,
-            nfp=nfp,
-            target_len_phi=target_len_phi,
-            filtered_inv_looped_fft_operator=filtered_inv_looped_fft_operator,
-            filtered_RHS_0_offset=filtered_RHS_0_offset,
-            coef_Delta_offset=coef_Delta_offset
+        filtered_solution = jnp.tensordot(
+            filtered_inv_looped_fft_operator,
+            filtered_RHS_0_offset,
         )
-        solution = solve_result['solution']
+        # Solve for Delta n0.
+        # Unit contribution of Delta0 to the RHS
+        # Making a blank ChiPhiFunc with the correct shape. The free parameter's
+        # contribution only has 2 chi components, and will cause errors when
+        # n_unknown>2.
+        Delta_offset_unit_contribution = ChiPhiFunc(
+            jnp.zeros((
+                filtered_inv_looped_fft_operator.shape[0],
+                filtered_inv_looped_fft_operator.shape[1]
+            )),
+            nfp
+        ) + lambda_coef_delta(
+            n_unknown+1,
+            B_alpha_coef,
+            B_denom_coef_c
+        )
+        # FFT the contribution
+        fft_Delta_offset_unit_contribution = Delta_offset_unit_contribution.fft().content
+        # Propagate the contribition to the solution
+        sln_Delta_offset_unit_contribution = jnp.tensordot(
+            filtered_inv_looped_fft_operator,
+            fft_Delta_offset_unit_contribution
+        )
+        # The amount of Delta_offset required
+        Delta_offset = -filtered_solution[-1,0]/sln_Delta_offset_unit_contribution[-1,0]
+        # # Making a blank ChiPhiFunc with the correct shape. The free parameter's
+        # # contribution only has 2 chi components, and will cause errors when
+        # # n_unknown>2.
+        # Delta_offset_correction = ChiPhiFunc(
+        #     jnp.zeros((
+        #         filtered_inv_looped_fft_operator.shape[0],
+        #         filtered_inv_looped_fft_operator.shape[1]
+        #     )),
+        #     nfp
+        # )
+        # Delta_offset_correction += Delta_offset_unit_contribution*Delta_offset
+        # # Adding the free parameter's contributions to the solution
+        # filtered_solution += jnp.tensordot(
+        #     filtered_inv_looped_fft_operator,
+        #     Delta_offset_correction.fft().content
+        # )
+        filtered_solution += sln_Delta_offset_unit_contribution*Delta_offset
+        padded_solution = fft_pad(
+            filtered_solution,
+            target_len_phi,
+            axis=1
+        )
+        solution = jnp.fft.ifft(padded_solution, axis=1)
+        # solve_result = solve_free_param(
+        #     n_unknown=n_unknown,
+        #     nfp=nfp,
+        #     target_len_phi=target_len_phi,
+        #     filtered_inv_looped_fft_operator=filtered_inv_looped_fft_operator,
+        #     filtered_RHS_0_offset=filtered_RHS_0_offset,
+        #     coef_Delta_offset=coef_Delta_offset
+        # )
+        # solution = solve_result['solution']
         B_theta_n = None
 
         # B_psi0
@@ -1510,7 +1560,7 @@ def iterate_looped(
                 dl_p=dl_p,
                 tau_p=tau_p,
                 n_eval=n_unknown+1)*dphi_B_psi_nm2_0
-            -solve_result['Delta_offset']
+            -Delta_offset
         )
 
         Yn_B_theta_terms = 0
@@ -1691,7 +1741,7 @@ def iterate_looped(
             'Zn':Zn.filter(max_freq),
             'pn':pn.filter(max_freq),
             'Deltan':Deltan.filter(max_freq),
-            'Delta_offset': solve_result['Delta_offset'],
+            'Delta_offset': Delta_offset,
             # 'solution': solution,
             # 'out_dict_RHS':out_dict_RHS,
             # 'out_dict_tensor':out_dict_tensor,

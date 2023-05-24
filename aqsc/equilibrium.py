@@ -44,7 +44,7 @@ def iterate_Xn_cp(n_eval,
         iota_coef=iota_coef).cap_m(n_eval))
 
 # O_matrices, O_einv, vector_free_coef only uses B_alpha_coef and X_coef_cp
-def iterate_Yn_cp_operators(n_unknown, X_coef_cp, B_alpha_coef): # nfp-dependent only in output
+def iterate_Yn_cp_operators(n_unknown, X_coef_cp, B_alpha_coef, Y1c_mode=False): # nfp-dependent only in output
     '''
     Input: -----
     '''
@@ -54,7 +54,11 @@ def iterate_Yn_cp_operators(n_unknown, X_coef_cp, B_alpha_coef): # nfp-dependent
     chiphifunc_B = parsed.coef_b(B_alpha_coef, X_coef_cp)
 
     # Calculating the inverted matrices
-    O_matrices, O_einv, vector_free_coef = get_O_O_einv_from_A_B(chiphifunc_A, chiphifunc_B, n_unknown)
+    O_matrices, O_einv, vector_free_coef = get_O_O_einv_from_A_B(
+        chiphifunc_A=chiphifunc_A,
+        chiphifunc_B=chiphifunc_B,
+        n_unknown=n_unknown,
+        Y1c_mode=Y1c_mode)
     return(O_matrices, O_einv, vector_free_coef)
 
 # O_matrices, O_einv, vector_free_coef only uses B_alpha_coef and X_coef_cp
@@ -130,7 +134,7 @@ def iterate_Yn_cp_magnetic(n_unknown,
     nfp = X_coef_cp.nfp
     n_eval = n_unknown+1
 
-    O_matrices, O_einv, vector_free_coef = \
+    _, O_einv, vector_free_coef = \
         iterate_Yn_cp_operators(n_unknown,
             X_coef_cp=X_coef_cp,
             B_alpha_coef=B_alpha_coef)
@@ -406,6 +410,12 @@ class Equilibrium:
         ))
 
     def save(self, file_name):
+        jnp.save(file_name, self)
+
+    def load(file_name):
+        return(jnp.load(file_name, allow_pickle=True).item())
+
+    def save_plain(self, file_name):
         unknown_dict = {}
         for key in self.unknown.keys():
             unknown_dict[key] = self.unknown[key].to_content_list()
@@ -430,12 +440,12 @@ class Equilibrium:
             'magnetic_only': self.magnetic_only,
             'axis_info': self.axis_info,
         }
-        jnp.savez(file_name, big_dict)
+        jnp.save(file_name, big_dict)
 
     # nfp-dependent!!
-    def load(filename):
-        npzfile = jnp.load(filename, allow_pickle=True)
-        big_dict = npzfile['arr_0'].item()
+    def load_plain(filename):
+        npyfile = jnp.load(filename, allow_pickle=True)
+        big_dict = npyfile.item()
         raw_unknown = big_dict['unknown']
         raw_constant = big_dict['constant']
         nfp = big_dict['nfp']
