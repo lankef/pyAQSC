@@ -1,1 +1,4 @@
 python_source/unsupported_by_jax.py
+*.bat
+*.pyc
+*checkpoint.ipynb

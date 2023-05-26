@@ -57,7 +57,7 @@ def iterate_Yn_cp_operators(n_unknown, X_coef_cp, B_alpha_coef, Y1c_mode=False):
     O_matrices, O_einv, vector_free_coef = get_O_O_einv_from_A_B(
         chiphifunc_A=chiphifunc_A,
         chiphifunc_B=chiphifunc_B,
-        n_unknown=n_unknown,
+        rank_rhs=n_unknown,
         Y1c_mode=Y1c_mode)
     return(O_matrices, O_einv, vector_free_coef)
 
