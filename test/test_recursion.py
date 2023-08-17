@@ -62,7 +62,6 @@ class TestCircularAxis(unittest.TestCase):
             tau_p=tau_p,
             iota_coef=iota_coef
             ).antid_chi()
-        print('Testing B_psi')
         compare_chiphifunc(B_psi_nm2,B_psi_coef_cp[1])
         self.assertTrue(is_roughly_close_chiphifunc(B_psi_nm2, B_psi_coef_cp[1]))
 

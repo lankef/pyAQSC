@@ -317,7 +317,7 @@ block(
             ineq_from_unpeel:cons(index_to_remove>lower_bound, ineq_from_unpeel),
             all_indices:cons(index_to_remove, all_indices)
         )else if upper_bound=inf then(
-            disp("unpeel_sums_sub_recursion: error, skip_ineq should not be enabled"),
+            disp("unpeel_sums_sub_recursion: error, expression includes infinite summations. skip_ineq should not be enabled"),
             disp("for expressions containing infinite sums. "),
             break(1)
         ),

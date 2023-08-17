@@ -106,20 +106,20 @@ Returns:
 
 - A `jnp.numpy.array` containing the solution to the equation. When `p_eff` is 0, it will be defaulted to the anti-derivative of `f_eff` with zero average.
 
-### `aqsc.solve_1d_fft(p_eff, f_eff, fft_max_freq:int=None)`
+### `aqsc.solve_1d_fft(p_eff, f_eff, static_max_freq:int=None)`
 Solves a linear ODE of form $y' + p_{eff}*y = f_{eff}$ using spectral method. The maximum truncation order is set in `ChiPhiFunc.py`.
 
 Parameters: 
 
 - `p_eff : jnp.numpy.array` (traced) - Coefficient of y. 1d array.
 - `f_eff : jnp.numpy.array` (traced) - The RHS. 1d array.
-- `fft_max_freq : int` (static) - Maximum number of Fourier harmonics used. Should be set as low as posssible while trying not losing too much accuracy to prevent high-frequency noise from blowing up. Need to be find empirically.
+- `static_max_freq : int` (static) - Maximum number of Fourier harmonics used. Should be set as low as posssible while trying not losing too much accuracy to prevent high-frequency noise from blowing up. Need to be find empirically.
 
 Returns:
 
 - A `jnp.numpy.array` containing the solution to the equation. When `p_eff` is 0, it will be defaulted to the anti-derivative of `f_eff` with zero average.
 
-### `aqsc.solve_ODE(coeff_arr, coeff_dp_arr, f_arr, fft_max_freq: int=None)`
+### `aqsc.solve_ODE(coeff_arr, coeff_dp_arr, f_arr, static_max_freq: int=None)`
 Solves a list of linear first order ODE systems in of form
 $(\text{coeff} + \text{coeff}_\phi \frac{d}{d\phi}) y = f$ (equivalent to $y' + p_{eff}*y = f_{eff}$) using spectral method.
 
@@ -128,31 +128,31 @@ Does not work well for p>10 with zeros or resonant p without low-pass filtering.
 
 Parameters:
 - `coeff_arr, coeff_dp_arr, f_arr : jax.numpy.array` (traced) - Components of the equations as 2d matrices. Its `axis=0` is equation indices and `axis=1` is $\phi$ dependence on grid points. All quantities are assumed periodic.
-- `fft_max_freq : int` (static): Maximum number of Fourier harmonics used. Should be set as low as posssible while trying not losing too much accuracy to prevent high-frequency noise from blowing up. Need to be find empirically.
+- `static_max_freq : int` (static): Maximum number of Fourier harmonics used. Should be set as low as posssible while trying not losing too much accuracy to prevent high-frequency noise from blowing up. Need to be find empirically.
 
 Returns:
 
 - A `jax.numpy.array` containing solutions to the equations.
 
-### `aqsc.solve_ODE_chi(coeff, coeff_dp, coeff_dc, f, fft_max_freq:int)`
+### `aqsc.solve_ODE_chi(coeff, coeff_dp, coeff_dc, f, static_max_freq:int)`
 Solves the periodic linear 1st order PDE $(\text{coeff} + \text{coeff}_\phi\frac{d}{d\phi} + \text{coeff}_\chi\frac{d}{d\chi}) y = f(\phi, \chi)$ using spectral method.
 
 Parameters: 
 
 - `coeff, coeff_dp, coeff_dc` (traced) - The coefficients. Can be 2D arrays with the same format as `ChiPhiFunc.content` or scalars. 
 - `f : jax.numpy.array` (traced) - The RHS. Must be a 2D array with the same format as `ChiPhiFunc.content`.
-- `fft_max_freq : int` (static) - Maximum number of Fourier harmonics used. Should be set as low as posssible while trying not losing too much accuracy to prevent high-frequency noise from blowing up. Need to be find empirically.
+- `static_max_freq : int` (static) - Maximum number of Fourier harmonics used. Should be set as low as posssible while trying not losing too much accuracy to prevent high-frequency noise from blowing up. Need to be find empirically.
 
 Returns: 
 - A `jax.numpy.array` containing the solution. Has the same format as `ChiPhiFunc.content`.
 
-### `aqsc.solve_dphi_iota_dchi(iota, f, fft_max_freq: int)`
+### `aqsc.solve_dphi_iota_dchi(iota, f, static_max_freq: int)`
 Solves the periodic linear 1st order PDE $(\frac{d}{d\phi} + \bar{\iota}\frac{d}{d\chi}) y = f(\phi, \chi)$ using spectral method.
 
 Parameters: 
 - `iota` (traced) - A scalar coefficient.
 - `f : jax.numpy.array` (traced) - The RHS. Must be a 2D array with the same format as `ChiPhiFunc.content`.
-- `fft_max_freq : int` (static) - Maximum number of Fourier harmonics used. Should be set as low as posssible while trying not losing too much accuracy to prevent high-frequency noise from blowing up. Need to be find empirically.
+- `static_max_freq : int` (static) - Maximum number of Fourier harmonics used. Should be set as low as posssible while trying not losing too much accuracy to prevent high-frequency noise from blowing up. Need to be find empirically.
 
 Returns: 
 - A `jax.numpy.array` containing the solution. Has the same format as `ChiPhiFunc.content`.

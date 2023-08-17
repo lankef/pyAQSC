@@ -756,7 +756,7 @@ class ChiPhiFunc:
     ''' I.1.3 phi Filters '''
     # Static arguments
     @partial(jit, static_argnums=(2,))
-    def filter(self, arg, mode:int=0):
+    def filter(self, arg:float, mode:int=0):
         '''
         An expandable filter. Now only low-pass is available.
 
@@ -775,9 +775,9 @@ class ChiPhiFunc:
         if self.is_special():
             return(self)
         if mode == 0:
+            # Skip filtering if arg is negative.
+            arg = jnp.where(arg<0, jnp.inf, arg)
             len_phi = self.content.shape[1]
-            if arg*2>=len_phi:
-                return(self)
             W = jnp.abs(jit_fftfreq_int(len_phi))
             f_signal = jnp.fft.fft(self.content, axis = 1)
             # If our original signal time was in seconds, this is now in Hz
@@ -1398,7 +1398,7 @@ def solve_1d_asym(p_eff, f_eff): # not nfp-dependent
     return(jnp.sum(asym_series, axis=0))
 
 @partial(jit, static_argnums=(2,))
-def solve_1d_fft(p_eff, f_eff, fft_max_freq:int=None): # not nfp-dependent
+def solve_1d_fft(p_eff, f_eff, static_max_freq:int=None): # not nfp-dependent
     '''
     Solves one linear ODE of form y' + p_eff*y = f_eff.
     Assumes non-zero p.
@@ -1418,10 +1418,10 @@ def solve_1d_fft(p_eff, f_eff, fft_max_freq:int=None): # not nfp-dependent
     if jnp.isscalar(p_eff):
         p_eff = p_eff*jnp.ones_like(f_eff)
 
-    if fft_max_freq is None:
+    if static_max_freq is None:
         target_length = len(f_eff)
     else:
-        target_length = fft_max_freq*2
+        target_length = static_max_freq*2
     p_fft = fft_filter(jnp.fft.fft(p_eff), target_length, axis=0)
     f_fft = fft_filter(jnp.fft.fft(f_eff), target_length, axis=0)
 
@@ -1436,7 +1436,7 @@ def solve_1d_fft(p_eff, f_eff, fft_max_freq:int=None): # not nfp-dependent
 
 solve_1d_fft_batch = vmap(solve_1d_fft, in_axes=(0, 0, None), out_axes=0)
 @partial(jit, static_argnums=(3,))
-def solve_ODE(coeff_arr, coeff_dp_arr, f_arr:jnp.ndarray, fft_max_freq:int=None): # not nfp-dependent
+def solve_ODE(coeff_arr, coeff_dp_arr, f_arr:jnp.ndarray, static_max_freq:int=None): # not nfp-dependent
     '''
     Solves simple linear first order ODE systems in batch:
     (coeff_phi d/dphi + coeff) y = f. ( y' + p_eff*y = f_eff )
@@ -1451,7 +1451,7 @@ def solve_ODE(coeff_arr, coeff_dp_arr, f_arr:jnp.ndarray, fft_max_freq:int=None)
     Axis=0 is equation indices and axis=1 is phi dependences. All quantities are
     assumed periodic
 
-    fft_max_freq: Maximum number of Fourier harmonics used.
+    static_max_freq: Maximum number of Fourier harmonics used.
 
     Output: -----
 
@@ -1460,8 +1460,8 @@ def solve_ODE(coeff_arr, coeff_dp_arr, f_arr:jnp.ndarray, fft_max_freq:int=None)
     len_phi = f_arr.shape[1]
     len_chi = f_arr.shape[0]
 
-    if fft_max_freq is None:
-        fft_max_freq = len_phi//2
+    if static_max_freq is None:
+        static_max_freq = len_phi//2
 
     # Rescale the eq into y'+py=f
     f_eff = f_arr/coeff_dp_arr
@@ -1490,7 +1490,7 @@ def solve_ODE(coeff_arr, coeff_dp_arr, f_arr:jnp.ndarray, fft_max_freq:int=None)
         (jnp.all(p_eff == 0, axis=1))[:, None],
         ChiPhiFunc(f_eff, nfp=1).\
             integrate_phi_fft(zero_avg=True).content,
-        solve_1d_fft_batch(p_eff, f_eff, fft_max_freq)
+        solve_1d_fft_batch(p_eff, f_eff, static_max_freq)
     )
     # return(out_arr*f_eff_scaling)
     return(out_arr)
@@ -1542,7 +1542,7 @@ def fft_conv_op(source):
     return(tensor_eff[0][0])
 
 @partial(jit, static_argnums=(4,))
-def solve_ODE_chi(coeff, coeff_dp, coeff_dc, f, fft_max_freq: int):
+def solve_ODE_chi(coeff, coeff_dp, coeff_dc, f, static_max_freq: int):
     '''
     For solving the periodic linear 1st order ODE
     (coeff + coeff_dp*dphi + coeff_dc*dchi) y = f(phi, chi)
@@ -1567,11 +1567,11 @@ def solve_ODE_chi(coeff, coeff_dp, coeff_dc, f, fft_max_freq: int):
 
     return(
         solve_ODE(coeff_eff, coeff_dp, f, \
-            fft_max_freq=fft_max_freq)
+            static_max_freq=static_max_freq)
     )
 
 @partial(jit, static_argnums=(2,))
-def solve_dphi_iota_dchi(iota, f, fft_max_freq: int):
+def solve_dphi_iota_dchi(iota, f, static_max_freq: int):
     '''
     For solving the periodic linear 1st order ODE
     (dphi+iota*dchi) y = f(phi, chi)
@@ -1594,7 +1594,7 @@ def solve_dphi_iota_dchi(iota, f, fft_max_freq: int):
             coeff_dp=1,
             coeff_dc = iota,
             f=f,
-            fft_max_freq=fft_max_freq
+            static_max_freq=static_max_freq
         )
     )
 
@@ -1621,7 +1621,7 @@ def fft_filter(fft_in:jnp.ndarray, target_length:int, axis:int): # not nfp-depen
 
     Filtered array.
     '''
-    if target_length>=fft_in.shape[axis]:
+    if target_length>=fft_in.shape[axis] or target_length<0:
         return(fft_in)
     # FFT of an array contains mode amplitude in the order given by
     # fftfreq(length)*length. For example, for length=7,

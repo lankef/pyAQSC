@@ -3,10 +3,10 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pyAQSC"
+name = "aqsc"
 description = "Constructs QS stellarator equilibrium to all orders."
 readme = "README.MD"
-version = "1.0.0"
+version = "0.1"
 dependencies = ["numpy", "matplotlib", "jax"]
 authors = [
   { name="Lanke Fu", email="ffu@pppl.edu" },

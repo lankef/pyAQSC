@@ -31,18 +31,19 @@ def lambda_coef_delta(n_eval, B_alpha_coef, B_denom_coef_c):
 # filtered_RHS_0_offset is the FFT of II tilde (even orders) or 
 # II tilde, II, II tilde, D3.
 def generate_RHS(
-    n_unknown, max_freq,
+    n_unknown, 
+    static_max_freq,
+    traced_max_freq,
     X_coef_cp, Y_coef_cp, Z_coef_cp,
     p_perp_coef_cp, Delta_coef_cp,
     B_psi_coef_cp, B_theta_coef_cp,
     B_alpha_coef, B_denom_coef_c,
     kap_p, tau_p, dl_p,
     iota_coef, 
-    Y1c_mode
+    Y1c_mode=False 
 ):
 # n_eval is the order at which the "looped" equations are evaluated at
     n_eval = n_unknown+1
-    len_tensor = max_freq*2
     out_dict_RHS = {}
     ''' O_einv and vec_free for Y. Y is unknown at all orders '''
     # but solved from different equations (II tilde/D3) at each (even/odd) order.
@@ -69,7 +70,7 @@ def generate_RHS(
         dl_p=dl_p,
         tau_p=tau_p,
         iota_coef=iota_coef
-    ).antid_chi().filter(max_freq)
+    ).antid_chi().filter(traced_max_freq)
 
     B_psi_coef_cp_no_unknown = B_psi_coef_cp.mask(n_unknown-3)
     B_psi_coef_cp_no_unknown = B_psi_coef_cp_no_unknown.append(B_psi_nm2_no_unknown)
@@ -89,7 +90,7 @@ def generate_RHS(
             B_theta_coef_cp, B_psi_coef_cp_no_unknown,
             B_alpha_coef,
             kap_p, dl_p, tau_p,
-            iota_coef).filter(max_freq)
+            iota_coef).filter(traced_max_freq)
         Z_coef_cp_no_unknown = Z_coef_cp.mask(n_eval-2)
         Z_coef_cp_no_unknown = Z_coef_cp_no_unknown.append(Zn_no_B_psi)
 
@@ -101,7 +102,7 @@ def generate_RHS(
             B_denom_coef_c=B_denom_coef_c,
             p_perp_coef_cp=p_perp_coef_cp,
             Delta_coef_cp=Delta_coef_cp,
-            iota_coef=iota_coef).filter(max_freq)
+            iota_coef=iota_coef).filter(traced_max_freq)
         p_perp_coef_cp_no_unknown = p_perp_coef_cp.mask(n_eval-2)
         p_perp_coef_cp_no_unknown = p_perp_coef_cp_no_unknown.append(pn_no_B_psi)
 
@@ -113,7 +114,7 @@ def generate_RHS(
             B_denom_coef_c,
             B_alpha_coef,
             kap_p, dl_p, tau_p,
-            iota_coef).filter(max_freq)
+            iota_coef).filter(traced_max_freq)
         X_coef_cp_no_unknown = X_coef_cp.mask(n_eval-2)
         X_coef_cp_no_unknown = X_coef_cp_no_unknown.append(Xn_no_B_psi)
 
@@ -121,8 +122,8 @@ def generate_RHS(
             B_denom_coef_c=B_denom_coef_c,
             p_perp_coef_cp=p_perp_coef_cp_no_unknown,
             Delta_coef_cp=Delta_coef_cp,
-            max_freq=max_freq,
-            iota_coef=iota_coef).filter(max_freq)
+            static_max_freq=static_max_freq,
+            iota_coef=iota_coef).filter(traced_max_freq)
         Delta_coef_cp_no_unknown_0_offset = Delta_coef_cp.mask(n_eval-2)
         Delta_coef_cp_no_unknown_0_offset = Delta_coef_cp_no_unknown_0_offset.append(Deltan_no_B_psi)
 
@@ -146,7 +147,7 @@ def generate_RHS(
             dl_p=dl_p,
             tau_p=tau_p,
             iota_coef=iota_coef
-            ).filter(max_freq)
+            ).filter(traced_max_freq)
         Z_coef_cp_no_unknown=Z_coef_cp.mask(n_unknown-1)
         Z_coef_cp_no_unknown = Z_coef_cp_no_unknown.append(Zn_no_B_theta)
 
@@ -160,7 +161,7 @@ def generate_RHS(
             dl_p=dl_p,
             tau_p=tau_p,
             iota_coef=iota_coef
-            ).filter(max_freq)
+            ).filter(traced_max_freq)
         X_coef_cp_no_unknown = X_coef_cp.mask(n_unknown-1)
         X_coef_cp_no_unknown = X_coef_cp_no_unknown.append(Xn_no_B_theta)
         pn_no_B_theta = equilibrium.iterate_p_perp_n(
@@ -171,7 +172,7 @@ def generate_RHS(
             B_denom_coef_c=B_denom_coef_c,
             p_perp_coef_cp=p_perp_coef_cp,
             Delta_coef_cp=Delta_coef_cp,
-            iota_coef=iota_coef).filter(max_freq)
+            iota_coef=iota_coef).filter(traced_max_freq)
         p_perp_coef_cp_no_unknown = p_perp_coef_cp.mask(n_unknown-1)
         p_perp_coef_cp_no_unknown = p_perp_coef_cp_no_unknown.append(pn_no_B_theta)
         Deltan_with_iota_no_B_theta = equilibrium.iterate_delta_n_0_offset(n_eval=n_unknown,
@@ -179,8 +180,8 @@ def generate_RHS(
             p_perp_coef_cp=p_perp_coef_cp_no_unknown,
             Delta_coef_cp=Delta_coef_cp,
             iota_coef=iota_coef,
-            max_freq=max_freq,
-            no_iota_masking = True).filter(max_freq)
+            static_max_freq=static_max_freq,
+            no_iota_masking = True).filter(traced_max_freq)
         Delta_coef_cp_no_unknown_0_offset = Delta_coef_cp.mask(n_eval-2)
         Delta_coef_cp_no_unknown_0_offset = Delta_coef_cp_no_unknown_0_offset.append(Deltan_with_iota_no_B_theta)
         out_dict_RHS['Zn_no_B_theta'] = Zn_no_B_theta
@@ -200,7 +201,7 @@ def generate_RHS(
         kap_p=kap_p,
         dl_p=dl_p,
         tau_p=tau_p,
-        iota_coef=iota_coef).filter(max_freq)
+        iota_coef=iota_coef).filter(traced_max_freq)
     Yn_rhs_content_no_unknown = Yn_rhs_no_unknown.content
     new_Y_n_no_unknown = ChiPhiFunc(jnp.einsum('ijk,jk->ik', O_einv, Yn_rhs_content_no_unknown), Yn_rhs_no_unknown.nfp)
     Y_coef_cp_no_unknown = Y_coef_cp.mask(n_eval-2)
@@ -223,7 +224,7 @@ def generate_RHS(
          # this zero_append on iota_coef doesn't do anythin at even n_unknown,
          # but masks iota (n_unknown-1)/2 at odd n_unknown.
         kap_p=kap_p, dl_p=dl_p, tau_p=tau_p, iota_coef=iota_coef #iota_coef.zero_append()
-    ).cap_m(n_eval-2).filter(max_freq)
+    ).cap_m(n_eval-2).filter(traced_max_freq)
 
     # Calculating D3. This cannot be merged into the previous
     # if statement because we need to know Y first.
@@ -273,7 +274,7 @@ def generate_RHS(
         looped_content = jnp.concatenate((looped_content, D3_RHS_content), axis=0)
         looped_RHS_0_offset = ChiPhiFunc(looped_content, looped_RHS_0_offset.nfp)
 
-    out_dict_RHS['filtered_RHS_0_offset'] = fft_filter(looped_RHS_0_offset.fft().content, max_freq*2, axis=1)
+    out_dict_RHS['filtered_RHS_0_offset'] = fft_filter(looped_RHS_0_offset.fft().content, static_max_freq*2, axis=1)
     return(out_dict_RHS)
 
 ''' II. Tensor operator '''
@@ -316,7 +317,8 @@ def generate_tensor_operator(
     kap_p, tau_p, dl_p,
     iota_coef,
     O_einv, vector_free_coef,
-    max_freq, # Maximum number of frequencies to consider
+    static_max_freq,
+    traced_max_freq, # Maximum number of frequencies to consider
     # Filter off-diagonal comps of the linear diff operator before inverting
     max_k_diff_pre_inv = -1,
 ):
@@ -325,7 +327,7 @@ def generate_tensor_operator(
     # Tilde II has n_unknown components at order n_unknown.
     n_eval = n_unknown+1
     # len_tensor is the number of phi modes kept in a tensor.
-    len_tensor = max_freq*2
+    len_tensor = static_max_freq*2
     # dphi_array
     # Multiply a dphi matrix to the end of source.
     # Here it's done by pointwise multiplying
@@ -349,15 +351,15 @@ def generate_tensor_operator(
         dl_p=dl_p,
         tau_p=tau_p,
         iota_coef=iota_coef)
-    coef_Y = looped_y_coefs['coef_Y'].filter_reduced_length(max_freq)
-    coef_dchi_Y = looped_y_coefs['coef_dchi_Y'].filter_reduced_length(max_freq)
-    coef_dphi_Y = looped_y_coefs['coef_dphi_Y'].filter_reduced_length(max_freq)
-    coef_dchi_dphi_Y = looped_y_coefs['coef_dchi_dphi_Y'].filter_reduced_length(max_freq)
-    coef_dphi_dphi_Y = looped_y_coefs['coef_dphi_dphi_Y'].filter_reduced_length(max_freq)
-    coef_dchi_dchi_Y = looped_y_coefs['coef_dchi_dchi_Y'].filter_reduced_length(max_freq)
-    coef_dchi_dchi_dphi_Y = looped_y_coefs['coef_dchi_dchi_dphi_Y'].filter_reduced_length(max_freq)
-    coef_dphi_dphi_dchi_Y = looped_y_coefs['coef_dphi_dphi_dchi_Y'].filter_reduced_length(max_freq)
-    coef_dchi_dchi_dchi_Y = looped_y_coefs['coef_dchi_dchi_dchi_Y'].filter_reduced_length(max_freq)
+    coef_Y = looped_y_coefs['coef_Y'].filter_reduced_length(traced_max_freq)
+    coef_dchi_Y = looped_y_coefs['coef_dchi_Y'].filter_reduced_length(traced_max_freq)
+    coef_dphi_Y = looped_y_coefs['coef_dphi_Y'].filter_reduced_length(traced_max_freq)
+    coef_dchi_dphi_Y = looped_y_coefs['coef_dchi_dphi_Y'].filter_reduced_length(traced_max_freq)
+    coef_dphi_dphi_Y = looped_y_coefs['coef_dphi_dphi_Y'].filter_reduced_length(traced_max_freq)
+    coef_dchi_dchi_Y = looped_y_coefs['coef_dchi_dchi_Y'].filter_reduced_length(traced_max_freq)
+    coef_dchi_dchi_dphi_Y = looped_y_coefs['coef_dchi_dchi_dphi_Y'].filter_reduced_length(traced_max_freq)
+    coef_dphi_dphi_dchi_Y = looped_y_coefs['coef_dphi_dphi_dchi_Y'].filter_reduced_length(traced_max_freq)
+    coef_dchi_dchi_dchi_Y = looped_y_coefs['coef_dchi_dchi_dchi_Y'].filter_reduced_length(traced_max_freq)
 
     # dchi operates on only vector_free_coef and dphi operates only on the free component
     # This can be simplified to be operator manipulations, rather than chain rules,
@@ -368,7 +370,7 @@ def generate_tensor_operator(
         +coef_dchi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi()
         +coef_dchi_dchi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi().dchi()
         +coef_dchi_dchi_dchi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi().dchi().dchi()
-    ).cap_m(n_eval-2).filter(max_freq)
+    ).cap_m(n_eval-2).filter(traced_max_freq)
     coef_Y_n0_dphi_1 = (
         coef_dphi_Y * ChiPhiFunc(vector_free_coef_short, nfp)
         +coef_dchi_dphi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi()
@@ -729,7 +731,7 @@ def generate_tensor_operator(
                     kap_p=kap_p,
                     iota_coef=iota_coef,
                     n_eval=n_eval).pad_chi(n_eval+1).content
-        ), nfp).filter_reduced_length(max_freq)
+        ), nfp).filter_reduced_length(traced_max_freq)
         out_dict_tensor['coef_B_psi_dphi_1_in_Y_var'] = coef_B_psi_dphi_1_in_Y_var
         coef_B_psi_dphi_1_in_Y = (
             coef_Y*coef_B_psi_dphi_1_in_Y_var
@@ -765,7 +767,7 @@ def generate_tensor_operator(
             tau_p=tau_p,
             kap_p=kap_p,
             iota_coef=iota_coef,
-            n_eval=n_eval).filter_reduced_length(max_freq)
+            n_eval=n_eval).filter_reduced_length(traced_max_freq)
         coef_B_psi_dphi_2_dchi_0_all_but_Y = looped_coefs.coef_B_psi_dphi_2_dchi_0_all_but_Y(
             X_coef_cp=X_coef_cp,
             Y_coef_cp=Y_coef_cp,
@@ -776,7 +778,7 @@ def generate_tensor_operator(
             tau_p=tau_p,
             kap_p=kap_p,
             iota_coef=iota_coef,
-            n_eval=n_eval).filter_reduced_length(max_freq)
+            n_eval=n_eval).filter_reduced_length(traced_max_freq)
         coef_B_psi_dphi_3_dchi_0_all_but_Y = looped_coefs.coef_B_psi_dphi_3_dchi_0_all_but_Y(
             X_coef_cp=X_coef_cp,
             Y_coef_cp=Y_coef_cp,
@@ -787,7 +789,7 @@ def generate_tensor_operator(
             tau_p=tau_p,
             kap_p=kap_p,
             iota_coef=iota_coef,
-            n_eval=n_eval).filter_reduced_length(max_freq)
+            n_eval=n_eval).filter_reduced_length(traced_max_freq)
         coef_B_psi_dphi_1 = (
             coef_B_psi_dphi_1_in_Y
             +coef_B_psi_dphi_1_dchi_0_all_but_Y
@@ -1311,54 +1313,57 @@ def iterate_looped(
     kap_p, tau_p, dl_p,
     iota_coef,
     # lambda for the coefficient of the scalar free parameter in RHS
-    max_freq,
+    static_max_freq,
+    traced_max_freq,
     # B_theta_np10_avg = 0,
     max_k_diff_pre_inv=-1
 ):
-    # if target_len_phi<max_freq*2:
-    #     raise ValueError('target_len_phi must >= max_freq*2.')
+    # if target_len_phi<traced_max_freq*2:
+    #     raise ValueError('target_len_phi must >= traced_max_freq*2.')
     # First calculate RHS
     out_dict_RHS = generate_RHS(
-        n_unknown = n_unknown,
-        max_freq = max_freq,
-        X_coef_cp = X_coef_cp,
-        Y_coef_cp = Y_coef_cp,
-        Z_coef_cp = Z_coef_cp,
-        p_perp_coef_cp = p_perp_coef_cp,
-        Delta_coef_cp = Delta_coef_cp,
-        B_psi_coef_cp = B_psi_coef_cp,
-        B_theta_coef_cp = B_theta_coef_cp,
-        B_alpha_coef = B_alpha_coef,
-        B_denom_coef_c = B_denom_coef_c,
-        kap_p = kap_p,
-        tau_p = tau_p,
-        dl_p = dl_p,
-        iota_coef = iota_coef
+        n_unknown=n_unknown,
+        static_max_freq=static_max_freq,
+        traced_max_freq=traced_max_freq,
+        X_coef_cp=X_coef_cp,
+        Y_coef_cp=Y_coef_cp,
+        Z_coef_cp=Z_coef_cp,
+        p_perp_coef_cp=p_perp_coef_cp,
+        Delta_coef_cp=Delta_coef_cp,
+        B_psi_coef_cp=B_psi_coef_cp,
+        B_theta_coef_cp=B_theta_coef_cp,
+        B_alpha_coef=B_alpha_coef,
+        B_denom_coef_c=B_denom_coef_c,
+        kap_p=kap_p,
+        tau_p=tau_p,
+        dl_p=dl_p,
+        iota_coef=iota_coef
     )
     O_einv = out_dict_RHS['O_einv']
     vector_free_coef = out_dict_RHS['vector_free_coef']
     # Then calculate the inverted differential operators
     filtered_RHS_0_offset = out_dict_RHS['filtered_RHS_0_offset']
     out_dict_tensor = generate_tensor_operator(
-        n_unknown = n_unknown,
-        nfp = nfp,
-        X_coef_cp = X_coef_cp,
-        Y_coef_cp = Y_coef_cp,
-        Z_coef_cp = Z_coef_cp,
-        p_perp_coef_cp = p_perp_coef_cp,
-        Delta_coef_cp = Delta_coef_cp,
-        B_psi_coef_cp = B_psi_coef_cp,
-        B_theta_coef_cp = B_theta_coef_cp,
-        B_alpha_coef = B_alpha_coef,
-        B_denom_coef_c = B_denom_coef_c,
-        kap_p = kap_p,
-        tau_p = tau_p,
-        dl_p = dl_p,
-        iota_coef = iota_coef,
-        O_einv = O_einv,
-        vector_free_coef = vector_free_coef,
-        max_freq = max_freq,
-        max_k_diff_pre_inv = max_k_diff_pre_inv,
+        n_unknown=n_unknown,
+        nfp=nfp,
+        X_coef_cp=X_coef_cp,
+        Y_coef_cp=Y_coef_cp,
+        Z_coef_cp=Z_coef_cp,
+        p_perp_coef_cp=p_perp_coef_cp,
+        Delta_coef_cp=Delta_coef_cp,
+        B_psi_coef_cp=B_psi_coef_cp,
+        B_theta_coef_cp=B_theta_coef_cp,
+        B_alpha_coef=B_alpha_coef,
+        B_denom_coef_c=B_denom_coef_c,
+        kap_p=kap_p,
+        tau_p=tau_p,
+        dl_p=dl_p,
+        iota_coef=iota_coef,
+        O_einv=O_einv,
+        vector_free_coef=vector_free_coef,
+        static_max_freq=static_max_freq,
+        traced_max_freq=traced_max_freq,
+        max_k_diff_pre_inv=max_k_diff_pre_inv,
     )
     filtered_looped_fft_operator = out_dict_tensor['filtered_looped_fft_operator']
     # Finding the inverse differential operator
@@ -1569,7 +1574,7 @@ def iterate_looped(
             B_theta_n = ChiPhiFunc(B_theta_n_no_center_content, nfp) + B_theta_coef_cp[n_unknown][0]
 
             B_theta_in_B_psi = n_unknown/2*B_theta_n.antid_chi()
-            B_theta_in_B_psi_fft_short=fft_filter(B_theta_in_B_psi.fft().content, max_freq*2, axis=1)
+            B_theta_in_B_psi_fft_short=fft_filter(B_theta_in_B_psi.fft().content, static_max_freq*2, axis=1)
 
             B_psi_nm2 += B_theta_in_B_psi
             Yn_B_theta_terms = ChiPhiFunc(
@@ -1734,11 +1739,11 @@ def iterate_looped(
         return({
             'B_theta_n': B_theta_n,
             'B_psi_nm2': B_psi_nm2,#!!_BTHETA!!!!!,
-            'Yn':Yn.filter(max_freq),
-            'Xn':Xn.filter(max_freq),
-            'Zn':Zn.filter(max_freq),
-            'pn':pn.filter(max_freq),
-            'Deltan':Deltan.filter(max_freq),
+            'Yn':Yn.filter(traced_max_freq),
+            'Xn':Xn.filter(traced_max_freq),
+            'Zn':Zn.filter(traced_max_freq),
+            'pn':pn.filter(traced_max_freq),
+            'Deltan':Deltan.filter(traced_max_freq),
             # 'Delta_offset': Delta_offset,
             # 'solution': solution,
             # 'out_dict_RHS':out_dict_RHS,
@@ -1758,7 +1763,7 @@ def iterate_looped(
         solution = jnp.fft.ifft(padded_solution, axis=1)
         B_theta_n = ChiPhiFunc(solution[:-2], nfp)
         B_theta_in_B_psi = n_unknown/2*B_theta_n.antid_chi()
-        B_theta_in_B_psi_fft_short=fft_filter(B_theta_in_B_psi.fft().content, max_freq*2, axis=1)
+        B_theta_in_B_psi_fft_short=fft_filter(B_theta_in_B_psi.fft().content, static_max_freq*2, axis=1)
 
         B_psi_nm2 = out_dict_RHS['B_psi_nm2_no_unknown'] + B_theta_in_B_psi
 
@@ -1935,15 +1940,15 @@ def iterate_looped(
                 n_eval=n_unknown+1)*B_denom_coef_c[0]*B_theta_in_B_psi.dphi()
         )
         return({
-            'B_theta_n': B_theta_n.filter(max_freq),
+            'B_theta_n': B_theta_n.filter(traced_max_freq),
             'B_theta_np10': ChiPhiFunc(jnp.array([solution[-1]]), nfp),
             # These filters are here because dphi and B_theta_in_B_psi still produce error
-            'B_psi_nm2': B_psi_nm2.filter(max_freq),
-            'Yn': Yn.filter(max_freq),
-            'Xn': Xn.filter(max_freq),
-            'Zn': Zn.filter(max_freq),
-            'pn': pn.filter(max_freq),
-            'Deltan': Deltan.filter(max_freq),
+            'B_psi_nm2': B_psi_nm2.filter(traced_max_freq),
+            'Yn': Yn.filter(traced_max_freq),
+            'Xn': Xn.filter(traced_max_freq),
+            'Zn': Zn.filter(traced_max_freq),
+            'pn': pn.filter(traced_max_freq),
+            'Deltan': Deltan.filter(traced_max_freq),
             # Debug use only
             'Yn_B_theta_terms': Yn_B_theta_terms,
             'Yn1p': vec_free,
@@ -1969,7 +1974,7 @@ def filter_operator(operator, max_k_diff):
     len_phi = operator.shape[1]
     operator = jnp.transpose(operator, (0,2,1,3))
     mode_diff_mat = mode_difference_matrix(len_phi)
-    # operator = operator.at[:,:,mode_diff_mat>max_k_diff].set(0)
+    # operator = operator.at[:,:,mode_diff_mat>static_max_freq].set(0)
     operator = jnp.where(
         jnp.logical_or(
             mode_diff_mat[None, None, :]<max_k_diff,

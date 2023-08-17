@@ -284,7 +284,8 @@ def circular_axis():
             nfp=1
         ),
         len_phi = 1000,
-        fft_max_freq = (15, 20)
+        static_max_freq = (15, 20),
+        traced_max_freq = (15, 20)
     ))
 
 def leading_orders(
@@ -297,7 +298,8 @@ def leading_orders(
     B_alpha_1,  # B_alpha
     B0, B11c, B2, # Magnetic field strength
     len_phi,
-    fft_max_freq,
+    static_max_freq,
+    traced_max_freq,
 ):
     '''
     Axis length, tau and kappa
@@ -482,7 +484,7 @@ def leading_orders(
     X1 = ChiPhiFunc(jnp.array([
         jnp.zeros_like(X11c.content[0]), # sin coeff is zero
         X11c.content[0],
-    ]), nfp, trig_mode = True).filter(fft_max_freq[0])
+    ]), nfp, trig_mode = True).filter(traced_max_freq[0])
     X_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), X1], nfp)
     # p1 and Delta1 has the same formula as higher orders.
     p1 = iterate_p_perp_n(1,
@@ -492,14 +494,14 @@ def leading_orders(
         B_denom_coef_c,
         p_perp_coef_cp,
         Delta_coef_cp,
-        iota_coef).filter(fft_max_freq[0])
+        iota_coef).filter(traced_max_freq[0])
     p_perp_coef_cp = p_perp_coef_cp.append(p1)
     Delta_1 = iterate_delta_n_0_offset(1,
         B_denom_coef_c,
         p_perp_coef_cp,
         Delta_coef_cp,
         iota_coef,
-        max_freq=None).filter(fft_max_freq[0])
+        static_max_freq=None).filter(traced_max_freq[0])
     Delta_coef_cp = Delta_coef_cp.append(Delta_1)
 
     '''
@@ -517,7 +519,7 @@ def leading_orders(
     then solves the linear 2nd order homogenous form of D3 for Yc[1,1].
     '''
     ''' II m = 0 '''
-    shortened_length = fft_max_freq[0]*2
+    shortened_length = static_max_freq[0]*2
     # RHS of II[1][0]
     II_2_inhomog = -B_alpha_coef[0]/2*(
         4*B0*B1*p_perp_coef_cp[1].dchi()
@@ -578,13 +580,16 @@ def leading_orders(
     Y1 = ChiPhiFunc(jnp.array([
         Y11s.content[0], # sin coeff is zero
         Y11c.content[0],
-    ]), nfp, trig_mode = True).filter(fft_max_freq[0])
+    ]), nfp, trig_mode = True).filter(traced_max_freq[0])
     Y_coef_cp = Y_coef_cp.append(Y1)
 
     ''' 2nd order quantities '''
     # Starting from order 2, the general recursion relations apply.
     solution2 = iterate_looped(
-        n_unknown=2, max_freq=fft_max_freq[1], target_len_phi=1000,
+        n_unknown=2, 
+        static_max_freq=static_max_freq[1], 
+        traced_max_freq=traced_max_freq[1], 
+        target_len_phi=1000,
         X_coef_cp=X_coef_cp,
         Y_coef_cp=Y_coef_cp,
         Z_coef_cp=Z_coef_cp,

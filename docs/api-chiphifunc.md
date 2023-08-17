@@ -107,14 +107,14 @@ IFFT the `axis=1` of content and returns as a ChiPhiFunc.
 
 ## Filters
 
-### `aqsc.ChiPhiFunc.filter(self, arg, mode:int=0)`
+### `aqsc.ChiPhiFunc.filter(self, arg:floar, mode:int=0)`
 An expandable filter. Now only low-pass is available.
 
 Parameters:
 - `mode : int` (static) - Filtering mode. Available modes are:
   - `mode=0` - Low_pass.
 
-- `arg` (traced) - Filter  argument. 
+- `arg : float` (traced) - Filter  argument. 
   - Under low-pass mode, this is the cutoff mode number.
 
 Returns:
