@@ -23,7 +23,7 @@ Internally, the coefficients are stored as the 2D numpy array, `ChiPhiFunc.conte
  - Lambda functions output, `ChiPhiFunc.get_lambda()` 
  - Simple ODE solves
 
-For more information, please refer to [ChiPhiFunc API](api-chiphifunc.md)
+For more information, please refer to [ChiPhiFunc API](api-chiphifunc.md).
 
 ## ChiPhiEpsFunc
 `ChiPhiEpsFunc` is a list-like class. It is the primary data structure pyAQSC stores results in. 

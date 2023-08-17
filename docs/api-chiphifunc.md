@@ -18,30 +18,30 @@ Parameters:
   `axis=0` corresponds to represents even/odd $\phi$ mode number $m$ due to regularization. Its length is n+1 for an order $n$ term in a power-Fourier series. For more detailed discussions on regularization, see [Ref. 5](https://doi.org/10.1017/S0022377818001289)
 
   `axis=1` stores $\phi$-dependent coefficients $F_{n,m}$ on $n$ uniformly spaced grid points over one field period, $\phi = 0, \frac{2\pi}{n_{fp}}\frac{1}{n}, ..., \frac{2\pi}{n_{fp}}\frac{(n-1)}{n}$, where $n_{fp}$ is the number of field period.
-  ```
-  self.content = \
-    [                           # [
-        [Chi_coeff_-n(phi)],    #     [Chi_coeff_-n(phi)],
-        ...                     #     ...
-        [Chi_coeff_-2(phi)],    #     [Chi_coeff_-1(phi)],
-        [const(phi)],           #     [Chi_coeff_1(phi)],
-        [Chi_coeff_2(phi)],     #     ...
-        ...                     #     [Chi_coeff_n(phi)]
-        [Chi_coeff_n(phi)]      # ] for odd n
-    ] for even n
-  ```
+
+      self.content = \
+        [                           # [
+            [Chi_coeff_-n(phi)],    #     [Chi_coeff_-n(phi)],
+            ...                     #     ...
+            [Chi_coeff_-2(phi)],    #     [Chi_coeff_-1(phi)],
+            [const(phi)],           #     [Chi_coeff_1(phi)],
+            [Chi_coeff_2(phi)],     #     ...
+            ...                     #     [Chi_coeff_n(phi)]
+            [Chi_coeff_n(phi)]      # ] for odd n
+        ] for even n
   
 - `nfp: int` (static): Number of field period when >0, and error code when <=0. See [Data structure](data-structure.md) for the list of all implemented error codes.
 - `trig_mode: bool`: When set to `True`, treat provided `content` as trigonometric Fourier coefficients:
-  ```
-  [
-      [Chi_sin_coeff_{m}(phi)],
-      [Chi_sin_coeff_{m-1}(phi)],
-      ...,
-      [Chi_cos_coeff__{m-1}(phi)],
-      [Chi_cos_coeff__{m}(phi)],
-  ]
-  ```
+  
+  
+      [
+          [Chi_sin_coeff_{m}(phi)],
+          [Chi_sin_coeff_{m-1}(phi)],
+          ...,
+          [Chi_cos_coeff__{m-1}(phi)],
+          [Chi_cos_coeff__{m}(phi)],
+      ]
+  
   and converts to esponential coefficients as part of the initialization:
 
 ### `ChiPhiFuncSpecial(error_code:int)`
