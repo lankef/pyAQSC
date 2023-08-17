@@ -13,7 +13,6 @@ run the main code, but contains source expressions much of code is parsed from.
 3. [Solving the problem of overdetermination of quasisymmetric equilibrium solutions by near-axis expansions. II. Circular axis stellarator solutions](https://aip.scitation.org/doi/10.1063/5.0027575)
 4. [pyQSC](https://github.com/landreman/pyQSC)
 
-5. [Direct construction of optimized stellarator shapes. Part 1. Theory in cylindrical coordinates](https://doi.org/10.1017/S0022377818001289)
 ## Project layout
 
     mkdocs.yml    # The configuration file.

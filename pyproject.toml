@@ -1,12 +1,19 @@
 [build-system]
 requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
-dynamic = ["dependencies"]
 
 [project]
 name = "pyAQSC"
+description = "Constructs QS stellarator equilibrium to all orders."
+readme = "README.MD"
 version = "1.0.0"
-dynamic = ["dependencies"]
+dependencies = ["numpy", "matplotlib", "jax"]
+authors = [
+  { name="Lanke Fu", email="ffu@pppl.edu" },
+]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
+
+[project.urls]
+"Homepage" = "https://github.com/lankef/pyAQSC"

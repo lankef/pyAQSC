@@ -45,24 +45,23 @@ asymptotic_order = 6
 # The number of phi modes will be tracked and cleaned up with a low-pass filter.
 
 ''' I.0 JIT methods used in the grid implementation '''
-def dchi_op(len_chi:int):
+def dchi_op(n_dim:int):
     '''
-    Generate chi differential operator diff_matrix. diff_matrix@f.content = dchi(f).content
-    invert = True generates anti-derivative operator. Cached for each new Chi length.
+    Generate chi differential operator diff_matrix. diff_matrix@f.content = dchi(f). 
 
     Input: -----
 
-    len_chi: length of Chi series.
+    n_dim: length of Chi series.
 
     Output: -----
 
     2d diagonal matrix with elements [-m, -m+2, ... m].
     '''
-    ind_chi = len_chi-1
-    mode_chi = jnp.linspace(-ind_chi, ind_chi, len_chi)
+    ind_chi = n_dim-1
+    mode_chi = jnp.linspace(-ind_chi, ind_chi, n_dim)
     return jnp.diag(1j*mode_chi)
 
-def trig_to_exp_op(n_dim):
+def trig_to_exp_op(n_dim:int):
     ''' Converts a ChiPhiFunc from trig to exp fourier series. '''
     ones = jnp.ones(n_dim//2)
     if n_dim%2==0:
@@ -73,7 +72,7 @@ def trig_to_exp_op(n_dim):
         arr_anti_diag = jnp.concatenate([-0.5j*ones, jnp.array([0.5]), 0.5*ones])
     return(jnp.diag(arr_diag)+jnp.flipud(jnp.diag(arr_anti_diag)))
 
-def exp_to_trig_op(n_dim):
+def exp_to_trig_op(n_dim:int):
     ''' Converts a ChiPhiFunc from exp to trig fourier series. '''
     ones = jnp.ones(n_dim//2)
     # sin:  +0.5je^-ix-0.5je^ix
@@ -247,7 +246,6 @@ class ChiPhiFunc:
     of a ChiPhiFunc, and need to be handled very carefully.
 
     Negative-nfp -----
-    -1: DEPRECIATED
     -2: Invalid/mismatched nfp
     -3: Invalid mode number
     -4: Mismatched even/oddness/direct division by chi-dependent ChiPhiFunc
@@ -556,10 +554,18 @@ class ChiPhiFunc:
                 return(other)
             # Handles zero/(not error)
             if self.nfp==0:
-                return(self)
+                return(self) 
+            # Mismatched nfp
+            if self.nfp!=other.nfp:
+                return(ChiPhiFuncSpecial(-2)) 
+            # Mismatched shape
             if other.content.shape[0]!=1:
                 return(ChiPhiFuncSpecial(-4))
-            # non-zero/chi-indep
+            # Mismatched length
+            if self.content.shape[1] != other.content.shape[1]\
+            and (self.content.shape[1]!=1 and other.content.shape[1]!=1):
+                return(ChiPhiFuncSpecial(-6)) 
+            # Legal case and non-zero
             return(ChiPhiFunc(self.content/other.content, self.nfp))
         else:
             if self.nfp==0:
@@ -624,6 +630,15 @@ class ChiPhiFunc:
         return(ChiPhiFunc(new_content, self.nfp))
 
     ''' I.1.2 Derivatives, integrals and related methods '''
+
+    def fft(self):
+        ''' FFT the axis=1 of content and returns as a ChiPhiFunc '''
+        return(ChiPhiFunc(jnp.fft.fft(self.content, axis=1), self.nfp))
+
+
+    def ifft(self):
+        ''' IFFT the axis=1 of content and returns as a ChiPhiFunc '''
+        return(ChiPhiFunc(jnp.fft.ifft(self.content, axis=1), self.nfp))
 
     # Static argument
     @partial(jit, static_argnums=(1,))
@@ -740,7 +755,7 @@ class ChiPhiFunc:
 
     ''' I.1.3 phi Filters '''
     # Static arguments
-    # @partial(jit, static_argnums=(1, 2,))
+    @partial(jit, static_argnums=(2,))
     def filter(self, arg, mode:int=0):
         '''
         An expandable filter. Now only low-pass is available.
@@ -772,8 +787,8 @@ class ChiPhiFunc:
         else:
             return(ChiPhiFuncSpecial())
 
-    # @partial(jit, static_argnums=(1,))
-    def filter_reduced_length(self, arg):
+    @partial(jit, static_argnums=(1,))
+    def filter_reduced_length(self, arg:int):
         '''
         Low pass filter that reduces the length of a ChiPhiFunc.
         Inputs: -----
@@ -825,8 +840,8 @@ class ChiPhiFunc:
     #     if self.is_special():
     #         return(self)
     #     return(ChiPhiFunc(jnp.imag(self.content), self.nfp))
-
-    def cap_m(self, m):
+    @partial(jit, static_argnums=(1,))
+    def cap_m(self, m:int):
         '''
         Takes the center m+1 rows of content. If the ChiPhiFunc
         contain less chi modes than m+1, It will be zero-padded.
@@ -852,14 +867,14 @@ class ChiPhiFunc:
             return(ChiPhiFuncSpecial(-4))
         return(ChiPhiFunc(self.content[num_clip//2:-num_clip//2], self.nfp))
 
-    def pad_m(self,m):
+    def pad_m(self,m:int):
         '''
         Alias for pad_chi to have a known maximum m instead. Recall that the
         number of chi components in a ChiPhiFunc equals to m+1.
         '''
         return self.pad_chi(m+1)
 
-    def pad_chi(self, target_chi):
+    def pad_chi(self, target_chi:int):
         '''
         Pads a ChiPhiFunc to be have a given total number of mode components.
         Both self.content.shape[0] and must be even/odd. target_chi MUST BE
@@ -922,7 +937,7 @@ class ChiPhiFunc:
             )
         ))
 
-    def display_content(self, trig_mode = False, colormap_mode = False):
+    def display_content(self, trig_mode=False, colormap_mode=False):
         '''
         Plot the content of a ChiPhiFunc.
 
@@ -1002,7 +1017,7 @@ class ChiPhiFunc:
         # else:
         #     plt.savefig(fname)
 
-    def display(self, complex = False, size=(100,100), avg_clim = False):
+    def display(self, complex:bool=False, size=(100,100), avg_clim:bool=False):
         '''
         Plot a period in both chi and phi in colormap.
 
@@ -1045,17 +1060,6 @@ class ChiPhiFunc:
                 plt.colorbar()
             plt.show()
 
-
-    def fft(self):
-        ''' FFT the axis=1 of content and returns as a ChiPhiFunc '''
-        return(ChiPhiFunc(jnp.fft.fft(self.content, axis=1), self.nfp))
-
-
-    def ifft(self):
-        ''' IFFT the axis=1 of content and returns as a ChiPhiFunc '''
-        return(ChiPhiFunc(jnp.fft.ifft(self.content, axis=1), self.nfp))
-
-    ''' I.1.6 Utilities '''
     def export_single_nfp(self):
         '''
         Outputs a ChiPhiFunc with just 1 nfp.
@@ -1183,11 +1187,15 @@ def get_O_O_einv_from_A_B(chiphifunc_A:ChiPhiFunc, chiphifunc_B:ChiPhiFunc, rank
     B_conv_matrices = conv_tensor(chiphifunc_B_content, rank_rhs+1)
     O_matrices = O_matrices + jnp.einsum('ijk,jl->ilk',B_conv_matrices,dchi_matrix)
 
-    if Y1c_mode:
+    if Y1c_mode and rank_rhs%2==1:
         # This O, when inverted, yields an O_einv acting on the trig
         # representation of RHS and vec_free_coef:
         # Yn_trig = O_einv@RHS_trig - (Yn0 or Yn1c) * vec_free_coef
-        O_matrices = O_matrices@trig_to_exp_op(O_matrices.shape[1])
+        # O_matrices = O_matrices@trig_to_exp_op(O_matrices.shape[1])
+        print('O_matrices', O_matrices.shape)
+        print('trig_to_exp_op(O_matrices.shape[1])', trig_to_exp_op(O_matrices.shape[1]).shape)
+        O_matrices = jnp.einsum('ijp,jm->imp', O_matrices, trig_to_exp_op(O_matrices.shape[1]))
+        O_matrices = jnp.einsum('ij,jmp->imp', exp_to_trig_op(O_matrices.shape[0]), O_matrices)
 
     O_einv = batch_matrix_inv_excluding_col(O_matrices)
     O_einv = jnp.concatenate((O_einv[:i_free], jnp.zeros((1,O_einv.shape[1],O_einv.shape[2])), O_einv[i_free:]))
@@ -1196,13 +1204,19 @@ def get_O_O_einv_from_A_B(chiphifunc_A:ChiPhiFunc, chiphifunc_B:ChiPhiFunc, rank
     vector_free_coef = jnp.einsum('ijk,jk->ik',O_einv, O_free_col)#A_einv@A_free_col
     vector_free_coef = vector_free_coef.at[i_free].set(-jnp.ones((vector_free_coef.shape[1])))
 
-    if Y1c_mode:
+    if Y1c_mode and rank_rhs%2==1:
         #             Yn_trig =             O_einv@            RHS_trig - (Yn0 or Yn1c) *             vec_free_coef
         # trig_to_exp@Yn_trig = trig_to_exp@O_einv@            RHS_trig - (Yn0 or Yn1c) * trig_to_exp@vec_free_coef
         #             Yn      = trig_to_exp@O_einv@            RHS_trig - (Yn0 or Yn1c) * trig_to_exp@vec_free_coef
         #             Yn      = trig_to_exp@O_einv@exp_to_trig@RHS      - (Yn0 or Yn1c) * trig_to_exp@vec_free_coef
-        O_einv = trig_to_exp_op(O_einv.shape[0])@O_einv@exp_to_trig_op(O_einv.shape[1])
-        vec_free_coef = trig_to_exp_op(O_einv.shape[0])@vec_free_coef
+        # O_einv = trig_to_exp_op(O_einv.shape[0])@O_einv@exp_to_trig_op(O_einv.shape[1])
+        print('trig_to_exp_op(O_einv.shape[0])', trig_to_exp_op(O_einv.shape[0]).shape)
+        print('O_einv', O_einv.shape)
+        print('exp_to_trig_op(O_einv.shape[1])', exp_to_trig_op(O_einv.shape[1]).shape)
+        print('jnp.einsum(ijp,jm->imp, O_einv, exp_to_trig_op(O_einv.shape[1]))', jnp.einsum('ijp,jm->imp', O_einv, exp_to_trig_op(O_einv.shape[1])).shape)
+        O_einv = jnp.einsum('ijp,jm->imp', O_einv, exp_to_trig_op(O_einv.shape[1]))
+        O_einv = jnp.einsum('ij,jmp->imp', trig_to_exp_op(O_einv.shape[0]), O_einv)
+        vector_free_coef = trig_to_exp_op(O_einv.shape[0])@vector_free_coef
 
     return(O_matrices, O_einv, -vector_free_coef)
 
@@ -1277,7 +1291,7 @@ def batch_matrix_inv_excluding_col(in_matrices:jnp.ndarray):
 roll_axis_0 = lambda a, shift: jnp.roll(a, shift, axis=0)
 batch_roll_axis_0 = jit(vmap(roll_axis_0, in_axes=1, out_axes=1))
 @partial(jit, static_argnums=(1,))
-def conv_tensor(content: jnp.ndarray, n_dim:int):
+def conv_tensor(content:jnp.ndarray, n_dim:int):
     '''
     Generate a tensor_coef (see looped_solver.py) convolving a ChiPhiFunc
     to another along axis 0.
@@ -1307,7 +1321,7 @@ def conv_tensor(content: jnp.ndarray, n_dim:int):
 roll_fft_last_axis = lambda a, shift: jnp.roll(a, shift, axis=-1)
 batch_roll_fft_last_axis = jit(vmap(roll_fft_last_axis, in_axes=(-2,0), out_axes=2))
 
-def fft_conv_tensor_batch(source):
+def fft_conv_tensor_batch(source:jnp.array):
     '''
     Generates a 4D convolution operator in the phi axis for a 3d "tensor coef"
     (see looped_solver for explanation).
@@ -1323,8 +1337,6 @@ def fft_conv_tensor_batch(source):
     axis 1 and 2 and then tensordotting. (see explanation for a "tensor operator"
     in looped_solver)
     '''
-    len_a = source.shape[0]
-    len_b = source.shape[1]
     len_phi = source.shape[2]
     arange = jnp.arange(len_phi)
     # out = jnp.zeros((len_a, len_b, len_phi, len_phi))#, dtype = jnp.complex128)
@@ -1386,7 +1398,7 @@ def solve_1d_asym(p_eff, f_eff): # not nfp-dependent
     return(jnp.sum(asym_series, axis=0))
 
 @partial(jit, static_argnums=(2,))
-def solve_1d_fft(p_eff, f_eff, fft_max_freq: int=None): # not nfp-dependent
+def solve_1d_fft(p_eff, f_eff, fft_max_freq:int=None): # not nfp-dependent
     '''
     Solves one linear ODE of form y' + p_eff*y = f_eff.
     Assumes non-zero p.
@@ -1424,7 +1436,7 @@ def solve_1d_fft(p_eff, f_eff, fft_max_freq: int=None): # not nfp-dependent
 
 solve_1d_fft_batch = vmap(solve_1d_fft, in_axes=(0, 0, None), out_axes=0)
 @partial(jit, static_argnums=(3,))
-def solve_ODE(coeff_arr, coeff_dp_arr, f_arr, fft_max_freq: int=None): # not nfp-dependent
+def solve_ODE(coeff_arr, coeff_dp_arr, f_arr:jnp.ndarray, fft_max_freq:int=None): # not nfp-dependent
     '''
     Solves simple linear first order ODE systems in batch:
     (coeff_phi d/dphi + coeff) y = f. ( y' + p_eff*y = f_eff )
@@ -1477,8 +1489,7 @@ def solve_ODE(coeff_arr, coeff_dp_arr, f_arr, fft_max_freq: int=None): # not nfp
     out_arr = jnp.where(
         (jnp.all(p_eff == 0, axis=1))[:, None],
         ChiPhiFunc(f_eff, nfp=1).\
-            integrate_phi_fft(zero_avg=True).\
-            filter(fft_max_freq).content,
+            integrate_phi_fft(zero_avg=True).content,
         solve_1d_fft_batch(p_eff, f_eff, fft_max_freq)
     )
     # return(out_arr*f_eff_scaling)
@@ -1591,7 +1602,7 @@ def solve_dphi_iota_dchi(iota, f, fft_max_freq: int):
 
 ''' V.1. Low-pass filter for simplifying tensor to invert '''
 # @partial(jit, static_argnums=(1,2,))
-def fft_filter(fft_in:jnp.ndarray, target_length, axis): # not nfp-dependent
+def fft_filter(fft_in:jnp.ndarray, target_length:int, axis:int): # not nfp-dependent
     '''
     Shorten an array in FFT representation to leave only target_length elements.
     (which correspond to a low-pass filter with k<target_length/2*nfp)
@@ -1620,7 +1631,7 @@ def fft_filter(fft_in:jnp.ndarray, target_length, axis): # not nfp-dependent
     return(jnp.concatenate((left, right), axis=axis)*target_length/fft_in.shape[axis])
 
 # @partial(jit, static_argnums=(1,2,))
-def fft_pad(fft_in, target_length, axis): # not nfp-dependent
+def fft_pad(fft_in:jnp.array, target_length:int, axis:int): # not nfp-dependent
     '''
     Pad an array in FFT representation to target_length elements.
     by adding zeroes as highest frequency modes.
@@ -1770,4 +1781,4 @@ def linear_least_sq_2d_svd(A, b):
     '''
     u, s, vh = jnp.linalg.svd(A, full_matrices=False)
     Eps_inv = jnp.diag(1/s)
-    return(vh.T@Eps_inv@u.T@b)
+    return(vh.conjugate().T@Eps_inv@u.conjugate().T@b)

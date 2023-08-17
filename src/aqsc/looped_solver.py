@@ -28,6 +28,8 @@ def lambda_coef_delta(n_eval, B_alpha_coef, B_denom_coef_c):
 # O_einv,
 # vector_free_coef,
 # filtered_RHS_0_offset,
+# filtered_RHS_0_offset is the FFT of II tilde (even orders) or 
+# II tilde, II, II tilde, D3.
 def generate_RHS(
     n_unknown, max_freq,
     X_coef_cp, Y_coef_cp, Z_coef_cp,
@@ -35,7 +37,8 @@ def generate_RHS(
     B_psi_coef_cp, B_theta_coef_cp,
     B_alpha_coef, B_denom_coef_c,
     kap_p, tau_p, dl_p,
-    iota_coef
+    iota_coef, 
+    Y1c_mode
 ):
 # n_eval is the order at which the "looped" equations are evaluated at
     n_eval = n_unknown+1
@@ -47,7 +50,8 @@ def generate_RHS(
         equilibrium.iterate_Yn_cp_operators(
             n_unknown=n_unknown,
             X_coef_cp=X_coef_cp,
-            B_alpha_coef=B_alpha_coef
+            B_alpha_coef=B_alpha_coef,
+            Y1c_mode=Y1c_mode
         )
     out_dict_RHS['O_einv'] = O_einv
     out_dict_RHS['vector_free_coef'] = vector_free_coef
@@ -315,9 +319,6 @@ def generate_tensor_operator(
     max_freq, # Maximum number of frequencies to consider
     # Filter off-diagonal comps of the linear diff operator before inverting
     max_k_diff_pre_inv = -1,
-    # Filter off-diagonal comps of the linear diff operator after inverting
-    max_k_diff_post_inv = -1,
-
 ):
 
     out_dict_tensor = {}
@@ -992,10 +993,12 @@ def generate_tensor_operator(
         )/2
         coef_dc_B_theta_0_chiphifunc = (
             B_denom_coef_c[0]*iota_coef[0]*Delta_coef_cp[1]
-            +(Delta_coef_cp[0]-1)*iota_coef[0]*B_denom_coef_c[1])
+            +(Delta_coef_cp[0]-1)*iota_coef[0]*B_denom_coef_c[1]
+        )
         coef_dp_B_theta_0_chiphifunc = (
             B_denom_coef_c[0]*Delta_coef_cp[1]
-            +(Delta_coef_cp[0]-1)*B_denom_coef_c[1])
+            +(Delta_coef_cp[0]-1)*B_denom_coef_c[1]
+        )
 
         tensor_fft_op_B_theta_n_in_II_direct = to_tensor_fft_op_multi_dim(
             len_tensor=len_tensor,
@@ -1199,13 +1202,8 @@ def generate_tensor_operator(
 
     # Filter off-diagonal elements in the linear differential operator.
     filtered_looped_fft_operator = filter_operator(filtered_looped_fft_operator, max_k_diff_pre_inv)
-    # Finding the inverse differential operator
-    filtered_inv_looped_fft_operator = jnp.linalg.tensorinv(filtered_looped_fft_operator)
-    # Filter off-diagonal elements in the inverted linear differential operator.
-    filtered_inv_looped_fft_operator = filter_operator(filtered_inv_looped_fft_operator, max_k_diff_post_inv)
     # (n_unknown(+1), len_tensor, n_unknown(+1), len_tensor)
     out_dict_tensor['filtered_looped_fft_operator'] = filtered_looped_fft_operator
-    out_dict_tensor['filtered_inv_looped_fft_operator'] = filtered_inv_looped_fft_operator
     return(out_dict_tensor)
 
 ''' III. Calculating Delta_offset and padding solution '''
@@ -1225,75 +1223,75 @@ def generate_tensor_operator(
 # TODO singular, but only possible to invert due to rounding errors.
 # TODO Now, how do we encode avg of B_theta or stellarator symmetry into the
 # TODO differential operator??
-def solve_free_param(n_unknown, nfp, target_len_phi,
-    filtered_inv_looped_fft_operator, filtered_RHS_0_offset,
-    coef_Delta_offset = 0,
-    # B_theta_np10_avg = 0 # Only used at odd orders, when B_theta[n+1,0] is a free param.
-    ):
-    out_dict_solve = {}
-    # Solution with zero value for the free constant parameter
-    filtered_solution = jnp.tensordot(
-        filtered_inv_looped_fft_operator,
-        filtered_RHS_0_offset, # + B_theta_np10_avg*filtered_RHS_0_offset.shape[1],
-        2
-    )
-    # To have periodic B_psi, values for a constant free marameter, Delt_offset
-    # must be found at even orders.
-    # Integral(B_psi') = 0 is equivalent to filtered_solution[-1,0] = 0.
-    # (-1: B_psi is always the second last row in the solution. 0: m=0 mode
-    # in a jnp.fft.fft array.)
-    # Because the looped ODE is now treated as a linear equation,
-    # the Delta_offset dependence of filtered_solution[-1,0] is linear.
+# def solve_free_param(n_unknown, nfp, target_len_phi,
+#     filtered_inv_looped_fft_operator, filtered_RHS_0_offset,
+#     coef_Delta_offset = 0,
+#     # B_theta_np10_avg = 0 # Only used at odd orders, when B_theta[n+1,0] is a free param.
+#     ):
+#     out_dict_solve = {}
+#     # Solution with zero value for the free constant parameter
+#     filtered_solution = jnp.tensordot(
+#         filtered_inv_looped_fft_operator,
+#         filtered_RHS_0_offset, # + B_theta_np10_avg*filtered_RHS_0_offset.shape[1],
+#         2
+#     )
+#     # To have periodic B_psi, values for a constant free marameter, Delt_offset
+#     # must be found at even orders.
+#     # Integral(B_psi') = 0 is equivalent to filtered_solution[-1,0] = 0.
+#     # (-1: B_psi is always the second last row in the solution. 0: m=0 mode
+#     # in a jnp.fft.fft array.)
+#     # Because the looped ODE is now treated as a linear equation,
+#     # the Delta_offset dependence of filtered_solution[-1,0] is linear.
 
-    # Making a blank ChiPhiFunc with the correct shape. The free parameter's
-    # contribution only has 2 chi components, and will cause errors when
-    # n_unknown>2.
-    Delta_offset_unit_contribution = ChiPhiFunc(
-        jnp.zeros((
-            filtered_inv_looped_fft_operator.shape[0],
-            filtered_inv_looped_fft_operator.shape[1]
-        )),
-        nfp
-    )
-    # How much a Delta_offset of 1 shift -filtered_solution[-1,0]
-    # This has shape (2, len_tensor)
-    Delta_offset_unit_contribution += coef_Delta_offset
-    # Sampling the rate of change of filtered_solution[-2,0] wrt Delta_offset.
-    # The free parameter is a scalar, but its coefficient is a ChiPhiFunc. This
-    # means that its contribution exists in all phi Fourier mode of the RHS.
-    # It's easier to calculate the ratio this way.
-    if n_unknown%2==0:
-        # FFT the contribution
-        fft_Delta_offset_unit_contribution = Delta_offset_unit_contribution.fft().content
-        # Contribition to the LHS vector
-        sln_Delta_offset_unit_contribution = jnp.tensordot(filtered_inv_looped_fft_operator, fft_Delta_offset_unit_contribution)
-        # The amount of Delta_offset required
-        Delta_offset = -filtered_solution[-1,0]/sln_Delta_offset_unit_contribution[-1,0]
-        # Output the offset for calculating Delta
-        out_dict_solve['Delta_offset'] = Delta_offset
-        # Making a blank ChiPhiFunc with the correct shape. The free parameter's
-        # contribution only has 2 chi components, and will cause errors when
-        # n_unknown>2.
-        Delta_offset_correction = ChiPhiFunc(
-            jnp.zeros((
-                filtered_inv_looped_fft_operator.shape[0],
-                filtered_inv_looped_fft_operator.shape[1]
-            )),
-            nfp
-        )
-        Delta_offset_correction += Delta_offset_unit_contribution*Delta_offset
-        # Adding the free parameter's contributions to the solution
-        filtered_solution += jnp.tensordot(filtered_inv_looped_fft_operator, Delta_offset_correction.fft().content, 2)
+#     # Making a blank ChiPhiFunc with the correct shape. The free parameter's
+#     # contribution only has 2 chi components, and will cause errors when
+#     # n_unknown>2.
+#     Delta_offset_unit_contribution = ChiPhiFunc(
+#         jnp.zeros((
+#             filtered_inv_looped_fft_operator.shape[0],
+#             filtered_inv_looped_fft_operator.shape[1]
+#         )),
+#         nfp
+#     )
+#     # How much a Delta_offset of 1 shift -filtered_solution[-1,0]
+#     # This has shape (2, len_tensor)
+#     Delta_offset_unit_contribution += coef_Delta_offset
+#     # Sampling the rate of change of filtered_solution[-2,0] wrt Delta_offset.
+#     # The free parameter is a scalar, but its coefficient is a ChiPhiFunc. This
+#     # means that its contribution exists in all phi Fourier mode of the RHS.
+#     # It's easier to calculate the ratio this way.
+#     if n_unknown%2==0:
+#         # FFT the contribution
+#         fft_Delta_offset_unit_contribution = Delta_offset_unit_contribution.fft().content
+#         # Contribition to the LHS vector
+#         sln_Delta_offset_unit_contribution = jnp.tensordot(filtered_inv_looped_fft_operator, fft_Delta_offset_unit_contribution)
+#         # The amount of Delta_offset required
+#         Delta_offset = -filtered_solution[-1,0]/sln_Delta_offset_unit_contribution[-1,0]
+#         # Output the offset for calculating Delta
+#         out_dict_solve['Delta_offset'] = Delta_offset
+#         # Making a blank ChiPhiFunc with the correct shape. The free parameter's
+#         # contribution only has 2 chi components, and will cause errors when
+#         # n_unknown>2.
+#         Delta_offset_correction = ChiPhiFunc(
+#             jnp.zeros((
+#                 filtered_inv_looped_fft_operator.shape[0],
+#                 filtered_inv_looped_fft_operator.shape[1]
+#             )),
+#             nfp
+#         )
+#         Delta_offset_correction += Delta_offset_unit_contribution*Delta_offset
+#         # Adding the free parameter's contributions to the solution
+#         filtered_solution += jnp.tensordot(filtered_inv_looped_fft_operator, Delta_offset_correction.fft().content, 2)
 
-    # Padding solution to a desired len_phi
-    padded_solution = fft_pad(
-        filtered_solution,
-        target_len_phi,
-        axis=1
-    )
-    ifft_solution = jnp.fft.ifft(padded_solution, axis=1)
-    out_dict_solve['solution'] = ifft_solution
-    return(out_dict_solve)
+#     # Padding solution to a desired len_phi
+#     padded_solution = fft_pad(
+#         filtered_solution,
+#         target_len_phi,
+#         axis=1
+#     )
+#     ifft_solution = jnp.fft.ifft(padded_solution, axis=1)
+#     out_dict_solve['solution'] = ifft_solution
+#     return(out_dict_solve)
 
 ''' IV. Wrapper '''
 # Outputs a dictionary containing
@@ -1315,8 +1313,7 @@ def iterate_looped(
     # lambda for the coefficient of the scalar free parameter in RHS
     max_freq,
     # B_theta_np10_avg = 0,
-    max_k_diff_pre_inv=-1,
-    max_k_diff_post_inv=-1
+    max_k_diff_pre_inv=-1
 ):
     # if target_len_phi<max_freq*2:
     #     raise ValueError('target_len_phi must >= max_freq*2.')
@@ -1362,15 +1359,16 @@ def iterate_looped(
         vector_free_coef = vector_free_coef,
         max_freq = max_freq,
         max_k_diff_pre_inv = max_k_diff_pre_inv,
-        max_k_diff_post_inv = max_k_diff_post_inv,
     )
-    filtered_inv_looped_fft_operator = out_dict_tensor['filtered_inv_looped_fft_operator']
+    filtered_looped_fft_operator = out_dict_tensor['filtered_looped_fft_operator']
+    # Finding the inverse differential operator
+    filtered_inv_looped_fft_operator = jnp.linalg.tensorinv(filtered_looped_fft_operator)
+    filtered_solution = jnp.tensordot(
+        filtered_inv_looped_fft_operator,
+        filtered_RHS_0_offset,
+    )
     # Even order
     if n_unknown%2==0:
-        filtered_solution = jnp.tensordot(
-            filtered_inv_looped_fft_operator,
-            filtered_RHS_0_offset,
-        )
         # Solve for Delta n0.
         # Unit contribution of Delta0 to the RHS
         # Making a blank ChiPhiFunc with the correct shape. The free parameter's
@@ -1741,7 +1739,7 @@ def iterate_looped(
             'Zn':Zn.filter(max_freq),
             'pn':pn.filter(max_freq),
             'Deltan':Deltan.filter(max_freq),
-            'Delta_offset': Delta_offset,
+            # 'Delta_offset': Delta_offset,
             # 'solution': solution,
             # 'out_dict_RHS':out_dict_RHS,
             # 'out_dict_tensor':out_dict_tensor,
@@ -1751,15 +1749,13 @@ def iterate_looped(
             # 'dphi_B_psi_nm2_0': dphi_B_psi_nm2_0
         })
     else:
-        solve_result = solve_free_param(
-            n_unknown=n_unknown,
-            nfp=nfp,
-            target_len_phi=target_len_phi,
-            filtered_inv_looped_fft_operator=filtered_inv_looped_fft_operator,
-            filtered_RHS_0_offset=filtered_RHS_0_offset,
-            # B_theta_np10_avg = B_theta_np10_avg,
+        filtered_looped_fft_operator = out_dict_tensor['filtered_looped_fft_operator']
+        padded_solution = fft_pad(
+            filtered_solution,
+            target_len_phi,
+            axis=1
         )
-        solution = solve_result['solution']
+        solution = jnp.fft.ifft(padded_solution, axis=1)
         B_theta_n = ChiPhiFunc(solution[:-2], nfp)
         B_theta_in_B_psi = n_unknown/2*B_theta_n.antid_chi()
         B_theta_in_B_psi_fft_short=fft_filter(B_theta_in_B_psi.fft().content, max_freq*2, axis=1)
@@ -1768,7 +1764,6 @@ def iterate_looped(
 
         # Calculating Yn
         vec_free = solution[-2]
-        Yn_rhs_content_no_unknown = out_dict_RHS['Yn_rhs_content_no_unknown']
         Yn_B_theta_terms = ChiPhiFunc(
             fft_pad(
                 jnp.einsum(
@@ -1949,11 +1944,12 @@ def iterate_looped(
             'Zn': Zn.filter(max_freq),
             'pn': pn.filter(max_freq),
             'Deltan': Deltan.filter(max_freq),
-            # 'Yn_B_theta_terms': Yn_B_theta_terms,
-            # 'Yn1p': vec_free,
+            # Debug use only
+            'Yn_B_theta_terms': Yn_B_theta_terms,
+            'Yn1p': vec_free,
             'solution': solution,
-            # 'out_dict_RHS':out_dict_RHS,
-            # 'out_dict_tensor':out_dict_tensor,
+            'out_dict_RHS':out_dict_RHS,
+            'out_dict_tensor':out_dict_tensor,
         })
 
 ''' V. Utilities '''

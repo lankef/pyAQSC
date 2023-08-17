@@ -2,11 +2,22 @@ site_name: pyAQSC documentation
 theme:
   name: readthedocs
   highlightjs: true
+nav:
+  - Home: 'index.md'
+  - 'Getting started with pyAQSC':
+    - 'Quick start': 'quick-start.md'
+    - 'Variables': 'variables.md'
+    - 'Data structure': 'data-structure.md'
+    - 'Plotting': 'styling-your-docs.md'
+  - 'API guide': 
+    - 'Equilibrium': 'api-equilibrium.md'
+    - 'ChiPhiFunc': 'api-chiphifunc.md'
+    - 'ChiPhiEpsFunc': 'api-chiphiepsfunc.md'
+    - 'Math utilities and solvers': 'api-utils.md'
 plugins:
   - search
   - mkdocstrings:
       handlers:
-        # See: https://mkdocstrings.github.io/python/usage/
         python:
           options:
             docstring_style: sphinx
@@ -14,3 +25,10 @@ markdown_extensions:
   - markdown_include.include:
       base_path: .
   - admonition
+  - mdx_math:
+      # How do I set this? 
+      enable_dollar_delimiter: True
+
+extra_javascript: 
+  - https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-AMS-MML_HTMLorMML
+

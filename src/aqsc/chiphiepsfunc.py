@@ -153,18 +153,20 @@ class ChiPhiEpsFunc:
                 if item.nfp==0:
                     content_list.append(0)
                 elif item.nfp<0:
-                    content_list.append(jnp.nan)
+                    content_list.append('err'+str(item.nfp))
                 else:
                     content_list.append(item.content)
             else:
                 content_list.append(item)
         return(content_list)
 
+    # Note that error types will not be saved.
     def from_content_list(content_list, nfp): # nfp-dependent!!
         chiphifunc_list = []
         for item in content_list:
-            if jnp.all(jnp.isnan(item)):
-                chiphifunc_list.append(ChiPhiFuncSpecial(-2))
+            if isinstance(item, str):
+                error_code = int(item[3:])
+                chiphifunc_list.append(ChiPhiFuncSpecial(error_code))
             elif jnp.array(item).ndim==0: # JAX scalar
                 if item==0:
                     chiphifunc_list.append(ChiPhiFuncSpecial(0))

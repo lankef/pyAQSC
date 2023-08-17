@@ -189,6 +189,8 @@ def print_fractional_error(guess, ans):
     else:
         frac = np.nan
     actual = np.abs((guess-ans))
+    print('Max amplitude of arg a:',np.max(np.abs(guess)))
+    print('Max amplitude of arg b:',np.max(np.abs(ans)))
     print('{:<15} {:<15} {:<15}'.format(
         'Error type:',
         'Fractional',

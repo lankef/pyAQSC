@@ -130,7 +130,6 @@ def iterate_Yn_cp_magnetic(n_unknown,
     max_freq,
     Yn0=None):
 
-    len_tensor = max_freq*2
     nfp = X_coef_cp.nfp
     n_eval = n_unknown+1
 
@@ -150,7 +149,7 @@ def iterate_Yn_cp_magnetic(n_unknown,
         kap_p=kap_p,
         dl_p=dl_p,
         tau_p=tau_p,
-        iota_coef=iota_coef).filter(max_freq)
+        iota_coef=iota_coef)
     Yn_rhs_content = Yn_rhs.content
     new_Y_n_no_unknown = ChiPhiFunc(jnp.einsum('ijk,jk->ik',O_einv,Yn_rhs_content), Yn_rhs.nfp)
     Y_coef_cp_no_unknown = Y_coef_cp.mask(n_eval-2)
