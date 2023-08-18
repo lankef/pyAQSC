@@ -1,0 +1,4 @@
+python-markdown-math
+pymdown-extensions
+markdown-include
+mkdocstrings
