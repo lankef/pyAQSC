@@ -1,21 +1,8 @@
-# pyAQSC
-This code constructs globally quasi-symmetric stellarator equilibria with
-anisotropic pressure near axis expansion to any order.
+# Results and plotting
+All data within an `Equilibrium` are within 3 dictionaries: `aqsc.Equilibrium.unknown`, `aqsc.Equilibrium.constant` and `aqsc.Equilibrium.axis_info`. See [Equilibrium API](api-equilibrium.md) for their contents. 
 
-## Dependencies
-The python codes requires Numpy, Matplotlib, and JAX.
+An order of an `Equilibrium` can be plotted with `aqsc.Equilibrium.display_order(n)`. See [Equilibrium API](api-equilibrium.md) for its usage.
 
-The Maxima notebooks requires wxMaxima to view. The notebooks are not required to
-run the main code, but contains source expressions much of code is parsed from.
-## References
-1. [Weakly Quasisymmetric Near-Axis Solutions to all Orders](https://doi.org/10.1063/5.0076583)
-2. [Solving the problem of overdetermination of quasisymmetric equilibrium solutions by near-axis expansions. I. Generalized force balance](https://doi.org/10.1063/5.0027574)
-3. [Solving the problem of overdetermination of quasisymmetric equilibrium solutions by near-axis expansions. II. Circular axis stellarator solutions](https://aip.scitation.org/doi/10.1063/5.0027575)
-4. [pyQSC](https://github.com/landreman/pyQSC)
+A `ChiPhiFunc` can be plotted with `aqsc.ChiPhiFunc.display()` and `aqsc.ChiPhiFunc.display_content()`, or converted to callables with `aqsc.ChiPhiFunc.get_lambda()`. See [ChiPhiFunc API](api-chiphifunc.md) for their usage.
 
-## Project layout
-
-    mkdocs.yml    # The configuration file.
-    docs/
-        index.md  # The documentation homepage.
-        ...       # Other markdown pages, images and other files.
+Two `ChiPhiFunc`'s can be compared with `aqsc.compare_chiphifunc()`. See [utility API](api-utils.md) for its usage.

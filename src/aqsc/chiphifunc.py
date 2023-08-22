@@ -815,6 +815,10 @@ class ChiPhiFunc:
 
         A real scalar.
         '''
+        if self.nfp==0:
+            return(0)
+        elif self.nfp<0:
+            return(jnp.inf)
         return(jnp.average(jnp.abs(self.content)))
 
     # def real(self):
@@ -1557,8 +1561,11 @@ def solve_ODE_chi(coeff, coeff_dp, coeff_dc, f, static_max_freq: int):
     Output: -----
     y is a ChiPhiFunc's content
     '''
+    print('coeff', coeff.shape)
+    print('coeff_dp', coeff_dp.shape)
+    print('coeff_dc', coeff_dc.shape)
+    print('f', f.shape)
     len_chi = f.shape[0]
-    len_phi = f.shape[1]
     # Chi harmonics
     ind_chi = len_chi-1
     # Multiplies each row with its corresponding mode number.

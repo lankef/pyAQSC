@@ -1,8 +1,6 @@
 import numpy as np
-import timeit
 import scipy.signal
 from matplotlib import pyplot as plt
-from scipy import interpolate
 
 # for importing parsed codes
 from .chiphifunc import *
@@ -115,7 +113,11 @@ def display(array, complex=True):
 
 # Plots the content of two ChiPhiFunc's and compare.
 # nfp-dependent!!
-def compare_chiphifunc(A, B, trig_mode=False, simple_mode=True, colormap_mode=False):
+def compare_chiphifunc(
+        A:ChiPhiFunc, B:ChiPhiFunc, 
+        trig_mode:bool=False, 
+        simple_mode:bool=True, 
+        colormap_mode:bool=False):
     if not simple_mode:
         print('A')
         A.display_content(trig_mode=trig_mode, colormap_mode=colormap_mode)
@@ -528,7 +530,7 @@ def chiphifunc_debug_plot():
     chiphifunc.debug_avg_value = []
 
 # nfp-dependent!!
-def import_from_stel(stel = Qsc.from_paper('r2 section 5.2'), len_phi=1000, nfp_enabled=False):
+def import_from_stel(stel, len_phi=1000, nfp_enabled=False):
     if not use_pyQSC:
         raise AttributeError(
             'use_pyQSC must be enabled to use test datasets from qyPSC.'

@@ -9,7 +9,7 @@ from .chiphifunc import *
 # expr should be non-dynamic.
 # Non-jitted because an argument is a callable. A wrapper for a py_sum with no
 # callable argument can be jitted.
-def py_sum(expr, lower, upper):
+def py_sum(expr, lower:int, upper:int):
     # The integer 0 cannot be added to even ChiPhiFuncs,
     # because JAX does not support conditionals on traced arguments.
     out = ChiPhiFuncSpecial(0)
@@ -77,7 +77,7 @@ def diff_backend(y, is_chi:bool, order):
 
 # Maxima sometimes merges a few diff's together.
 @partial(jit, static_argnums=(1, 2, 3, 4,))
-def diff(y, is_chi1, order1, is_chi2=None, order2=None):
+def diff(y, is_chi1:bool, order1:int, is_chi2=None, order2=None):
     out = diff_backend(y, is_chi1, order1)
     if is_chi2 is not None:
         out = diff_backend(out, is_chi2, order2)

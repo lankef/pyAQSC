@@ -183,6 +183,8 @@ def iterate_Yn_cp_magnetic(n_unknown,
             iota_coef,
             dl_p, tau_p, nfp
         )
+        print('coef_Yn1p_in_D3')
+        coef_Yn1p_in_D3.display_content()
         coef_dp_Yn1p_in_D3 = looped_coefs.lambda_coef_dp_Yn1p_in_D3(
             vector_free_coef,
             X_coef_cp, Y_coef_cp,
@@ -190,11 +192,14 @@ def iterate_Yn_cp_magnetic(n_unknown,
             dl_p, tau_p, nfp
         )
 
+        print('coef_dp_Yn1p_in_D3')
+        coef_dp_Yn1p_in_D3.display_content()
         Yn_free_content = solve_ODE(
             coeff_arr=coef_Yn1p_in_D3.content,
             coeff_dp_arr=coef_dp_Yn1p_in_D3.content*nfp,
             f_arr=D3_RHS_no_unknown.content,
-            static_max_freq=static_max_freq)
+            static_max_freq=static_max_freq
+        )
 
     Yn = new_Y_n_no_unknown + ChiPhiFunc(vector_free_coef*Yn_free_content, nfp)
     return(Yn)
@@ -319,6 +324,7 @@ def iterate_delta_n_0_offset(n_eval,
     # At even orders, setting Delta[even, 0] to have zero average.
     # This average is a free parameter, because the center component of
     # the ODE is dphi x = f.
+    print('Delta_n_inhomog_component',Delta_n_inhomog_component)
     content = solve_dphi_iota_dchi(
         iota=iota_coef[0]/Delta_n_inhomog_component.nfp,
         f=Delta_n_inhomog_component.content/Delta_n_inhomog_component.nfp,
@@ -459,8 +465,6 @@ class Equilibrium:
         constant={}
         constant['B_denom_coef_c']\
             = ChiPhiEpsFunc.from_content_list(raw_constant['B_denom_coef_c'], nfp)
-        constant['iota_coef']\
-            = ChiPhiEpsFunc.from_content_list(raw_constant['iota_coef'], nfp)
         constant['B_alpha_coef']\
             = ChiPhiEpsFunc.from_content_list(raw_constant['B_alpha_coef'], nfp)
         constant['kap_p']\
@@ -469,6 +473,8 @@ class Equilibrium:
             = raw_constant['dl_p']
         constant['tau_p']\
             = ChiPhiFunc(raw_constant['tau_p'], nfp)
+        constant['iota_coef']\
+            = ChiPhiFunc(raw_constant['iota_coef'], nfp)
 
         return(Equilibrium(
             unknown=unknown,
@@ -525,7 +531,7 @@ class Equilibrium:
     # Checks the accuracy of iteration at order n_unknown by substituting
     # results into the original form of the governing equations.
     # not nfp-dependent
-    def check_governing_equations(self, n_unknown):
+    def check_governing_equations(self, n_unknown:int, magnetic=False):
         if n_unknown is None:
             n_unknown = self.get_order()
         elif n_unknown>self.get_order():
@@ -571,13 +577,18 @@ class Equilibrium:
             B_denom_coef_c, B_alpha_coef,
             B_psi_coef_cp, B_theta_coef_cp,
             kap_p, dl_p, tau_p, iota_coef)
-        I = MHD_parsed.validate_I(n_unknown, B_denom_coef_c,
-            p_perp_coef_cp, Delta_coef_cp,
-            iota_coef)
-        II = MHD_parsed.validate_II(n_unknown,
-            B_theta_coef_cp, B_alpha_coef, B_denom_coef_c,
-            p_perp_coef_cp, Delta_coef_cp, iota_coef)
-        III = MHD_parsed.validate_III(n_unknown-2,
+        if magnetic:
+            I = ChiPhiFuncSpecial(0)
+            II = ChiPhiFuncSpecial(0)
+            III = ChiPhiFuncSpecial(0)
+        else:
+            I = MHD_parsed.validate_I(n_unknown, B_denom_coef_c,
+                p_perp_coef_cp, Delta_coef_cp,
+                iota_coef)
+            II = MHD_parsed.validate_II(n_unknown,
+                B_theta_coef_cp, B_alpha_coef, B_denom_coef_c,
+                p_perp_coef_cp, Delta_coef_cp, iota_coef)
+            III = MHD_parsed.validate_III(n_unknown-2,
             B_theta_coef_cp, B_psi_coef_cp,
             B_alpha_coef, B_denom_coef_c,
             p_perp_coef_cp, Delta_coef_cp,
@@ -602,14 +613,6 @@ class Equilibrium:
             else:
                 print(self.unknown[name][n_display])
 
-    # The looped equation uses some very long coefficients with simple n dependence.
-    # the below methods calculates these coefficients using n-independent parts
-    # calculated in prepare
-    def iterate_2_magnetic_only():
-        raise NotImplementedError('Clip the order of the equilibrium in a \
-        non-jitted portion before running the jitted portion to avoid recompile.\
-        running to ')
-
 tree_util.register_pytree_node(
 Equilibrium,
 Equilibrium._tree_flatten,
@@ -632,8 +635,8 @@ def iterate_2_magnetic_only(equilibrium,
     B_alpha_nb2,
     B_denom_nm1, B_denom_n,
     iota_nm2b2,
-    traced_max_freq=(-1,-1),
     static_max_freq=(-1,-1),
+    traced_max_freq=(-1,-1),
     n_eval=None,
 ):
 
@@ -865,13 +868,13 @@ def iterate_2(equilibrium,
     # free_param_values need to be a 2-element tuple.
     # Now only implemented avg(B_theta_n0)=0 and given iota.
     iota_new, # arg 4
-    n_eval=None,
     static_max_freq=(-1,-1),
     traced_max_freq=(-1,-1),
     # Traced.
     # -1 represents no filtering (default). This value is chosen so that
     # turning on or off off-diagonal filtering does not require recompiles.
     max_k_diff_pre_inv=(-1,-1),
+    n_eval=None,
     ):
     if equilibrium.magnetic_only:
         return()

@@ -1,21 +1,141 @@
-# pyAQSC
-This code constructs globally quasi-symmetric stellarator equilibria with
-anisotropic pressure near axis expansion to any order.
+# Equilibrium API
+AS its name suggests, the Equilibrium class manages all information for a QS equilibrium or magnetic field. For the definition of quantities, see the sections on [unknowns](background-solves-for.md) and [free parameters](background-free-params.md).
 
-## Dependencies
-The python codes requires Numpy, Matplotlib, and JAX.
+## Class attributes
+### `self.unknown : {string:ChiPhiEpsFunc}` (dict of traced) 
+All unknowns solved by pyAQSC. Contains keys:
+- `'X_coef_cp' : ChiPhiEpsFunc` - $X$. At even order $n$ at all time.
+- `'Y_coef_cp' : ChiPhiEpsFunc` - $Y$. At even order $n$ at all time.
+- `'Z_coef_cp' : ChiPhiEpsFunc` - $Z$. At even order $n$ at all time.
+- `'B_psi_coef_cp' : ChiPhiEpsFunc` - $B_{\psi}$. At even order $n-2$ at all time.
+- `'B_theta_coef_cp' : ChiPhiEpsFunc` - $B_{\theta}$. At even order $n$ at all time.
+- `'iota_coef' : ChiPhiEpsFunc` - $\bar{\iota}$. At order $(n-2)/2$ at all time.
+- `'p_perp_coef_cp' : ChiPhiEpsFunc` - $p_\perp$. At even order $n$ at all time.
+- `'Delta_coef_cp' : ChiPhiEpsFunc` - $\Delta$. At even order $n$ at all time.
 
-The Maxima notebooks requires wxMaxima to view. The notebooks are not required to
-run the main code, but contains source expressions much of code is parsed from.
-## References
-1. [Weakly Quasisymmetric Near-Axis Solutions to all Orders](https://doi.org/10.1063/5.0076583)
-2. [Solving the problem of overdetermination of quasisymmetric equilibrium solutions by near-axis expansions. I. Generalized force balance](https://doi.org/10.1063/5.0027574)
-3. [Solving the problem of overdetermination of quasisymmetric equilibrium solutions by near-axis expansions. II. Circular axis stellarator solutions](https://aip.scitation.org/doi/10.1063/5.0027575)
-4. [pyQSC](https://github.com/landreman/pyQSC)
+### `self.constant : {string:ChiPhiEpsFunc or ChiPhiFunc}` (dict of traced) 
+All constants (inputs or calculated from inputs). Contains keys:
+- `'B_denom_coef_c' : ChiPhiEpsFunc` - $B^-$. At even order $n$ at all time.
+- `'B_alpha_coef' : ChiPhiEpsFunc` - $B_{\alpha}$. At order $n/2$ at all time.
+- `'kap_p' : ChiPhiFunc` - $\kappa$.
+- `'dl_p' : float` - $dl/d\phi$.
+- `'tau_p' : ChiPhiFunc` - $\tau$.
+### `self.axis_info : {string:jax.numpy.array}` (dict of traced) 
+Axis information, not used in further iteration. The naming convention is the same as in [pyQSC](https://landreman.github.io/pyQSC/outputs.html#outputs). Contains keys:
 
-## Project layout
+- `'varphi' : array` - The Boozer toroidal angle $\phi$ on a uniformly spaced grid of cylindrical toroidal angle $\Phi=0, \frac{2\pi}{n_{fp}}\frac{1}{n_{grid}}, ..., \frac{2\pi}{n_{fp}}\frac{n_{grid}}{n_{grid}}$.
+- `'phi' : array` - A uniformly spaced grid of cylindrical toroidal angle $\Phi=0, \frac{2\pi}{n_{fp}}\frac{1}{n_{grid}}, ..., \frac{2\pi}{n_{fp}}\frac{n_{grid}}{n_{grid}}$.
+- `'d_phi' : float` - $\Phi$ grid spacing
+- `'R0' : array` - $R_0$, axis shape in cylindrical coordinate.
+- `'Z0' : array` - $Z_0$, axis shape in cylindrical coordinate.
+- `'R0p' : array` - $dR_0/d\Phi$.
+- `'Z0p' : array` - $dZ_0/d\Phi$.
+- `'R0pp' : array` - $d^2Z_0/d\Phi^2$.
+- `'Z0pp' : array` - $d^2Z_0/d\Phi^2$.
+- `'R0ppp' : array` - $d^3R_0/d\Phi^3$.
+- `'Z0ppp' : array` - $d^3R_0/d\Phi^3$.
+- `'d_l_d_phi' : array` - $dl/d\Phi$, rate of change of axis length $l$ w.r.t. the cylindrical toroidal angle $\Phi$.
+- `'axis_length' : array` - Total axis length.
+- `'curvature' : array` - Curvature in cylindrical coordinate.
+- `'torsion' : array` - Torsion in cylindrical coordinate.
+- `'tangent_cylindrical' : array` - Components of the unit tangent vector $\hat{\boldsymbol{b}}_0$ in cylindrical coordinate.
+- `'normal_cylindrical' : array` - Components of the unit normal vector $\hat{\boldsymbol{\kappa}}_0$ in cylindrical coordinate.
+- `'binormal_cylindrical' : array` - Components of the unit binormal vector $\hat{\boldsymbol{\tau}}_0$ in cylindrical coordinate.
 
-    mkdocs.yml    # The configuration file.
-    docs/
-        index.md  # The documentation homepage.
-        ...       # Other markdown pages, images and other files.
+### `self.nfp : int` (static) 
+The number of field period of an equilibrium
+### `self.magnetic_only : bool` (static) 
+Iteration mode. When set to `False` (default), is a QS equilibrium with anisotropic pressure. When set to `True`, is a QS magnetic field without force balance.
+
+## Constructor
+Instead of the constructor, we recommend creating equilibria using `aqsc.leading_orders()` (see [iteration API](api-iteration.md)). 
+### `aqsc.Equilibrium(unknown, constant, nfp, magnetic_only, axis_info={})`
+
+Parameters:
+- `self.unknown : {string:ChiPhiEpsFunc}` (dict of traced) .
+- `self.constant : {string:ChiPhiEpsFunc or ChiPhiFunc}` (dict of traced) 
+- `self.axis_info : {string:jax.numpy.array}` (dict of traced) 
+- `self.nfp : int` (static) 
+- `self.magnetic_only : bool` (static) 
+
+### `from_known(X_coef_cp, Y_coef_cp, Z_coef_cp, B_psi_coef_cp, B_theta_coef_cp, B_denom_coef_c, B_alpha_coef, kap_p, dl_p, tau_p, iota_coef, p_perp_coef_cp, Delta_coef_cp, axis_info={}, magnetic_only=False )`
+Constructs an equilibrium from known quantities. **Does not** check order consistency, nfp, grid number or whether the known quantities obey the ordered governing equations. We recommend creating equilibria using `aqsc.leading_orders()` (see [iteration API](api-iteration.md)). 
+
+Parameters:
+
+- `X_coef_cp : ChiPhiEpsFunc` - $X$. Must be even order $n$.
+- `Y_coef_cp : ChiPhiEpsFunc` - $Y$. Must be even order $n$.
+- `Z_coef_cp : ChiPhiEpsFunc` - $Z$. Must be even order $n$.
+- `B_psi_coef_cp : ChiPhiEpsFunc` - $B_{\psi}$. Must be even order $n-2$.
+- `B_theta_coef_cp : ChiPhiEpsFunc` - $B_{\theta}$. Must be even order $n$.
+- `B_denom_coef_c : ChiPhiEpsFunc` - $B^-$. Must be even order $n$.
+- `B_alpha_coef : ChiPhiEpsFunc` - $B_{\alpha}$. Must be order $n/2$.
+- `kap_p : ChiPhiFunc` - $\kappa$.
+- `dl_p : float` - $dl/d\phi$.
+- `tau_p : ` - $\tau$.
+- `iota_coef : ChiPhiEpsFunc` - $\bar{\iota}$. Must be order $(n-2)/2$.
+- `p_perp_coef_cp : ChiPhiEpsFunc` - $p_\perp$. Must be even order $n$.
+- `Delta_coef_cp : ChiPhiEpsFunc` - $\Delta$. Must be even order $n$.
+- `axis_info : ChiPhiEpsFunc` - Axis information calculated by `aqsc.leading_orders()`. Not used in further iteration. Can be left blank.
+- `magnetic_only : ChiPhiEpsFunc` - Whether the iteration is magnetic-only. `False` by default.
+
+## Functions for saving and loading
+### `aqsc.Equilibrium.save(file_name)`
+Saves `self` as a `.npy` file.
+
+Parameters:
+- `file_name : str` : The name of the save file (without extension).
+  
+### `aqsc.Equilibrium.load(file_name)`
+Loads from a `.npy` file created by `aqsc.Equilibrium.save()`.
+
+Parameters:
+- `file_name : str` : The name of the save file (with extension).
+Returns: 
+- An `aqsc.Equilibrium`.
+
+### `aqsc.Equilibrium.save_plain(self, file_name)`
+Saves `self` as a `.npy` file. This `.npy` file contains a dict of `list`'s from `aqsc.ChiPhiEpsFunc.to_content_list()` and does not require pyAQSC to load.
+
+Parameters:
+- `file_name : str` : The name of the save file (without extension).
+  
+### `aqsc.Equilibrium.load_plain(filename)`
+Loads from a `.npy` file created by `aqsc.Equilibrium.save_plain()`.
+
+Parameters:
+- `file_name : str` : The name of the save file (without extension).
+Returns: 
+- An `aqsc.Equilibrium`.
+
+## Functions for output
+### `aqsc.Equilibrium.get_order()`
+Gets the highest known order $n$ of `self`.
+
+Returns:
+- An int $n$
+
+### `aqsc.Equilibrium.check_order_consistency()`
+Checks whether all items in `self.unknown` and `self.constant` has consistent highest known order. If not, throws `AttributeError`'s. **Cannot be JIT compiled.**
+
+### `aqsc.Equilibrium.check_governing_equations(n_unknown:int, magnetic:bool=False)`
+Evaluates the residual (LHS-RHS) of all governing equations at a given order. The results should be as close to 0 as possible.
+
+Parameters:
+- `n_unknown : int` (static) - Order to evaluate residuals at.
+- `magnetic : bool` (static) - When True, returns `ChiPhiFuncSpecial(0)` for the force balance equations.
+
+Returns:
+- `J : ChiPhiFunc` (traced) - The residual of the Jacobian equation
+- `Cb : ChiPhiFunc` (traced) - The residual of the co/contravariant equation's tangent component.
+- `Ck : ChiPhiFunc` (traced) - The residual of the co/contravariant equation's normal component. 
+- `Ct : ChiPhiFunc` (traced) - The residual of the co/contravariant equation's binormal component
+- `I : ChiPhiFunc` (traced) - The residual of the force balance equation I. (See [Ref.2](https://doi.org/10.1063/5.0027574))
+- `II : ChiPhiFunc` (traced) - The residual of the force balance equation II.
+- `II : ChiPhiFunc` (traced) - The residual of the force balance equation III.
+
+### `aqsc.Equilibrium.display_order`
+Plots all quantities at order $n$.
+
+Parameters:
+- `n_unknown : int` (static) - Order to plot.

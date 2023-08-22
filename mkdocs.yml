@@ -4,16 +4,23 @@ theme:
   highlightjs: true
 nav:
   - Home: 'index.md'
-  - 'Getting started with pyAQSC':
+  - Background:
+    - Introduction: 'background-intro.md'
+    - Governing equations: 'background-governing.md'
+    - Free parameters: 'background-free-params.md'
+    - Solves for: 'background-solves-for.md'
+  - Tutorial:
     - 'Quick start': 'quick-start.md'
-    - 'Variables': 'variables.md'
-    - 'Data structure': 'data-structure.md'
-    - 'Plotting': 'styling-your-docs.md'
+    - 'New QS equilibria': 'init-and-iterate-eq.md'
+    - 'New QS magnetic field': 'init-and-iterate-mag.md'
+    - 'Data structures': 'data-structure.md'
+    - 'Plotting': 'plotting.md'
   - 'API guide': 
     - 'Equilibrium': 'api-equilibrium.md'
     - 'ChiPhiFunc': 'api-chiphifunc.md'
     - 'ChiPhiEpsFunc': 'api-chiphiepsfunc.md'
     - 'Math utilities and solvers': 'api-utils.md'
+    - 'Iteration': 'api-iteration.md'
 plugins:
   - search
   - mkdocstrings:

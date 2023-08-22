@@ -1,51 +1,32 @@
 # pyAQSC
 Welcome to pyAQSC documentations!
 
-pyAQSC directly constructs globally quasi-symmetric, anisotropic stellarator equilibria without costly optimization. 
+PyAQSC directly constructs globally quasi-symmetric, anisotropic stellarator equilibria without costly optimization using the method of near-axis expansion (NAE). The construction procedure is GPU accelerated and fully auto-differentiable.
 
-The introduction of anisotropy $\Delta$ circumvents the Garren-Boozer Conundrum and allows the system to be solved to any order. This allows studies on higher order quantities and optimal truncation.
+PyAQSC is the first NAE code incorporating pressure anisotropy. It can explore new design spaces for equilibria with good quasisymmetry and small pressure anisotropy. It can also model higher order ($n\geq3$) physical quanties unavailable to scalar-pressure NAE (such as magnetic shear $\iota$) without special parameter choices.
 
-pyAQSC is written with optimization and data-driven studies in mind. The construction procedure is GPU accelerated and is fully auto-differentiable.
+For an intriduction on near-axis expansion and the formulation behind pyAQSC, see [backgrounds](background.md).
 
+For a quick example, see [quick start](quick-start.md).
 
 ## Dependencies
-pyAQSC requires Numpy, Matplotlib, and JAX.
+pyAQSC requires only Numpy, Matplotlib, and JAX. 
 
-The Maxima notebooks requires wxMaxima to view. The notebooks are not required to
-run pyAQSC, but contains source expressions a large portion of the code is parsed from.
+Some unit tests uses Matt Landreman's [pyQSC](https://github.com/landreman/pyQSC). The code does not require pyQSC to function. PyQSC import is disabled by default, and can be enabled in `config.py` when needed.
 
-## Governing equations
-The governing equations solved by pyAQSC are:
-
-- The Jacobian equation 
-$$
-    J^{-1} = (\nabla\psi\times\nabla\theta\cdot\nabla\phi)
-     = \frac{B^2}{B_\alpha^2}
-$$
-- The co/contravariant equation
-$$
-    \textbf{B}=B_\theta\nabla\chi
-    +(B_\alpha-\bar{\iota}B_\theta)\nabla\phi
-    +B_\psi\nabla\psi\\
-    =\nabla\psi\times\nabla\chi
-    +\bar{\iota}\nabla\phi\times\nabla\psi. 
-$$
-- The force balance equation
-$$
-    \textbf{j}\times\textbf{B} = \nabla\cdot\Pi = \nabla\cdot(\Delta\textbf{bb} + p_\perp \mathbb{I}).
-$$
-The first two equations, the "magnetic equations", encodes QS and nested flux surfaceconditions. They can be solved independenctly with pyAQSC to yield a globally QS magnetic field with no force balance.
-
-For more detail, see Ref.1-3.
+Notebooks in `MHD_recursion_relations/` and `magnetic_recursion_relations/` requires [wxMaxima](https://wxmaxima-developers.github.io/wxmaxima/) to view. The notebooks are not required to
+run pyAQSC, but contains source expressions that pyAQSC evaluates.
 
 ## Installation
 This code can currently only be used by downloading from Github and importing locally.
 
 ## Importing
-To use pyaqsc, import using 
-```
-import aqsc
-```
+To use pyAQSC, simply run
+
+    import aqsc
+
+## Contact
+Please contact [Lanke Fu](mailto:ffu@pppl.gov) at PPPL for questions and bug reports.
 
 ## References
 1. [Weakly Quasisymmetric Near-Axis Solutions to all Orders](https://doi.org/10.1063/5.0076583)
@@ -54,3 +35,4 @@ import aqsc
 4. [pyQSC](https://github.com/landreman/pyQSC)
 
 5. [Direct construction of optimized stellarator shapes. Part 1. Theory in cylindrical coordinates](https://doi.org/10.1017/S0022377818001289)
+6. [Optimized quasisymmetric stellarators are consistent with the Garren–Boozer construction](https://iopscience.iop.org/article/10.1088/1361-6587/ab19f6)

@@ -14,7 +14,7 @@ class ChiPhiEpsFunc:
         self.chiphifunc_list = list
         self.nfp = nfp
         if check_consistency:
-            self = self.check_nfp_consistency()
+            self.chiphifunc_list = self.check_nfp_consistency()
 
     ''' For JAX use '''
     def _tree_flatten(self):
@@ -35,23 +35,24 @@ class ChiPhiEpsFunc:
         '''
         Check the nfp of all constituents in self.chiphifunc_list
         '''
-        for i in range(len(self.chiphifunc_list)):
-            item = self.chiphifunc_list[i]
+        new_chiphifunc_list = self.chiphifunc_list.copy()
+        for i in range(len(new_chiphifunc_list)):
+            item = new_chiphifunc_list[i]
             # Do not modify a CHiPhiFUnc if it has consistent nfp or is an error
             if isinstance(item, ChiPhiFunc) and (item.nfp==self.nfp or item.nfp<=0):
-                if jnp.all(item.content==0):
-                    self.chiphifunc_list[i] = ChiPhiFuncSpecial(0)
-                    continue
+                # if jnp.all(item.content==0):
+                #     self.chiphifunc_list[i] = ChiPhiFuncSpecial(0)
+                #     continue
                 continue
             # Do not modify scalars
             if jnp.isscalar(item) or item.ndim==0:
                 # Force known zeros to be special zeros.
-                if item==0:
-                    self.chiphifunc_list[i] = ChiPhiFuncSpecial(0)
-                    continue
+                # if item==0:
+                #     self.chiphifunc_list[i] = ChiPhiFuncSpecial(0)
+                #     continue
                 continue
-            self.chiphifunc_list[i] = ChiPhiFuncSpecial(-14)
-
+            new_chiphifunc_list[i] = ChiPhiFuncSpecial(-14)
+        return(new_chiphifunc_list)
 
     def __getitem__(self, index):
         '''

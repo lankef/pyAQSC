@@ -351,15 +351,15 @@ def generate_tensor_operator(
         dl_p=dl_p,
         tau_p=tau_p,
         iota_coef=iota_coef)
-    coef_Y = looped_y_coefs['coef_Y'].filter_reduced_length(traced_max_freq)
-    coef_dchi_Y = looped_y_coefs['coef_dchi_Y'].filter_reduced_length(traced_max_freq)
-    coef_dphi_Y = looped_y_coefs['coef_dphi_Y'].filter_reduced_length(traced_max_freq)
-    coef_dchi_dphi_Y = looped_y_coefs['coef_dchi_dphi_Y'].filter_reduced_length(traced_max_freq)
-    coef_dphi_dphi_Y = looped_y_coefs['coef_dphi_dphi_Y'].filter_reduced_length(traced_max_freq)
-    coef_dchi_dchi_Y = looped_y_coefs['coef_dchi_dchi_Y'].filter_reduced_length(traced_max_freq)
-    coef_dchi_dchi_dphi_Y = looped_y_coefs['coef_dchi_dchi_dphi_Y'].filter_reduced_length(traced_max_freq)
-    coef_dphi_dphi_dchi_Y = looped_y_coefs['coef_dphi_dphi_dchi_Y'].filter_reduced_length(traced_max_freq)
-    coef_dchi_dchi_dchi_Y = looped_y_coefs['coef_dchi_dchi_dchi_Y'].filter_reduced_length(traced_max_freq)
+    coef_Y = looped_y_coefs['coef_Y'].filter_reduced_length(static_max_freq)
+    coef_dchi_Y = looped_y_coefs['coef_dchi_Y'].filter_reduced_length(static_max_freq)
+    coef_dphi_Y = looped_y_coefs['coef_dphi_Y'].filter_reduced_length(static_max_freq)
+    coef_dchi_dphi_Y = looped_y_coefs['coef_dchi_dphi_Y'].filter_reduced_length(static_max_freq)
+    coef_dphi_dphi_Y = looped_y_coefs['coef_dphi_dphi_Y'].filter_reduced_length(static_max_freq)
+    coef_dchi_dchi_Y = looped_y_coefs['coef_dchi_dchi_Y'].filter_reduced_length(static_max_freq)
+    coef_dchi_dchi_dphi_Y = looped_y_coefs['coef_dchi_dchi_dphi_Y'].filter_reduced_length(static_max_freq)
+    coef_dphi_dphi_dchi_Y = looped_y_coefs['coef_dphi_dphi_dchi_Y'].filter_reduced_length(static_max_freq)
+    coef_dchi_dchi_dchi_Y = looped_y_coefs['coef_dchi_dchi_dchi_Y'].filter_reduced_length(static_max_freq)
 
     # dchi operates on only vector_free_coef and dphi operates only on the free component
     # This can be simplified to be operator manipulations, rather than chain rules,
@@ -371,6 +371,13 @@ def generate_tensor_operator(
         +coef_dchi_dchi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi().dchi()
         +coef_dchi_dchi_dchi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi().dchi().dchi()
     ).cap_m(n_eval-2).filter(traced_max_freq)
+    print('pre-filter coef_Y_n0_dphi_0', (
+        coef_Y * ChiPhiFunc(vector_free_coef_short, nfp)
+        +coef_dchi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi()
+        +coef_dchi_dchi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi().dchi()
+        +coef_dchi_dchi_dchi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi().dchi().dchi()
+    ).cap_m(n_eval-2))
+    print('post-filter coef_Y_n0_dphi_0', coef_Y_n0_dphi_0)
     coef_Y_n0_dphi_1 = (
         coef_dphi_Y * ChiPhiFunc(vector_free_coef_short, nfp)
         +coef_dchi_dphi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi()
@@ -731,7 +738,7 @@ def generate_tensor_operator(
                     kap_p=kap_p,
                     iota_coef=iota_coef,
                     n_eval=n_eval).pad_chi(n_eval+1).content
-        ), nfp).filter_reduced_length(traced_max_freq)
+        ), nfp).filter_reduced_length(static_max_freq)
         out_dict_tensor['coef_B_psi_dphi_1_in_Y_var'] = coef_B_psi_dphi_1_in_Y_var
         coef_B_psi_dphi_1_in_Y = (
             coef_Y*coef_B_psi_dphi_1_in_Y_var
@@ -767,7 +774,7 @@ def generate_tensor_operator(
             tau_p=tau_p,
             kap_p=kap_p,
             iota_coef=iota_coef,
-            n_eval=n_eval).filter_reduced_length(traced_max_freq)
+            n_eval=n_eval).filter_reduced_length(static_max_freq)
         coef_B_psi_dphi_2_dchi_0_all_but_Y = looped_coefs.coef_B_psi_dphi_2_dchi_0_all_but_Y(
             X_coef_cp=X_coef_cp,
             Y_coef_cp=Y_coef_cp,
@@ -778,7 +785,7 @@ def generate_tensor_operator(
             tau_p=tau_p,
             kap_p=kap_p,
             iota_coef=iota_coef,
-            n_eval=n_eval).filter_reduced_length(traced_max_freq)
+            n_eval=n_eval).filter_reduced_length(static_max_freq)
         coef_B_psi_dphi_3_dchi_0_all_but_Y = looped_coefs.coef_B_psi_dphi_3_dchi_0_all_but_Y(
             X_coef_cp=X_coef_cp,
             Y_coef_cp=Y_coef_cp,
@@ -789,7 +796,7 @@ def generate_tensor_operator(
             tau_p=tau_p,
             kap_p=kap_p,
             iota_coef=iota_coef,
-            n_eval=n_eval).filter_reduced_length(traced_max_freq)
+            n_eval=n_eval).filter_reduced_length(static_max_freq)
         coef_B_psi_dphi_1 = (
             coef_B_psi_dphi_1_in_Y
             +coef_B_psi_dphi_1_dchi_0_all_but_Y

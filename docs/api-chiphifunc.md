@@ -1,6 +1,6 @@
 # ChiPhiFunc API
 
-As introduced in [Data structure](data-structure.md), `ChiPhiFunc` represents
+As introduced in [data structure](data-structure.md), `ChiPhiFunc` represents
 $$
 F_n(\chi, \phi) = \sum_{m=0|1}^n e^{im} F_{n,m}(\phi) + e^{-im} F_{n,-m}(\phi)
 $$
@@ -8,10 +8,8 @@ and handles numerical operations on/between such series. It is a traced class to
 
 **Numerical operations between ChiPhiFunc's with different grid number or nfp are not supported.**
 
-## Constructor 
-### `ChiPhiFunc(content:jax.numpy.ndarray, nfp:int, trig_mode: bool=False)`
-Parameters:
-- `content: jax.numpy.array` (traced):
+## Class Attributes
+### `self.content : jax.numpy.array` (traced)
   
   A `complex128` or `complex64` array storing the Fourier series coefficients.
    
@@ -30,9 +28,15 @@ Parameters:
             [Chi_coeff_n(phi)]      # ] for odd n
         ] for even n
   
-- `nfp: int` (static): Number of field period when >0, and error code when <=0. See [Data structure](data-structure.md) for the list of all implemented error codes.
-- `trig_mode: bool`: When set to `True`, treat provided `content` as trigonometric Fourier coefficients:
-  
+### `self.nfp : int` (static)
+Number of field period when >0, and error code when <=0. See [Data structure](data-structure.md) for the list of all implemented error codes.
+
+## Constructor 
+### `aqsc.ChiPhiFunc(content:jax.numpy.ndarray, nfp:int, trig_mode:bool=False)`
+Parameters:
+- `content : jax.numpy.array` (traced)
+- `nfp : int` (static)
+- `trig_mode : bool`: When set to `True`, treat provided `content` as trigonometric Fourier coefficients:
   
       [
           [Chi_sin_coeff_{m}(phi)],
@@ -44,7 +48,7 @@ Parameters:
   
   and converts to esponential coefficients as part of the initialization:
 
-### `ChiPhiFuncSpecial(error_code:int)`
+### `aqsc.ChiPhiFuncSpecial(error_code:int)`
 Creates a `ChiPhiFunc` with non-positive `self.nfp`. Its `self.content` will be `np.nan`.
 
 Parameters:
@@ -70,7 +74,7 @@ Parameters:
 ### `aqsc.ChiPhiFunc.exp()` 
 Calculates $e^{F_n(\phi)}$. Only supports `ChiPhiFunc` with no $\chi$ dependence.
 
-## Derivatives, integrals and FFT
+## Functions for derivatives, integrals and FFT 
 
 ### `aqsc.ChiPhiFunc.dchi(order:int=1)` 
 Takes the $\chi$ derivative and returns a new `ChiPhiFunc.`
@@ -105,7 +109,7 @@ FFT the `axis=1` of content and returns as a ChiPhiFunc.
 ### `aqsc.ChiPhiFunc.ifft()`
 IFFT the `axis=1` of content and returns as a ChiPhiFunc.
 
-## Filters
+## Functions for filtering
 
 ### `aqsc.ChiPhiFunc.filter(self, arg:floar, mode:int=0)`
 An expandable filter. Now only low-pass is available.
@@ -129,15 +133,17 @@ Parameters:
 Returns: 
 - A new `ChiPhiFunc`.
 
-## Properties
-### `aqsc.ChiPhiFunc.get_amplitude(self)`
-Calculating the average of the absolute value of elements in `self.content`.
+## Functions for indexing
 
-Outputs:
+### `aqsc.ChiPhiEpsFunc.__getitem__(self, index)`
 
-- A real scalar.
+Implements `ChiPhiEpsFunc[m]`. Finds the $m$-th mode coefficient.   
+Parameters:
+- `index : int` (static) - $\chi$ mode number $m$. Must be even or odd (depends on `self.content.shape[0]%2`) and 
 
-## Indexing
+Returns:
+- A `ChiPhiFunc`.
+
 ### `aqsc.ChiPhiFunc.cap_m(m)` 
 
 Removes all $\chi$ modes with mode number larger than `m`. Takes the center m+1 rows of `self.content`. If the ChiPhiFunc contain less $\chi$ modes than $m+1$, It will be zero-padded.
@@ -149,7 +155,7 @@ Returns
 - A `ChiPhiFunc` with maximum $\chi$ mode number $m$ (and $m+1$ $\chi$ components).
 
 <!-- pad_m and pad_chi are not used much and omitted here.  -->
-## Output and plotting
+## Functions for output and plotting
 An overview of a `ChiPhiFunc` can be printed with the built-in `str()` and `print()` statements.
 
 ### `aqsc.ChiPhiFunc.get_lambda()`
@@ -182,5 +188,17 @@ Tiles a `ChiPhiFunc` by `self.nfp` and export a new `ChiPhiFunc` with `nfp==1`.
 ### `aqsc.ChiPhiFunc.trig_to_exp()`
 Converts a ChiPhiFunc from trig to exp fourier series.
 
+Returns:
+- A `ChiPhiFunc`.
+
 ### `aqsc.ChiPhiFunc.exp_to_trig()`
 Converts a ChiPhiFunc from exp to trig fourier series.
+
+Returns:
+- A `ChiPhiFunc`.
+
+### `aqsc.ChiPhiFunc.get_amplitude(self)`
+Calculating the average of the absolute value of elements in `self.content`. If `nfp==0`, returns 0. If `nfp<0`, returns `jnp.inf`.
+
+Returns:
+- A real scalar.

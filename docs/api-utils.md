@@ -1,4 +1,58 @@
 # Math utilities and solvers
+## Output (`chiphifunc_test_suite.py`)
+### `aqsc.compare_chiphifunc(A:ChiPhiFunc, B:ChiPhiFunc, trig_mode=False, simple_mode=True, colormap_mode=False)`
+Compares and plots two `ChiPhiFunc`'s.
+
+Parameters:
+- `A : ChiPhiFunc` - A `ChiPhiFunc`.
+- `B : ChiPhiFunc` - The other `ChiPhiFunc`
+- `trig_mode : bool=False` - When `True`, plots $cos(m\chi)$ and $sin(m\chi)$ coefficients. Otherwise plots $e^{\pm im\chi}$ coefficients.
+- `simple_mode : bool=True` - When `True`, only plots the difference. Otherwise also plots the values of `A` and `B`.
+- `colormap_mode : bool=False` - When `True`, plots the components in a colormap. Otherwise makes line plots. See `ChiPhiFunc.display_content()`.
+
+## Math (`math_utilities.py`)
+### `aqsc.py_sum(expr, lower:int, upper:int)`
+Sums a lambda function `expr` that takes one static `int` input from `lower` to `upper`. Will be possible to JIT compile if `expr` can be JIT compiled.
+
+Parameters:
+- `expr : lambda` (must obey JAX rules) - The expression to sum.
+- `lower : int` (static) - The summation's lower bound.
+- `upper : int` (static) - The summation's upper bound.
+
+Returns:
+- The evaluation result.
+
+### `aqsc.is_seq(a, b)`
+Returns 1 if `a<=b`, and 0 otherwise.
+
+Parameters:
+- `a,b` (static).
+
+Returns:
+- 0 or 1.
+
+### `aqsc.is_integer(a)`
+Returns 1 if `a` is an integer, and 0 otherwise.
+
+Parameters:
+- `a` (static).
+
+Returns:
+- 0 or 1.
+
+### `aqsc.diff(y, is_chi1:bool, order1:int, is_chi2=None, order2=None)`
+Used to evaluate expressions from Maxima. Takes $\chi$ and/or $\phi$ derivatives of a quantity.
+
+Parameters:
+- `y` (traced) - A scalar or `ChiPhiFunc`. Any other input type will result in `ChiPhiFunc(nfp=-13)`.
+- `is_chi1 : bool` (static) - If `True`, takes $\chi$ detivative, otherwise takes $\phi$ derivative
+- `order1 : int` (static) - Order of the first derivative.
+- `is_chi2` (static) - Optional. If `None`, doesn't take another derivative. If `True`, takes $\chi$ detivative, otherwise takes $\phi$ derivative
+- `order2` (static) - Optional. Order of the second derivative.
+
+Returns:
+- A `ChiPhiFunc`, 0, or a `ChiPhiFunc(nfp=-13)`
+
 ## Operator generators (`chiphifunc.py`)
 ### `aqsc.dchi_op(n_dim:int)`
 Generates a differential operator that performs derivative in $\chi$. The operator is applied using `diff_matrix@f.content = dchi(f).content`.
@@ -81,7 +135,7 @@ Inputs:
 - `A, B : ChiPhiFunc` (traced) - coefficients
 - `rank_rhs : int` (static) - The number of rows in the RHS.
 
-Outputs:
+Returns:
 `O_matrices, O_einv, vector_free_coef, Y_nfp`
 - `O_matrices : jax.numpy.array` (traced) - An `(n+2, n+1, len_phi)` operator equivalent to $\left[
     -\frac{1}{2}
