@@ -1555,10 +1555,6 @@ def solve_ODE_chi(coeff, coeff_dp, coeff_dc, f, static_max_freq: int):
     Output: -----
     y is a ChiPhiFunc's content
     '''
-    print('coeff', coeff.shape)
-    print('coeff_dp', coeff_dp.shape)
-    print('coeff_dc', coeff_dc.shape)
-    print('f', f.shape)
     len_chi = f.shape[0]
     # Chi harmonics
     ind_chi = len_chi-1

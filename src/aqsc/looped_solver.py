@@ -371,13 +371,6 @@ def generate_tensor_operator(
         +coef_dchi_dchi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi().dchi()
         +coef_dchi_dchi_dchi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi().dchi().dchi()
     ).cap_m(n_eval-2).filter(traced_max_freq)
-    print('pre-filter coef_Y_n0_dphi_0', (
-        coef_Y * ChiPhiFunc(vector_free_coef_short, nfp)
-        +coef_dchi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi()
-        +coef_dchi_dchi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi().dchi()
-        +coef_dchi_dchi_dchi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi().dchi().dchi()
-    ).cap_m(n_eval-2))
-    print('post-filter coef_Y_n0_dphi_0', coef_Y_n0_dphi_0)
     coef_Y_n0_dphi_1 = (
         coef_dphi_Y * ChiPhiFunc(vector_free_coef_short, nfp)
         +coef_dchi_dphi_Y * ChiPhiFunc(vector_free_coef_short, nfp).dchi()
