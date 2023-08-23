@@ -6,7 +6,9 @@ anisotropic pressure near axis expansion to any order.
 [Click here to read pyAQSC documentations.](https://pyaqsc.readthedocs.io/en/latest/)
 
 ## Dependencies
-The python codes requires Numpy, Matplotlib, and JAX.
+The python codes requires Numpy, Matplotlib, and JAX. To install a JAX version 
+matching your hardware, see the official 
+[JAX installation guide](https://jax.readthedocs.io/en/latest/installation.html).
 
 The Maxima notebooks requires wxMaxima to view. The notebooks are not required to
 run the main code, but contains source expressions much of code is parsed from.
