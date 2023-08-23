@@ -10,7 +10,7 @@ For an intriduction on near-axis expansion and the formulation behind pyAQSC, se
 For a quick example, see [quick start](quick-start.md).
 
 ## Dependencies
-pyAQSC requires only Numpy, Matplotlib, and JAX. 
+pyAQSC requires only Numpy, Matplotlib, and JAX. To install a JAX version matching your hardware, see the official [JAX installation guide](https://jax.readthedocs.io/en/latest/installation.html).
 
 Some unit tests uses Matt Landreman's [pyQSC](https://github.com/landreman/pyQSC). The code does not require pyQSC to function. PyQSC import is disabled by default, and can be enabled in `config.py` when needed.
 
