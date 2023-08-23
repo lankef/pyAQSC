@@ -809,7 +809,7 @@ class ChiPhiFunc:
     ''' I.1.4 Properties '''
     def get_amplitude(self):
         '''
-        Getting the average amplitude of the content
+        Getting the max amplitude of the content
 
         Outputs:
 
@@ -819,7 +819,7 @@ class ChiPhiFunc:
             return(0)
         elif self.nfp<0:
             return(jnp.inf)
-        return(jnp.average(jnp.abs(self.content)))
+        return(jnp.max(jnp.abs(self.content)))
 
     # def real(self):
     #     '''
@@ -1196,8 +1196,6 @@ def get_O_O_einv_from_A_B(chiphifunc_A:ChiPhiFunc, chiphifunc_B:ChiPhiFunc, rank
         # representation of RHS and vec_free_coef:
         # Yn_trig = O_einv@RHS_trig - (Yn0 or Yn1c) * vec_free_coef
         # O_matrices = O_matrices@trig_to_exp_op(O_matrices.shape[1])
-        print('O_matrices', O_matrices.shape)
-        print('trig_to_exp_op(O_matrices.shape[1])', trig_to_exp_op(O_matrices.shape[1]).shape)
         O_matrices = jnp.einsum('ijp,jm->imp', O_matrices, trig_to_exp_op(O_matrices.shape[1]))
         O_matrices = jnp.einsum('ij,jmp->imp', exp_to_trig_op(O_matrices.shape[0]), O_matrices)
 
@@ -1214,10 +1212,6 @@ def get_O_O_einv_from_A_B(chiphifunc_A:ChiPhiFunc, chiphifunc_B:ChiPhiFunc, rank
         #             Yn      = trig_to_exp@O_einv@            RHS_trig - (Yn0 or Yn1c) * trig_to_exp@vec_free_coef
         #             Yn      = trig_to_exp@O_einv@exp_to_trig@RHS      - (Yn0 or Yn1c) * trig_to_exp@vec_free_coef
         # O_einv = trig_to_exp_op(O_einv.shape[0])@O_einv@exp_to_trig_op(O_einv.shape[1])
-        print('trig_to_exp_op(O_einv.shape[0])', trig_to_exp_op(O_einv.shape[0]).shape)
-        print('O_einv', O_einv.shape)
-        print('exp_to_trig_op(O_einv.shape[1])', exp_to_trig_op(O_einv.shape[1]).shape)
-        print('jnp.einsum(ijp,jm->imp, O_einv, exp_to_trig_op(O_einv.shape[1]))', jnp.einsum('ijp,jm->imp', O_einv, exp_to_trig_op(O_einv.shape[1])).shape)
         O_einv = jnp.einsum('ijp,jm->imp', O_einv, exp_to_trig_op(O_einv.shape[1]))
         O_einv = jnp.einsum('ij,jmp->imp', trig_to_exp_op(O_einv.shape[0]), O_einv)
         vector_free_coef = trig_to_exp_op(O_einv.shape[0])@vector_free_coef

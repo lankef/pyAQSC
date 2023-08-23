@@ -51,6 +51,7 @@ To iterate the next two orders, use `aqsc.iterate_2_magnetic_only()`:
         equilibrium,
         B_theta_nm1, B_theta_n,
         Yn0,
+        Yn1p_avg,
         B_psi_nm20,
         B_alpha_nb2,
         B_denom_nm1, B_denom_n,
@@ -61,14 +62,15 @@ To iterate the next two orders, use `aqsc.iterate_2_magnetic_only()`:
     )
 
 Parameters:
-`B_theta_nm1 : ChiPhiFunc` (traced) - $B_{\theta n-1}$
-`B_theta_n : ChiPhiFunc` (traced) - $B_{\theta n}$
-`Yn0 : 1d array` (traced) - $Y_{n,0}$
-`B_psi_nm20 : 1d array` (traced) - $B_{\psi n-2, 0}$
-`B_alpha_nb2 : float` (traced) - $B_{\alpha n/2}$
-`B_denom_nm1 : ChiPhiFunc` (traced) - $B^-_{n-1}$
-`B_denom_n : ChiPhiFunc` (traced) - $B^-_{n}$
-`iota_nm2b2 : float` (traced) - $\bar{\iota}^-_{n-1}$
+`B_theta_nm1 : ChiPhiFunc` (traced) - $B_{\theta n-1}$.
+`B_theta_n : ChiPhiFunc` (traced) - $B_{\theta n}$.
+`Yn0 : 1d array` (traced) - $Y_{n,0}$.
+`Yn1p_avg : float` (traced) - The $\phi$ average pf $Y_{n,1}$.
+`B_psi_nm20 : 1d array` (traced) - $B_{\psi n-2, 0}$.
+`B_alpha_nb2 : float` (traced) - $B_{\alpha n/2}$.
+`B_denom_nm1 : ChiPhiFunc` (traced) - $B^-_{n-1}$.
+`B_denom_n : ChiPhiFunc` (traced) - $B^-_{n}$.
+`iota_nm2b2 : float` (traced) - $\bar{\iota}^-_{n-1}$.
 `static_max_freq : (int, int)` (static) - The cut-off frequency for the low-pass filter on the results.
 `traced_max_freq : (scalar, scalar)` (traced) - The cut-off frequency for the low-pass filter on the results.
 `n_eval : ChiPhiFunc` (static) - `n_eval : int` (static) - Order to evaluate to. By default evaluates the next two orders, but can also re-evaluate 2 orders from lower $n$. Must be even and no greater than $n+2$.

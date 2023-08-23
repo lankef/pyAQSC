@@ -123,7 +123,6 @@ Evaluates the residual (LHS-RHS) of all governing equations at a given order. Th
 
 Parameters:
 - `n_unknown : int` (static) - Order to evaluate residuals at.
-- `magnetic : bool` (static) - When True, returns `ChiPhiFuncSpecial(0)` for the force balance equations.
 
 Returns:
 - `J : ChiPhiFunc` (traced) - The residual of the Jacobian equation

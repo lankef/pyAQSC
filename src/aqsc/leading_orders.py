@@ -529,7 +529,7 @@ def leading_orders(
     coef_B_theta_20 = -B0**2*diff(p_perp_coef_cp[0],False,1)
     coef_dp_B_theta_20 = B0*(Delta_coef_cp[0]-1)
     # Solving y'+py=f for B_theta[2,0]. This equation has no unique solution,
-    # and a BC is provided.
+    # and an initial condition is provided.
     p_eff = (coef_B_theta_20.content/coef_dp_B_theta_20.content)[0]
     f_eff = (II_2_inhomog.content/coef_dp_B_theta_20.content)[0]
     p_fft = fft_filter(jnp.fft.fft(p_eff), shortened_length, axis=0)
@@ -539,13 +539,32 @@ def leading_orders(
     diff_matrix = fft_dphi_op(shortened_length)
     conv_matrix = fft_conv_op(p_fft)
     tot_matrix = diff_matrix + conv_matrix
-    # The average of B_theta[2,0] is its zeroth element in FFT representation.
+
+    # # Add a row to the matrix for avg initial condition
+    # # and solve as overdetermined system with SVD. Doesn't
+    # # work well in practice.
+    # svd_norm = jnp.average(jnp.abs(f_fft))
+    # tot_matrix_svd = jnp.zeros((shortened_length+1, shortened_length))
+    # tot_matrix_svd = tot_matrix_svd.at[:-1, :].set(tot_matrix)
+    # tot_matrix_svd = tot_matrix_svd.at[-1, 0].set(svd_norm)
+
+    # f_fft_svd = jnp.zeros(shortened_length+1)
+    # f_fft_svd = f_fft_svd.at[:-1].set(f_fft)
+    # f_fft_svd = f_fft_svd.at[-1].set(B_theta_20_avg*shortened_length*svd_norm)
+    # sln_svd = linear_least_sq_2d_svd(tot_matrix_svd, f_fft_svd)
+
+    # Original: The average of B_theta[2,0] is its zeroth 
+    # element in FFT representation.
     # The zeroth column of B_theta[2,0] acts on this element.
     # By adding 1 to all elements in this column will result in
     # adding B_theta_20_average to all elements in the RHS.
-    tot_matrix = tot_matrix.at[:, 0].set(tot_matrix[:, 0]+1)
-    f_fft = f_fft+B_theta_20_avg*shortened_length
+    tot_matrix_normalization = jnp.max(jnp.abs(tot_matrix))
+    tot_matrix = tot_matrix.at[:, 0].set(
+        tot_matrix[:, 0]+tot_matrix_normalization # was +1
+    )
+    f_fft = f_fft+B_theta_20_avg*shortened_length*tot_matrix_normalization
     sln_fft = jnp.linalg.solve(tot_matrix, f_fft)
+
     B_theta_20 = ChiPhiFunc(jnp.fft.ifft(fft_pad(sln_fft, len_phi, axis=0), axis=0)[None, :], nfp)
     B_theta_coef_cp = B_theta_coef_cp.append(B_theta_20)
 
@@ -562,18 +581,30 @@ def leading_orders(
     # u''-R(x)u'+S(x)u=0, where y =
     S_lin = q0*q2
     R_lin = q1+q2.dphi()/q2
-    u_avg = 1 # Doesn't actually impact Y! That's crazy.
+    u_avg = 1 # Doesn't actually impact Y!
     # The differential operator is:
     R_fft = fft_filter(jnp.fft.fft(R_lin.content[0]), shortened_length, axis=0)
     S_fft = fft_filter(jnp.fft.fft(S_lin.content[0]), shortened_length, axis=0)
     R_conv_matrix = fft_conv_op(R_fft)
     S_conv_matrix = fft_conv_op(S_fft)
     riccati_matrix = diff_matrix**2 - R_conv_matrix@diff_matrix + S_conv_matrix
-    # BC
-    riccati_matrix = riccati_matrix.at[:, 0].set(riccati_matrix[:, 0]+1)
-    riccati_RHS = jnp.ones(shortened_length)*u_avg*shortened_length
-    # Solution
+    # old BC
+    riccati_normalization = jnp.max(jnp.abs(riccati_matrix))
+    riccati_matrix = riccati_matrix.at[:, 0].set(
+        riccati_matrix[:, 0]+riccati_normalization # was +1
+    )
+    riccati_RHS = jnp.ones(shortened_length)*u_avg*shortened_length*riccati_normalization
     riccati_sln_fft = jnp.linalg.solve(riccati_matrix, riccati_RHS)
+    # # Add a row to the matrix for avg initial condition
+    # # and solve as overdetermined system with SVD. Doessn't
+    # # work well in practice.
+    # riccati_matrix_svd = jnp.zeros((riccati_matrix.shape[0]+1, riccati_matrix.shape[1]))
+    # riccati_matrix_svd = riccati_matrix_svd.at[:-1, :].set(riccati_matrix)
+    # riccati_matrix_svd = riccati_matrix_svd.at[-1, 0].set(1)
+    # riccati_RHS_svd = jnp.zeros(shortened_length+1)
+    # riccati_RHS_svd = riccati_RHS_svd.at[-1].set(u_avg*shortened_length)
+    # Solution
+    # riccati_sln_svd = linear_least_sq_2d_svd(riccati_matrix_svd, riccati_RHS_svd)
     riccati_u = ChiPhiFunc(jnp.fft.ifft(fft_pad(riccati_sln_fft, len_phi, axis=0), axis=0)[None, :], nfp)
     Y11c = (-riccati_u.dphi()/(q2*riccati_u))
     Y1 = ChiPhiFunc(jnp.array([

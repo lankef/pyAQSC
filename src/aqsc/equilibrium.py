@@ -117,7 +117,8 @@ def iterate_Yn_cp_RHS(n_unknown,
 # \iota_{(n-3)/2 or (n-4)/2}, B_{\alpha  (n-1)/2 or (n-2)/2}
 # nfp-dependent!!
 # Cannot be jitted beause of the lambda funcs
-def iterate_Yn_cp_magnetic(n_unknown,
+def iterate_Yn_cp_magnetic(
+    n_unknown,
     X_coef_cp,
     Y_coef_cp,
     Z_coef_cp,
@@ -128,15 +129,19 @@ def iterate_Yn_cp_magnetic(n_unknown,
     kap_p, dl_p, tau_p,
     iota_coef,
     static_max_freq,
-    Yn0=None):
+    Yn0=None,
+    Yn1c_avg=None):
 
     nfp = X_coef_cp.nfp
     n_eval = n_unknown+1
 
     _, O_einv, vector_free_coef = \
-        iterate_Yn_cp_operators(n_unknown,
+        iterate_Yn_cp_operators(
+            n_unknown,
             X_coef_cp=X_coef_cp,
-            B_alpha_coef=B_alpha_coef)
+            B_alpha_coef=B_alpha_coef, 
+            Y1c_mode=True
+        )
 
     Yn_rhs = iterate_Yn_cp_RHS(n_unknown=n_unknown,
         X_coef_cp=X_coef_cp,
@@ -153,7 +158,7 @@ def iterate_Yn_cp_magnetic(n_unknown,
     Yn_rhs_content = Yn_rhs.content
     new_Y_n_no_unknown = ChiPhiFunc(jnp.einsum('ijk,jk->ik',O_einv,Yn_rhs_content), Yn_rhs.nfp)
     Y_coef_cp_no_unknown = Y_coef_cp.mask(n_eval-2)
-    Y_coef_cp_no_unknown.append(new_Y_n_no_unknown)
+    Y_coef_cp_no_unknown = Y_coef_cp_no_unknown.append(new_Y_n_no_unknown)
 
     # Calculating D3 to solve for Yn1p
     if n_unknown%2==0:
@@ -161,6 +166,8 @@ def iterate_Yn_cp_magnetic(n_unknown,
             return(ChiPhiFuncSpecial(-15))
         Yn_free_content = Yn0
     else:
+        if Yn1c_avg is None:
+            Yn1c_avg = 0
         D3_RHS_no_unknown = -parsed.eval_D3_RHS_m_LHS(
             n = n_eval,
             X_coef_cp = X_coef_cp.mask(n_unknown).zero_append(),
@@ -177,29 +184,73 @@ def iterate_Yn_cp_magnetic(n_unknown,
             tau_p = tau_p,
         kap_p = kap_p)[0]
 
-        coef_Yn1p_in_D3 = looped_coefs.lambda_coef_Yn1p_in_D3(
-            vector_free_coef,
-            X_coef_cp, Y_coef_cp,
-            iota_coef,
-            dl_p, tau_p, nfp
+        coef_Yn1c_in_D3, coef_dp_Yn1c_in_D3 = looped_coefs.lambda_coef_Yn1c_in_D3(
+            vector_free_coef, 
+            X_coef_cp, Y_coef_cp, 
+            iota_coef, 
+            dl_p, tau_p, 
+            nfp
         )
-        print('coef_Yn1p_in_D3')
-        coef_Yn1p_in_D3.display_content()
-        coef_dp_Yn1p_in_D3 = looped_coefs.lambda_coef_dp_Yn1p_in_D3(
-            vector_free_coef,
-            X_coef_cp, Y_coef_cp,
-            iota_coef,
-            dl_p, tau_p, nfp
+        # Solving y'+py=f for Yn1+. This equation has no unique solution,
+        # and a initial condition is provided.
+        p_eff = (coef_Yn1c_in_D3.content/coef_dp_Yn1c_in_D3.content)[0]
+        f_eff = (D3_RHS_no_unknown.content/coef_dp_Yn1c_in_D3.content)[0]
+        p_fft = fft_filter(jnp.fft.fft(p_eff), static_max_freq, axis=0)
+        f_fft = fft_filter(jnp.fft.fft(f_eff), static_max_freq, axis=0)
+        # Creating differential operator and convolution operator
+        # as in solve_ODE
+        diff_matrix = fft_dphi_op(static_max_freq)
+        conv_matrix = fft_conv_op(p_fft)
+        tot_matrix = diff_matrix + conv_matrix
+        
+        tot_matrix_normalization = jnp.max(jnp.abs(tot_matrix))
+        tot_matrix = tot_matrix.at[:, 0].set(
+            tot_matrix[:, 0]+tot_matrix_normalization # was +1
         )
+        f_fft = f_fft+Yn1c_avg*static_max_freq*tot_matrix_normalization
+        sln_fft = jnp.linalg.solve(tot_matrix, f_fft)
 
-        print('coef_dp_Yn1p_in_D3')
-        coef_dp_Yn1p_in_D3.display_content()
-        Yn_free_content = solve_ODE(
-            coeff_arr=coef_Yn1p_in_D3.content,
-            coeff_dp_arr=coef_dp_Yn1p_in_D3.content*nfp,
-            f_arr=D3_RHS_no_unknown.content,
-            static_max_freq=static_max_freq
-        )
+        
+        len_phi = Yn_rhs.content.shape[1]
+        Yn_free_content = jnp.fft.ifft(fft_pad(sln_fft, len_phi, axis=0), axis=0)[None, :]
+        
+        ######## Yn1p
+        # Yn_free_content = solve_ODE(
+        #     coeff_arr=coef_Yn1p_in_D3.content,
+        #     coeff_dp_arr=coef_dp_Yn1p_in_D3.content*nfp,
+        #     f_arr=D3_RHS_no_unknown.content,
+        #     static_max_freq=static_max_freq
+        # ) # Seems underdetermined. Blows up.
+
+
+        # # Solving y'+py=f for Yn1+. This equation has no unique solution,
+        # # and a initial condition is provided.
+        # p_eff = (coef_Yn1p_in_D3.content/coef_dp_Yn1p_in_D3.content)[0]
+        # f_eff = (D3_RHS_no_unknown.content/coef_dp_Yn1p_in_D3.content)[0]
+        # p_fft = fft_filter(jnp.fft.fft(p_eff), static_max_freq, axis=0)
+        # f_fft = fft_filter(jnp.fft.fft(f_eff), static_max_freq, axis=0)
+        # # Creating differential operator and convolution operator
+        # # as in solve_ODE
+        # diff_matrix = fft_dphi_op(static_max_freq)
+        # conv_matrix = fft_conv_op(p_fft)
+        # tot_matrix = diff_matrix + conv_matrix
+        
+        # tot_matrix_normalization = jnp.max(jnp.abs(tot_matrix))
+        # tot_matrix = tot_matrix.at[:, 0].set(
+        #     tot_matrix[:, 0]+tot_matrix_normalization # was +1
+        # )
+        # f_fft = f_fft+Yn1p_avg*static_max_freq*tot_matrix_normalization
+        # sln_fft = jnp.linalg.solve(tot_matrix, f_fft)
+
+        
+        len_phi = Yn_rhs.content.shape[1]
+        Yn_free_content = jnp.fft.ifft(fft_pad(sln_fft, len_phi, axis=0), axis=0)[None, :]
+        # Yn_free_content = solve_ODE(
+        #     coeff_arr=coef_Yn1c_in_D3.content,
+        #     coeff_dp_arr=coef_dp_Yn1c_in_D3.content*nfp,
+        #     f_arr=D3_RHS_no_unknown.content,
+        #     static_max_freq=static_max_freq
+        # ) # Seems underdetermined. Blows up.
 
     Yn = new_Y_n_no_unknown + ChiPhiFunc(vector_free_coef*Yn_free_content, nfp)
     return(Yn)
@@ -324,7 +375,6 @@ def iterate_delta_n_0_offset(n_eval,
     # At even orders, setting Delta[even, 0] to have zero average.
     # This average is a free parameter, because the center component of
     # the ODE is dphi x = f.
-    print('Delta_n_inhomog_component',Delta_n_inhomog_component)
     content = solve_dphi_iota_dchi(
         iota=iota_coef[0]/Delta_n_inhomog_component.nfp,
         f=Delta_n_inhomog_component.content/Delta_n_inhomog_component.nfp,
@@ -531,7 +581,7 @@ class Equilibrium:
     # Checks the accuracy of iteration at order n_unknown by substituting
     # results into the original form of the governing equations.
     # not nfp-dependent
-    def check_governing_equations(self, n_unknown:int, magnetic=False):
+    def check_governing_equations(self, n_unknown:int):
         if n_unknown is None:
             n_unknown = self.get_order()
         elif n_unknown>self.get_order():
@@ -577,7 +627,7 @@ class Equilibrium:
             B_denom_coef_c, B_alpha_coef,
             B_psi_coef_cp, B_theta_coef_cp,
             kap_p, dl_p, tau_p, iota_coef)
-        if magnetic:
+        if self.magnetic_only:
             I = ChiPhiFuncSpecial(0)
             II = ChiPhiFuncSpecial(0)
             III = ChiPhiFuncSpecial(0)
@@ -631,6 +681,7 @@ Equilibrium._tree_unflatten)
 def iterate_2_magnetic_only(equilibrium,
     B_theta_nm1, B_theta_n,
     Yn0,
+    Yn1c_avg,
     B_psi_nm20,
     B_alpha_nb2,
     B_denom_nm1, B_denom_n,
@@ -756,7 +807,8 @@ def iterate_2_magnetic_only(equilibrium,
         dl_p=dl_p,
         tau_p=tau_p,
         iota_coef=iota_coef,
-        static_max_freq=static_max_freq[0]
+        static_max_freq=static_max_freq[0],
+        Yn1c_avg=Yn1c_avg
     )
     Y_coef_cp = Y_coef_cp.append(Ynm1.filter(traced_max_freq[0]))
 
