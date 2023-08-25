@@ -1,14 +1,15 @@
 import unittest
-import numpy as np
 from aqsc import *
+import pathlib
 
 import jax.numpy as jnp
 
 # The numerical derivatives usually aren't as accurate 
 # as to go below the threshold of np.isclose().
-print('Testing allparsed recursion relations '\
+print('Testing all parsed recursion relations '\
       '(except the looped equation) against '\
       'Rodriguez\'s circular axis calculation')
+
 
 circ_axis_tolerance = 1e-4
 def is_roughly_close_chiphifunc(chiphifunc_a, chiphifunc_b):
@@ -18,6 +19,7 @@ def is_roughly_close_chiphifunc(chiphifunc_a, chiphifunc_b):
         )
     )
 
+test_dir = str(pathlib.Path(__file__).parent.resolve())
 B_psi_coef_cp, B_theta_coef_cp, \
     Delta_coef_cp, p_perp_coef_cp,\
     X_coef_cp, Y_coef_cp, Z_coef_cp, \
@@ -25,7 +27,7 @@ B_psi_coef_cp, B_theta_coef_cp, \
     nfp, Xi_0, eta, \
     B_denom_coef_c, B_alpha_coef, \
     kap_p, tau_p = read_first_three_orders(
-        './circ/', 
+        test_dir+'/circ/', 
         R_array=[2,0,1,2,0.0001,0],
         Z_array=[1,2,0,0.001]
     )
@@ -62,7 +64,7 @@ class TestCircularAxis(unittest.TestCase):
             tau_p=tau_p,
             iota_coef=iota_coef
             ).antid_chi()
-        compare_chiphifunc(B_psi_nm2,B_psi_coef_cp[1])
+        print_fractional_error(B_psi_nm2.content,B_psi_coef_cp[1].content)
         self.assertTrue(is_roughly_close_chiphifunc(B_psi_nm2, B_psi_coef_cp[1]))
 
     def test_X(self):
@@ -75,7 +77,7 @@ class TestCircularAxis(unittest.TestCase):
             B_alpha_coef,
             kap_p, dl_p, tau_p,
             iota_coef)
-        compare_chiphifunc(X2, X_coef_cp[2])
+        print_fractional_error(X2.content, X_coef_cp[2].content)
         self.assertTrue(is_roughly_close_chiphifunc(X2, X_coef_cp[2]))
 
     def test_Z(self):
@@ -87,7 +89,7 @@ class TestCircularAxis(unittest.TestCase):
             B_alpha_coef,
             kap_p, dl_p, tau_p,
             iota_coef)
-        compare_chiphifunc(Z2, Z_coef_cp[2])
+        print_fractional_error(Z2.content, Z_coef_cp[2].content)
         self.assertTrue(is_roughly_close_chiphifunc(Z2, Z_coef_cp[2]))
 
     def test_Y(self):
@@ -103,9 +105,9 @@ class TestCircularAxis(unittest.TestCase):
             B_denom_coef_c,
             kap_p, dl_p, tau_p,
             iota_coef,
-            max_freq=50, 
+            static_max_freq=50, 
             Yn0=Y_coef_cp[2][0].content)
-        compare_chiphifunc(Yn, Y_coef_cp[2])
+        print_fractional_error(Yn.content, Y_coef_cp[2].content)
         self.assertTrue(is_roughly_close_chiphifunc(Yn, Y_coef_cp[2]))
 
     def test_p(self):
@@ -118,7 +120,7 @@ class TestCircularAxis(unittest.TestCase):
             p_perp_coef_cp,
             Delta_coef_cp,
             iota_coef)
-        compare_chiphifunc(pn, p_perp_coef_cp[2])
+        print_fractional_error(pn.content, p_perp_coef_cp[2].content)
         self.assertTrue(is_roughly_close_chiphifunc(pn, p_perp_coef_cp[2]))
 
     def test_Delta(self):
@@ -128,14 +130,15 @@ class TestCircularAxis(unittest.TestCase):
             p_perp_coef_cp,
             Delta_coef_cp,
             iota_coef,
-            max_freq=None,
+            static_max_freq=None,
             no_iota_masking = False)
         # Delta_n[0]'s average need to be solved at the following order. 
         # Here we compare two Deltas after setting both of their m=0
         # components to have zero average.
         Delta_n_no_avg = Delta_n - jnp.average(Delta_n[0].content)
         Delta_ans_no_avg = Delta_coef_cp[2] - jnp.average(Delta_coef_cp[2][0].content)
-        compare_chiphifunc(Delta_n_no_avg, Delta_ans_no_avg)
+        print_fractional_error(Delta_n_no_avg.content, Delta_ans_no_avg.content)
         self.assertTrue(is_roughly_close_chiphifunc(Delta_n_no_avg, Delta_ans_no_avg))
-
-unittest.main()
+        
+if __name__ == '__main__':
+    unittest.main()

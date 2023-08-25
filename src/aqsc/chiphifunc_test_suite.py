@@ -291,7 +291,7 @@ def rodriguez_to_landreman(in_array, nfp):
 # X22c.dat		Y20.dat		Yc1.dat		Z33c.dat
 # X22s.dat		Y22c.dat	Ys1.dat		Z33s.dat
 # nfp-dependent!!
-def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_enabled=False):
+def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_enabled=False, plot_axis=False):
     if not use_pyQSC:
         raise AttributeError(
             'use_pyQSC must be enabled to use test datasets from Eduardo Rodriguez.'
@@ -332,7 +332,7 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
     d22c = divide_by_nfp(np.loadtxt(path+'d22c.dat')[:-1], nfp)
     d22s = divide_by_nfp(np.loadtxt(path+'d22s.dat')[:-1], nfp)
     Delta_2 = ChiPhiFunc(np.array([d22s, d20c, d22c]), nfp, trig_mode = True)
-    Delta_coef_cp = ChiPhiEpsFunc([Delta_0, Delta_1, Delta_2], nfp, True)
+    Delta_coef_cp = ChiPhiEpsFunc_remove_zero([Delta_0, Delta_1, Delta_2], nfp, True)
 
     # P_perp --------------------------------------
     p0 = divide_by_nfp(np.loadtxt(path+'p0.dat')[:-1], nfp)
@@ -348,7 +348,7 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
     p22s = divide_by_nfp(np.loadtxt(path+'p22s.dat')[:-1], nfp)
     p22c = divide_by_nfp(np.loadtxt(path+'p22c.dat')[:-1], nfp)
     p_perp_2 = ChiPhiFunc(np.array([p22s,p20c,p22c]), nfp, trig_mode = True)
-    p_perp_coef_cp = ChiPhiEpsFunc([p_perp_0, p_perp_1, p_perp_2], nfp, True)
+    p_perp_coef_cp = ChiPhiEpsFunc_remove_zero([p_perp_0, p_perp_1, p_perp_2], nfp, True)
 
     # B psi ---------------------------------------
     Bp0 = divide_by_nfp(np.loadtxt(path+'Bp0.dat')[:-1], nfp)
@@ -361,14 +361,14 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
         Bpc11
     ]), nfp, trig_mode = True)
 
-    B_psi_coef_cp = ChiPhiEpsFunc([B_psi_0, B_psi_1], nfp, True)
+    B_psi_coef_cp = ChiPhiEpsFunc_remove_zero([B_psi_0, B_psi_1], nfp, True)
 
     # B theta ---------------------------------------
     Btc20 = divide_by_nfp(np.loadtxt(path+'Btc20.dat')[:-1], nfp)
     B_theta_2 = ChiPhiFunc(np.array([
         Btc20
     ]), nfp, trig_mode = True)
-    B_theta_coef_cp = ChiPhiEpsFunc([0, 0, B_theta_2], nfp, True)
+    B_theta_coef_cp = ChiPhiEpsFunc_remove_zero([0, 0, B_theta_2], nfp, True)
 
     # X ---------------------------------------
     Xc1 = divide_by_nfp(np.loadtxt(path+'Xc1.dat')[:-1], nfp)
@@ -397,7 +397,7 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
         X33c
     ]), nfp, trig_mode = True)
 
-    X_coef_cp = ChiPhiEpsFunc([0, X1, X2, X3], nfp, True)
+    X_coef_cp = ChiPhiEpsFunc_remove_zero([0, X1, X2, X3], nfp, True)
 
     # Y ---------------------------------------
     Ys1 = divide_by_nfp(np.loadtxt(path+'Ys1.dat')[:-1], nfp)
@@ -427,7 +427,7 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
         Y33c
     ]), nfp, trig_mode = True)
 
-    Y_coef_cp = ChiPhiEpsFunc([0, Y1, Y2, Y3], nfp, True)
+    Y_coef_cp = ChiPhiEpsFunc_remove_zero([0, Y1, Y2, Y3], nfp, True)
 
     # Z ---------------------------------------
     Z20 = divide_by_nfp(np.loadtxt(path+'Z20.dat')[:-1], nfp)
@@ -450,10 +450,10 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
         Z33c
     ]), nfp, trig_mode = True)
 
-    Z_coef_cp = ChiPhiEpsFunc([0, 0, Z2, Z3], nfp, True)
+    Z_coef_cp = ChiPhiEpsFunc_remove_zero([0, 0, Z2, Z3], nfp, True)
 
     # Constants
-    B_alpha_e = ChiPhiEpsFunc([Ba0, Ba1], nfp, True)
+    B_alpha_e = ChiPhiEpsFunc_remove_zero([Ba0, Ba1], nfp, True)
     kap_p = ChiPhiFunc(np.array([divide_by_nfp(np.loadtxt(path+'kappa.dat')[:-1], nfp)]), nfp)
     tau_p = ChiPhiFunc(np.array([divide_by_nfp(np.loadtxt(path+'tau.dat')[:-1], nfp)]), nfp)
 
@@ -470,9 +470,9 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
     ]), nfp, trig_mode = True)
     # B1 is given by first order jacobian equation, above 14 in the first
     # half of the 2-part paper
-    B_denom_coef_c = ChiPhiEpsFunc([1, phi_avg(-X1*2*kap_p), B2, B3], nfp, True)
+    B_denom_coef_c = ChiPhiEpsFunc_remove_zero([1, phi_avg(-X1*2*kap_p), B2, B3], nfp, True)
 
-    iota_e = ChiPhiEpsFunc(list(np.loadtxt(path+'outputs.dat')), nfp, True)
+    iota_e = ChiPhiEpsFunc_remove_zero(list(np.loadtxt(path+'outputs.dat')), nfp, True)
 
     # Not an actual representation in pyQSC.
     # only for calculating axis length.
@@ -480,8 +480,9 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
     zc, zs = rodriguez_to_landreman(Z_array, 1)
     stel = Qsc(rc=rc, rs=rs, zc=zc, zs=zs, nfp=1)
     dl_p = stel.axis_length/(2*np.pi)
-    print('Axis shape:')
-    stel.plot_axis(frenet=False)
+    if plot_axis:
+        print('Axis shape:')
+        stel.plot_axis(frenet=False)
 
     if numerical_mode:
         return(
@@ -502,14 +503,22 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
     )
 
     return(
-        B_psi_coef_cp, B_theta_coef_cp,
-        Delta_coef_cp, p_perp_coef_cp,
-        X_coef_cp, Y_coef_cp, Z_coef_cp,
-        iota_e, dl_p,
-        int(nfp_read), Xi_0, eta,
+        B_psi_coef_cp, 
+        B_theta_coef_cp,
+        Delta_coef_cp, 
+        p_perp_coef_cp,
+        X_coef_cp, 
+        Y_coef_cp, 
+        Z_coef_cp,
+        iota_e, 
+        dl_p,
+        int(nfp_read), 
+        Xi_0, 
+        eta,
         B_denom_coef_c,
         B_alpha_e,
-        kap_p, tau_p
+        kap_p, 
+        tau_p
     )
 
 # not nfp-dependent
@@ -560,7 +569,7 @@ def import_from_stel(stel, len_phi=1000, nfp_enabled=False):
 
     dl_p = stel.abs_G0_over_B0
     iota = stel.iotaN
-    iota_coef = ChiPhiEpsFunc([iota], nfp, True)
+    iota_coef = ChiPhiEpsFunc_remove_zero([iota], nfp, True)
     tau_p = ChiPhiFunc(np.array([to_phi(stel.varphi, -stel.torsion)]), nfp)
     kap_p = ChiPhiFunc(np.array([to_phi(stel.varphi, stel.curvature)]), nfp)
     B0 = 1/stel.B0**2
@@ -583,7 +592,7 @@ def import_from_stel(stel, len_phi=1000, nfp_enabled=False):
         to_phi(stel.varphi, stel.X3c1),
         to_phi(stel.varphi, stel.X3c3)*r_factor**3
     ]), nfp, trig_mode = True)
-    X_coef_cp = ChiPhiEpsFunc([0, X1, X2], nfp, True)
+    X_coef_cp = ChiPhiEpsFunc_remove_zero([0, X1, X2], nfp, True)
     Y1 = ChiPhiFunc(np.array([
         to_phi(stel.varphi, stel.Y1s), # sin coeff is zero
         to_phi(stel.varphi, stel.Y1c),
@@ -599,7 +608,7 @@ def import_from_stel(stel, len_phi=1000, nfp_enabled=False):
         to_phi(stel.varphi, stel.Y3c1),
         to_phi(stel.varphi, stel.Y3c3)
     ]), nfp, trig_mode = True)*r_factor**3
-    Y_coef_cp = ChiPhiEpsFunc([0, Y1, Y2], nfp, True)
+    Y_coef_cp = ChiPhiEpsFunc_remove_zero([0, Y1, Y2], nfp, True)
     Z2 = ChiPhiFunc(np.array([
         to_phi(stel.varphi, stel.Z2s),
         to_phi(stel.varphi, stel.Z20),
@@ -611,15 +620,15 @@ def import_from_stel(stel, len_phi=1000, nfp_enabled=False):
         to_phi(stel.varphi, stel.Z3c1),
         to_phi(stel.varphi, stel.Z3c3)
     ]), nfp, trig_mode = True)*r_factor**3
-    Z_coef_cp = ChiPhiEpsFunc([0, 0, Z2], nfp, trig_mode = True)
+    Z_coef_cp = ChiPhiEpsFunc_remove_zero([0, 0, Z2], nfp, trig_mode = True)
     # B components
 
     Btc20 = 2*stel.I2/stel.B0
-    B_theta_coef_cp = ChiPhiEpsFunc([0, 0, ChiPhiFunc(np.array([
+    B_theta_coef_cp = ChiPhiEpsFunc_remove_zero([0, 0, ChiPhiFunc(np.array([
         to_phi(stel.varphi, Btc20)
     ]), nfp)], nfp, True)
 
-    B_psi_coef_cp = ChiPhiEpsFunc([0], nfp, trig_mode = True)
+    B_psi_coef_cp = ChiPhiEpsFunc_remove_zero([0], nfp, trig_mode = True)
 
     B1c = -2*B0*eta
     B1 = ChiPhiFunc(np.array([
@@ -634,7 +643,7 @@ def import_from_stel(stel, len_phi=1000, nfp_enabled=False):
         np.average(B20),
         np.average(B2c)
     ]), nfp, trig_mode = True)
-    B_denom_coef_c = ChiPhiEpsFunc([
+    B_denom_coef_c = ChiPhiEpsFunc_remove_zero([
         B0,
         B1,
         ChiPhiFunc(
@@ -644,7 +653,7 @@ def import_from_stel(stel, len_phi=1000, nfp_enabled=False):
 
     Ba0 = np.average(stel.G0)
     Ba1 = np.average(2/stel.B0*(stel.G2 + stel.iotaN*stel.I2))
-    B_alpha_coef = ChiPhiEpsFunc([Ba0, Ba1], nfp, True)
+    B_alpha_coef = ChiPhiEpsFunc_remove_zero([Ba0, Ba1], nfp, True)
 
     # X_coef_cp.mask(2), Done
     # Y_coef_cp.mask(2), Done
@@ -664,7 +673,7 @@ def import_from_stel(stel, len_phi=1000, nfp_enabled=False):
         B_alpha_coef,
         kap_p, dl_p, tau_p,
         iota_coef, eta,
-        ChiPhiEpsFunc([0,0,0], 0, True), # no pressure or delta
-        ChiPhiEpsFunc([0,0,0], 0, True))
+        ChiPhiEpsFunc_remove_zero([0,0,0], nfp, True), # no pressure or delta
+        ChiPhiEpsFunc_remove_zero([0,0,0], nfp, True))
 
     return(equilibrium_out, Y3)

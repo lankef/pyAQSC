@@ -1,7 +1,7 @@
 # Solves the looped equations.
 import jax.numpy as jnp
-from functools import partial
-from jax import jit
+# from functools import partial
+# from jax import jit
 
 # ChiPhiFunc and ChiPhiEpsFunc
 from .chiphifunc import *

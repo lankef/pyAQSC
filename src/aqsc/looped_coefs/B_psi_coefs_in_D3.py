@@ -1,8 +1,8 @@
 from aqsc.math_utilities import *
 from aqsc.chiphifunc import *
-from jax import jit
-from functools import partial
-@partial(jit, static_argnums=(0, 10, 11, 12, 13))
+# from jax import jit
+# from functools import partial
+# @partial(jit, static_argnums=(0, 10, 11, 12, 13))
 def eval_B_psi_coefs_D3(n_eval, X_coef_cp, Y_coef_cp,
     Delta_coef_cp, B_alpha_coef, B_denom_coef_c,
     dl_p, tau_p, kap_p, iota_coef,

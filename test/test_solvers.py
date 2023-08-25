@@ -20,7 +20,7 @@ class TestSolver(unittest.TestCase):
         test_y = ChiPhiFunc_from_splines(splines=test_splines, nfp=1).content[0]
         test_yp = ChiPhiFunc_from_splines(splines=test_splines, nfp=1, dphi_order=1).content[0]
         test_f = test_yp+test_p*test_y
-        test_y_guess = solve_1d_fft(p_eff=test_p, f_eff=test_f, fft_max_freq=15)
+        test_y_guess = solve_1d_fft(p_eff=test_p, f_eff=test_f, static_max_freq=15)
         # Depreciated
         # test_y_guess_asym = solve_1d_asym(p_eff=test_p, f_eff=test_f)
         print('Testing spectral ODE solver (tolerance:', solver_tolerance, ')')
@@ -46,5 +46,6 @@ class TestSolver(unittest.TestCase):
         print('Testing PDE solver for dphi y + iota dchi y = f (tolerance:', solver_tolerance, ')')
         print_fractional_error(test_y.content, guess_y_content)
         self.assertTrue(jnp.all(is_roughly_close(test_y.content, guess_y_content)))
-
-unittest.main()
+        
+if __name__ == '__main__':
+    unittest.main()

@@ -6,7 +6,8 @@ import jax.numpy as jnp
 
 orig_list = [0, 1, 3, jnp.array([666,667])] # legal, legal, legal, illegal
 a = ChiPhiEpsFunc(orig_list, 2, True) 
-a = a.zero_append(2) # legal, legal
+a = a.append(ChiPhiFuncSpecial(0)) # legal, legal
+a = a.append(ChiPhiFuncSpecial(0)) # legal, legal
 a = a.append(66) # legal
 a = a.append(ChiPhiFuncSpecial(-10)) # legal
 a = a.append(ChiPhiFunc(jnp.array([[1]]),2)) # legal
@@ -60,4 +61,5 @@ class TestChiPhiEpsFunc(unittest.TestCase):
         self.assertTrue(b_final[10].is_special() and b_final[10].nfp==0)
         self.assertTrue(b_final.nfp==2)
         
-unittest.main()
+if __name__ == '__main__':
+    unittest.main()

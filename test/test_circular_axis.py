@@ -1,6 +1,6 @@
 import unittest
-import numpy as np
 from aqsc import *
+import pathlib
 
 import jax.numpy as jnp
 
@@ -13,6 +13,7 @@ def is_roughly_close_chiphifunc(chiphifunc_a, chiphifunc_b):
         )
     )
 
+test_dir = str(pathlib.Path(__file__).parent.resolve())
 B_psi_coef_cp, B_theta_coef_cp, \
     Delta_coef_cp, p_perp_coef_cp,\
     X_coef_cp, Y_coef_cp, Z_coef_cp, \
@@ -20,7 +21,7 @@ B_psi_coef_cp, B_theta_coef_cp, \
     nfp, Xi_0, eta, \
     B_denom_coef_c, B_alpha_coef, \
     kap_p, tau_p = read_first_three_orders(
-        './circ/', 
+        test_dir+'/circ/', 
         R_array=[2,0,1,2,0.0001,0],
         Z_array=[1,2,0,0.001]
     )
@@ -144,4 +145,6 @@ class TestCircularAxis(unittest.TestCase):
             circ_equilibrium.unknown['B_theta_coef_cp'][2],
             B_theta_coef_cp[2]
         ))
-unittest.main()
+        
+if __name__ == '__main__':
+    unittest.main()

@@ -1,9 +1,9 @@
 # This script evaluates all governing equations to order n.
 from math import floor, ceil
 from aqsc.math_utilities import *
-from jax import jit
-from functools import partial
-@partial(jit, static_argnums=(0,))
+# from jax import jit
+# from functools import partial
+# @partial(jit, static_argnums=(0,))
 def validate_J(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
     B_denom_coef_c, B_alpha_coef,
     kap_p, dl_p, tau_p, iota_coef):
@@ -200,7 +200,7 @@ def validate_J(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
         +(-2*is_seq(0,n)*dl_p*is_integer(n)*diff(Z_coef_cp[n],False,1))\
         +(2*is_seq(0,n)*dl_p**2*kap_p*X_coef_cp[n]*is_integer(n))
     return(out)
-@partial(jit, static_argnums=(0,))
+# @partial(jit, static_argnums=(0,))
 def validate_Cb(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
     B_denom_coef_c, B_alpha_coef,
     B_psi_coef_cp, B_theta_coef_cp,
@@ -332,7 +332,7 @@ def validate_Cb(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
 
     out = ((is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum_parallel(sum_arg_31,0,n+2)+is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum_parallel(sum_arg_29,0,n+2)-2*is_seq(0,n)*dl_p*is_integer(n)*py_sum_parallel(sum_arg_27,0,n)-2*is_seq(0,n)*dl_p*is_integer(n)*py_sum_parallel(sum_arg_25,0,n))*tau_p+is_seq(0,n+2)*is_integer(n+2)*py_sum_parallel(sum_arg_9,0,n+2)+py_sum_parallel(sum_arg_7,ceil(n/2)+1,floor(n)+2)-py_sum_parallel(sum_arg_4,ceil(n/2)+1,floor(n)+2)+2*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_23,0,n)-2*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_21,0,n)-is_seq(0,n+2)*is_integer(n+2)*py_sum_parallel(sum_arg_19,0,n+2)+is_seq(0,n+2)*dl_p*kap_p*is_integer(n+2)*py_sum_parallel(sum_arg_17,0,n+2)-2*is_seq(0,n)*dl_p*kap_p*is_integer(n)*py_sum_parallel(sum_arg_15,0,n)+py_sum_parallel(sum_arg_13,ceil(n/2)+1,floor(n)+2)-py_sum_parallel(sum_arg_11,ceil(n/2)+1,floor(n)+2)-2*py_sum_parallel(sum_arg_1,ceil(n/2),floor(n))-2*is_seq(0,n)*is_integer(n)*diff(Z_coef_cp[n],False,1)+2*is_seq(0,n)*dl_p*kap_p*X_coef_cp[n]*is_integer(n))/2
     return(out)
-@partial(jit, static_argnums=(0,))
+# @partial(jit, static_argnums=(0,))
 def validate_Ck(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
     B_denom_coef_c, B_alpha_coef,
     B_psi_coef_cp, B_theta_coef_cp,
@@ -473,7 +473,7 @@ def validate_Ck(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
         +(-is_seq(0,n)*is_integer(n)*diff(X_coef_cp[n],False,1))\
         +(-is_seq(0,n)*dl_p*kap_p*Z_coef_cp[n]*is_integer(n))
     return(out)
-@partial(jit, static_argnums=(0,))
+# @partial(jit, static_argnums=(0,))
 def validate_Ct(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
     B_denom_coef_c, B_alpha_coef,
     B_psi_coef_cp, B_theta_coef_cp,
@@ -631,7 +631,7 @@ def validate_Ct(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
         +(py_sum_parallel(sum_arg_10,ceil(0.5*n)+1,floor(n)+2)/2)\
         +(-is_seq(0,n)*is_integer(n)*diff(Y_coef_cp[n],False,1))
     return(out)
-@partial(jit, static_argnums=(0,))
+# @partial(jit, static_argnums=(0,))
 def validate_I(n, B_denom_coef_c,
     p_perp_coef_cp, Delta_coef_cp,
     iota_coef):
@@ -678,7 +678,7 @@ def validate_I(n, B_denom_coef_c,
 
     out = (2*py_sum_parallel(sum_arg_8,ceil(n/2),floor(n))+2*py_sum_parallel(sum_arg_5,ceil(n/2),floor(n))+2*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_3,0,n)-py_sum_parallel(sum_arg_2,ceil(n/2),floor(n))+2*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_10,0,n))/2
     return(out)
-@partial(jit, static_argnums=(0,))
+# @partial(jit, static_argnums=(0,))
 def validate_II(n,
     B_theta_coef_cp, B_alpha_coef, B_denom_coef_c,
     p_perp_coef_cp, Delta_coef_cp, iota_coef):
@@ -777,7 +777,7 @@ def validate_II(n,
 
     out = (py_sum_parallel(sum_arg_9,ceil(n/2),floor(n))+2*py_sum_parallel(sum_arg_7,ceil(n/2),floor(n))-2*py_sum_parallel(sum_arg_3,ceil(n/2),floor(n))+2*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_23,0,n)-2*py_sum_parallel(sum_arg_20,ceil(n/2),floor(n))-2*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_17,0,n)+2*py_sum_parallel(sum_arg_15,ceil(n/2),floor(n))+2*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_13,0,n)-py_sum_parallel(sum_arg_12,ceil(n/2),floor(n)))/2
     return(out)
-@partial(jit, static_argnums=(0,))
+# @partial(jit, static_argnums=(0,))
 def validate_III(n,
     B_theta_coef_cp, B_psi_coef_cp,
     B_alpha_coef, B_denom_coef_c,
@@ -902,7 +902,7 @@ def validate_III(n,
 
     out = (4*py_sum_parallel(sum_arg_9,ceil(n/2)+1,floor(n)+2)-4*py_sum_parallel(sum_arg_4,ceil(n/2)+1,floor(n)+2)+4*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_29,0,n)+4*py_sum_parallel(sum_arg_27,ceil(n/2),floor(n))+4*py_sum_parallel(sum_arg_24,ceil(n/2),floor(n))+4*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_21,0,n)+2*py_sum_parallel(sum_arg_19,ceil(n/2)+1,floor(n)+2)-4*py_sum_parallel(sum_arg_16,ceil(n/2),floor(n))-4*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_14,0,n)-4*py_sum_parallel(sum_arg_13,ceil(n/2)+1,floor(n)+2)-py_sum_parallel(sum_arg_11,ceil(n/2)+1,floor(n)+2)+4*py_sum_parallel(sum_arg_1,ceil(n/2)+1,floor(n)+2))/4
     return(out)
-@partial(jit, static_argnums=(0,))
+# @partial(jit, static_argnums=(0,))
 def validate_E6(n,
     B_theta_coef_cp, B_psi_coef_cp,
     B_alpha_coef, B_denom_coef_c,
@@ -1027,7 +1027,7 @@ def validate_E6(n,
 
     out = ((-4*py_sum_parallel(sum_arg_9,ceil(n/2)+1,floor(n)+2))+4*py_sum_parallel(sum_arg_6,ceil(n/2)+1,floor(n)+2)+4*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_29,0,n)+4*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_27,0,n)+4*py_sum_parallel(sum_arg_25,ceil(n/2),floor(n))+4*py_sum_parallel(sum_arg_22,ceil(n/2),floor(n))-4*py_sum_parallel(sum_arg_19,ceil(n/2)+1,floor(n)+2)-4*py_sum_parallel(sum_arg_17,ceil(n/2),floor(n))-4*is_seq(0,n)*is_integer(n)*py_sum_parallel(sum_arg_15,0,n)-py_sum_parallel(sum_arg_14,ceil(n/2)+1,floor(n)+2)+2*py_sum_parallel(sum_arg_12,ceil(n/2)+1,floor(n)+2)+4*py_sum_parallel(sum_arg_1,ceil(n/2)+1,floor(n)+2))/4
     return(out)
-@partial(jit, static_argnums=(0,))
+# @partial(jit, static_argnums=(0,))
 def validate_D2(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
     B_denom_coef_c, B_alpha_coef,
     B_psi_coef_cp, B_theta_coef_cp,
@@ -1095,7 +1095,7 @@ def validate_D2(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
 
     out = -((is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum_parallel(sum_arg_15,0,n+2)-is_seq(0,n+2)*dl_p*is_integer(n+2)*py_sum_parallel(sum_arg_14,0,n+2))*tau_p+py_sum_parallel(sum_arg_9,ceil(n/2)+1,floor(n)+2)+is_seq(0,n+2)*is_integer(n+2)*py_sum_parallel(sum_arg_7,0,n+2)+is_seq(0,n+2)*is_integer(n+2)*py_sum_parallel(sum_arg_6,0,n+2)+is_seq(0,n+2)*is_integer(n+2)*py_sum_parallel(sum_arg_5,0,n+2)-2*py_sum_parallel(sum_arg_4,ceil(n/2),floor(n))+is_seq(0,n+2)*dl_p*kap_p*is_integer(n+2)*py_sum_parallel(sum_arg_2,0,n+2)+py_sum_parallel(sum_arg_13,ceil(n/2)+1,floor(n)+2)+py_sum_parallel(sum_arg_11,ceil(n/2)+1,floor(n)+2)-is_seq(0,n+2)*dl_p*kap_p*is_integer(n+2)*py_sum_parallel(sum_arg_1,0,n+2)+(is_seq(0,n+2)*dl_p*n+2*is_seq(0,n+2)*dl_p)*Z_coef_cp[n+2]*is_integer(n+2))/2
     return(out)
-@partial(jit, static_argnums=(0,))
+# @partial(jit, static_argnums=(0,))
 def validate_D3(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
     B_denom_coef_c, B_alpha_coef,
     B_psi_coef_cp, B_theta_coef_cp,
@@ -1173,7 +1173,7 @@ def validate_D3(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
         +(-py_sum_parallel(sum_arg_11,ceil(n/2),floor(n)))\
         +(-is_seq(0,n)*dl_p*is_integer(n)*diff(Z_coef_cp[n],True,1))
     return(out)
-@partial(jit, static_argnums=(0,))
+# @partial(jit, static_argnums=(0,))
 def validate_kt(n, X_coef_cp, Y_coef_cp, Z_coef_cp,
     B_denom_coef_c, B_alpha_coef,
     B_psi_coef_cp, B_theta_coef_cp,

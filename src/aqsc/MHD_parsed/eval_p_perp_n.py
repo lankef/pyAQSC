@@ -8,9 +8,9 @@
 # coeff_dphi = -2(Delta_coef_cp[0]-1)/(n*B_alpha_coef[0]*B_denom_coef_c[0])
 from math import floor, ceil
 from aqsc.math_utilities import *
-from jax import jit
-from functools import partial
-@partial(jit, static_argnums=(0,))
+# from jax import jit
+# from functools import partial
+# @partial(jit, static_argnums=(0,))
 def eval_p_perp_n_cp(n,
     B_theta_coef_cp,
     B_psi_coef_cp,

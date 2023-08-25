@@ -2,7 +2,8 @@
 # in parsed/. Necessary masking and/or n-substitution are included. All iterate_*
 # methods returns ChiPhiFunc's.
 import jax.numpy as jnp
-from jax import jit, vmap, tree_util
+# from jax import jit, vmap, tree_util
+from jax import tree_util
 from functools import partial # for JAX jit with static params
 from matplotlib import pyplot as plt
 
@@ -729,10 +730,10 @@ def iterate_2_magnetic_only(equilibrium,
     iota_coef = iota_coef.append(iota_nm2b2)
     B_denom_coef_c = B_denom_coef_c.append(B_denom_nm1)
     B_denom_coef_c = B_denom_coef_c.append(B_denom_n)
-    p_perp_coef_cp = p_perp_coef_cp.zero_append()
-    p_perp_coef_cp = p_perp_coef_cp.zero_append()
-    Delta_coef_cp = Delta_coef_cp.zero_append()
-    Delta_coef_cp = Delta_coef_cp.zero_append()
+    p_perp_coef_cp = p_perp_coef_cp.append(ChiPhiFuncSpecial(0))
+    p_perp_coef_cp = p_perp_coef_cp.append(ChiPhiFuncSpecial(0))
+    Delta_coef_cp = Delta_coef_cp.append(ChiPhiFuncSpecial(0))
+    Delta_coef_cp = Delta_coef_cp.append(ChiPhiFuncSpecial(0))
 
     # Evaluating order n_eval-1
     # Requires:

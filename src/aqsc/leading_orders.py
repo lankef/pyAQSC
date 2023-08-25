@@ -1,5 +1,5 @@
 import jax.numpy as jnp
-from jax import jit
+# from jax import jit
 
 from .looped_solver import *
 from .chiphifunc import *

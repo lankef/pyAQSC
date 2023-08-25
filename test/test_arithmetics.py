@@ -271,5 +271,6 @@ class TestArithmetics(unittest.TestCase):
         print('Testing **:')
         print_fractional_error(evaluate_ChiPhiFunc(test1**3), (func1_result*func1_result*func1_result))
         print_fractional_error(evaluate_ChiPhiFunc(testodd**3), (funcodd_result*funcodd_result*funcodd_result))
-
-unittest.main()
+        
+if __name__ == '__main__':
+    unittest.main()

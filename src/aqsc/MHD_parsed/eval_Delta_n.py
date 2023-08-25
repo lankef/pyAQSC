@@ -5,9 +5,9 @@
 # Must be evaluated with Delta_n=0
 from math import floor, ceil
 from aqsc.math_utilities import *
-from jax import jit
-from functools import partial
-@partial(jit, static_argnums=(0,))
+# from jax import jit
+# from functools import partial
+# @partial(jit, static_argnums=(0,))
 def eval_inhomogenous_Delta_n_cp(n,
     B_denom_coef_c,
     p_perp_coef_cp,

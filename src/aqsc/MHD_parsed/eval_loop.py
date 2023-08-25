@@ -6,9 +6,9 @@
 # B_psi_coef_cp[n-2] = 0, B_denom_coef_c[n] = 0 and B_theta_coef_cp[n] = 0
 from math import floor, ceil
 from aqsc.math_utilities import *
-from jax import jit
-from functools import partial
-@partial(jit, static_argnums=(0,))
+# from jax import jit
+# from functools import partial
+# @partial(jit, static_argnums=(0,))
 def eval_loop(n, X_coef_cp, Y_coef_cp, Z_coef_cp, \
     B_theta_coef_cp, B_psi_coef_cp, B_alpha_coef, B_denom_coef_c, \
     p_perp_coef_cp, Delta_coef_cp, kap_p, dl_p, tau_p, iota_coef):

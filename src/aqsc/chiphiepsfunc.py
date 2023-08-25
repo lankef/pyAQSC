@@ -1,6 +1,7 @@
 import jax.numpy as jnp
-from functools import partial
-from jax import jit, tree_util
+# from functools import partial
+# from jax import jit, tree_util
+from jax import tree_util
 
 from .chiphifunc import *
 
@@ -81,7 +82,7 @@ class ChiPhiEpsFunc:
                 return(ChiPhiEpsFunc(self.chiphifunc_list+[ChiPhiFuncSpecial(-14)], self.nfp))
         return(ChiPhiEpsFunc(self.chiphifunc_list+[item], self.nfp))
 
-    @partial(jit, static_argnums=(1,))
+    # @partial(jit, static_argnums=(1,))
     def zero_append(self, n=1):
         '''
         Append one or more zeros to the end of the list.
@@ -89,12 +90,16 @@ class ChiPhiEpsFunc:
         expressions used to evaluate a higher order term includes the term itself,
         and requires ChiPhiEpsFunc to provide zero (rather than ChiPhiFuncNull
         from __getitem__ when array index is out of bound)
-        '''
-        zeros = [ChiPhiFuncSpecial(0)]*n
-        # we know the new element has consistent nfp.
-        return(ChiPhiEpsFunc(self.chiphifunc_list+zeros, self.nfp))
 
-    @partial(jit, static_argnums=(1,))
+        Was required before when out of range returns a special ChiPhiFunc,
+        rather than 0 to check for logical error. Is now redundant.
+        '''
+        return(self)
+        # zeros = [ChiPhiFuncSpecial(0)]*n
+        # # we know the new element has consistent nfp.
+        # return(ChiPhiEpsFunc(self.chiphifunc_list+zeros, self.nfp))
+
+    # @partial(jit, static_argnums=(1,))
     def mask(self, n):
         '''
         Produces a sub-list up to the nth element (order).
@@ -121,7 +126,7 @@ class ChiPhiEpsFunc:
         ''' Gets the currently known order of a power series. '''
         return(len(self.chiphifunc_list)-1)
 
-    @partial(jit, static_argnums=(0,))
+    # @partial(jit, static_argnums=(0,))
     def zeros_like(other):
         '''
         Make a ChiPhiFunc with zero elements with the same order
@@ -177,6 +182,18 @@ class ChiPhiEpsFunc:
                 chiphifunc_list.append(ChiPhiFunc(item, nfp))
         out_chiphiepsfunc = ChiPhiEpsFunc(chiphifunc_list, nfp)
         return(out_chiphiepsfunc)
+    
+# Replaces all zeros with ChiPhiFunc(nfp=0). Cannot be jitted.
+def ChiPhiEpsFunc_remove_zero(list:list, nfp:int, check_consistency:bool=False):
+    for i in range(len(list)):
+        item = list[i]
+        if isinstance(item, ChiPhiFunc):
+            if jnp.all(item.content==0):
+                list[i] = ChiPhiFuncSpecial(0)
+        elif jnp.isscalar(item) or item.ndim==0:
+            if item==0:
+                list[i] = ChiPhiFuncSpecial(0)
+    return(ChiPhiEpsFunc(list, nfp, check_consistency))
 
 # For JAX use
 tree_util.register_pytree_node(ChiPhiEpsFunc,

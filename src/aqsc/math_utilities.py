@@ -1,6 +1,6 @@
 import jax.numpy as jnp
-from jax import jit, vmap, tree_util
-from functools import partial # for JAX jit with static params
+# from jax import jit, vmap, tree_util
+# from functools import partial # for JAX jit with static params
 
 from math import floor, ceil
 from .chiphifunc import *
@@ -39,7 +39,7 @@ py_sum_parallel = py_sum
 # Used to make sure new indices of terms and new upper bounds are within the
 # bound of the original summations
 # is_seq(a,b): 1 if a<=b
-@partial(jit, static_argnums=(0, 1,))
+# @partial(jit, static_argnums=(0, 1,))
 def is_seq(a, b):
     if a<=b:
         return(1)
@@ -47,14 +47,14 @@ def is_seq(a, b):
         return(ChiPhiFuncSpecial(0))
 # Used to ensure new index values (after removing the innermost sum) are integers.
 # is_integer(a): 1 if a is integer
-@partial(jit, static_argnums=(0,))
+# @partial(jit, static_argnums=(0,))
 def is_integer(a):
     if a%1==0:
         return(1)
     else:
         return(ChiPhiFuncSpecial(0))
 
-@partial(jit, static_argnums=(1, 2, ))
+# @partial(jit, static_argnums=(1, 2, ))
 def diff_backend(y, is_chi:bool, order):
     '''
     Takes phi or chi derivative.
@@ -76,7 +76,7 @@ def diff_backend(y, is_chi:bool, order):
     return(out)
 
 # Maxima sometimes merges a few diff's together.
-@partial(jit, static_argnums=(1, 2, 3, 4,))
+# @partial(jit, static_argnums=(1, 2, 3, 4,))
 def diff(y, is_chi1:bool, order1:int, is_chi2=None, order2=None):
     out = diff_backend(y, is_chi1, order1)
     if is_chi2 is not None:

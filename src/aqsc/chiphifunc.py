@@ -1,6 +1,7 @@
 import jax.numpy as jnp
-from jax import jit, vmap, tree_util
-from functools import partial # for JAX jit with static params
+from jax import vmap, tree_util
+# from jax import jit, vmap, tree_util
+# from functools import partial # for JAX jit with static params
 
 import math # factorial in dphi_direct
 from matplotlib import pyplot as plt
@@ -167,7 +168,7 @@ def ChiPhiFuncSpecial(error_code:int):
 Convolves 2 2d arrays along axis=0.
 The inputs must have with equal lengths along axis=1
 '''
-batch_convolve = jit(vmap(jnp.convolve, in_axes=1, out_axes=1))
+batch_convolve = vmap(jnp.convolve, in_axes=1, out_axes=1)
 
 def phi_avg(in_quant):
     '''
@@ -246,6 +247,7 @@ class ChiPhiFunc:
     of a ChiPhiFunc, and need to be handled very carefully.
 
     Negative-nfp -----
+    -1: Inconsistent even/oddness in ChiPhiEpsFUnc
     -2: Invalid/mismatched nfp
     -3: Invalid mode number
     -4: Mismatched even/oddness/direct division by chi-dependent ChiPhiFunc
@@ -316,9 +318,7 @@ class ChiPhiFunc:
     def __str__(self):
         ''' For printing a ChiPhiFunc '''
         if self.is_special():
-            if self.nfp==-1:
-                msg = 'index out of bound'
-            elif self.nfp==0:
+            if self.nfp==0:
                 msg = 'conditional 0'
             else:
                 msg = 'error '+str(self.nfp)
@@ -518,7 +518,7 @@ class ChiPhiFunc:
         ''' Overloads the other * self operator. See __mul__() for details. '''
         return(self*other)
 
-    @jit
+    # @jit
     def __truediv__(self, other):
         '''
         Overloads the self / other operator. "Division" in the context of NAE
@@ -612,7 +612,7 @@ class ChiPhiFunc:
         return ChiPhiFunc(mat @ self.content, self.nfp)
 
     # Static argument
-    @partial(jit, static_argnums=(1,))
+    # @partial(jit, static_argnums=(1,))
     def __pow__(self, other):
         '''
         Overloads the self ** other operator. Only supports integer other.
@@ -641,7 +641,7 @@ class ChiPhiFunc:
         return(ChiPhiFunc(jnp.fft.ifft(self.content, axis=1), self.nfp))
 
     # Static argument
-    @partial(jit, static_argnums=(1,))
+    # @partial(jit, static_argnums=(1,))
     def dchi(self, order=1):
         '''
         Derivative in chi.
@@ -679,7 +679,7 @@ class ChiPhiFunc:
         return(ChiPhiFunc(-1j * self.content/temp, self.nfp))
 
     # Static argument
-    @partial(jit, static_argnums=(1, 2,))
+    # @partial(jit, static_argnums=(1, 2,))
     def dphi(self, order:int=1, mode=0):
         if self.is_special():
             return(self)
@@ -717,7 +717,7 @@ class ChiPhiFunc:
         return(ChiPhiFunc(jnp.exp(self.content), self.nfp))
 
     # Input is not order-dependent, and permitted to be static.
-    @partial(jit, static_argnums=(1,))
+    # @partial(jit, static_argnums=(1,))
     def integrate_phi_fft(self, zero_avg):
         '''
         Phi-integrate a ChiPhiFunc over 0 to 2pi or 0 to a given phi.
@@ -755,7 +755,7 @@ class ChiPhiFunc:
 
     ''' I.1.3 phi Filters '''
     # Static arguments
-    @partial(jit, static_argnums=(2,))
+    # @partial(jit, static_argnums=(2,))
     def filter(self, arg:float, mode:int=0):
         '''
         An expandable filter. Now only low-pass is available.
@@ -787,7 +787,7 @@ class ChiPhiFunc:
         else:
             return(ChiPhiFuncSpecial())
 
-    @partial(jit, static_argnums=(1,))
+    # @partial(jit, static_argnums=(1,))
     def filter_reduced_length(self, arg:int):
         '''
         Low pass filter that reduces the length of a ChiPhiFunc.
@@ -844,7 +844,7 @@ class ChiPhiFunc:
     #     if self.is_special():
     #         return(self)
     #     return(ChiPhiFunc(jnp.imag(self.content), self.nfp))
-    @partial(jit, static_argnums=(1,))
+    # @partial(jit, static_argnums=(1,))
     def cap_m(self, m:int):
         '''
         Takes the center m+1 rows of content. If the ChiPhiFunc
@@ -1091,7 +1091,7 @@ tree_util.register_pytree_node(ChiPhiFunc,
 ''' I.2 Utilities '''
 # Used only in pseudosspectral method.
 roll_axis_01 = lambda a, shift: jnp.roll(jnp.roll(a, shift, axis=0), shift, axis=1)
-batch_roll_axis_01 = jit(vmap(roll_axis_01, in_axes=0, out_axes=0))
+batch_roll_axis_01 = vmap(roll_axis_01, in_axes=0, out_axes=0)
 # @lru_cache(maxsize=10)
 # @partial(jit, static_argnums=(0,))
 def dphi_op_pseudospectral(n:int):
@@ -1287,8 +1287,8 @@ def batch_matrix_inv_excluding_col(in_matrices:jnp.ndarray):
 ''' III.3 Convolution operator generator and ChiPhiFunc.content wrapper '''
 # A jitted vectorized version of jnp.roll
 roll_axis_0 = lambda a, shift: jnp.roll(a, shift, axis=0)
-batch_roll_axis_0 = jit(vmap(roll_axis_0, in_axes=1, out_axes=1))
-@partial(jit, static_argnums=(1,))
+batch_roll_axis_0 = vmap(roll_axis_0, in_axes=1, out_axes=1)
+# @partial(jit, static_argnums=(1,))
 def conv_tensor(content:jnp.ndarray, n_dim:int):
     '''
     Generate a tensor_coef (see looped_solver.py) convolving a ChiPhiFunc
@@ -1317,7 +1317,7 @@ def conv_tensor(content:jnp.ndarray, n_dim:int):
     return(batch_roll_axis_0(content_padded, shift[None, :]))
 
 roll_fft_last_axis = lambda a, shift: jnp.roll(a, shift, axis=-1)
-batch_roll_fft_last_axis = jit(vmap(roll_fft_last_axis, in_axes=(-2,0), out_axes=2))
+batch_roll_fft_last_axis = vmap(roll_fft_last_axis, in_axes=(-2,0), out_axes=2)
 
 def fft_conv_tensor_batch(source:jnp.array):
     '''
@@ -1395,7 +1395,7 @@ def solve_1d_asym(p_eff, f_eff): # not nfp-dependent
 
     return(jnp.sum(asym_series, axis=0))
 
-@partial(jit, static_argnums=(2,))
+# @partial(jit, static_argnums=(2,))
 def solve_1d_fft(p_eff, f_eff, static_max_freq:int=None): # not nfp-dependent
     '''
     Solves one linear ODE of form y' + p_eff*y = f_eff.
@@ -1433,7 +1433,7 @@ def solve_1d_fft(p_eff, f_eff, static_max_freq:int=None): # not nfp-dependent
     return(sln)
 
 solve_1d_fft_batch = vmap(solve_1d_fft, in_axes=(0, 0, None), out_axes=0)
-@partial(jit, static_argnums=(3,))
+# @partial(jit, static_argnums=(3,))
 def solve_ODE(coeff_arr, coeff_dp_arr, f_arr:jnp.ndarray, static_max_freq:int=None): # not nfp-dependent
     '''
     Solves simple linear first order ODE systems in batch:
@@ -1539,7 +1539,7 @@ def fft_conv_op(source):
     # Collapse the first two axes from a diagonal matrix to a 1d array by summing
     return(tensor_eff[0][0])
 
-@partial(jit, static_argnums=(4,))
+# @partial(jit, static_argnums=(4,))
 def solve_ODE_chi(coeff, coeff_dp, coeff_dc, f, static_max_freq: int):
     '''
     For solving the periodic linear 1st order ODE
@@ -1567,7 +1567,7 @@ def solve_ODE_chi(coeff, coeff_dp, coeff_dc, f, static_max_freq: int):
             static_max_freq=static_max_freq)
     )
 
-@partial(jit, static_argnums=(2,))
+# @partial(jit, static_argnums=(2,))
 def solve_dphi_iota_dchi(iota, f, static_max_freq: int):
     '''
     For solving the periodic linear 1st order ODE
@@ -1667,7 +1667,7 @@ V.2 Tensor construction for looped_solver.py
 Theses methods are for constructing differential/convolution tensors
 '''
 
-@partial(jit, static_argnums=(1,))
+# @partial(jit, static_argnums=(1,))
 def to_tensor_fft_op(ChiPhiFunc_in:ChiPhiFunc, len_tensor:int):
     '''
     For solving the looped equations. They are only used in looped_solver.py and
@@ -1678,7 +1678,7 @@ def to_tensor_fft_op(ChiPhiFunc_in:ChiPhiFunc, len_tensor:int):
     tensor_fft_op = fft_conv_tensor_batch(tensor_fft_coef)
     return(tensor_fft_op)
 
-@partial(jit, static_argnums=(1,2,3,4,5,6))
+# @partial(jit, static_argnums=(1,2,3,4,5,6))
 def to_tensor_fft_op_multi_dim(
     ChiPhiFunc_in:ChiPhiFunc, dphi:int, dchi:int,
     num_mode:int, cap_axis0:int,

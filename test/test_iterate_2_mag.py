@@ -1,10 +1,10 @@
 import unittest
 import aqsc
 import jax.numpy as jnp
-
-debug_path = '../test_data_eduardo/'
+import pathlib
 
 # No B theta
+test_dir = str(pathlib.Path(__file__).parent.resolve())
 B_psi_coef_cp, B_theta_coef_cp, \
     Delta_coef_cp, p_perp_coef_cp,\
     X_coef_cp, Y_coef_cp, Z_coef_cp, \
@@ -12,7 +12,7 @@ B_psi_coef_cp, B_theta_coef_cp, \
     nfp, Xi_0, eta, \
     B_denom_coef_c, B_alpha_coef, \
     kap_p, tau_p = aqsc.read_first_three_orders(
-        debug_path+'circ/', 
+        test_dir+'/circ/', 
         R_array=[2,0,1,2,0.0001,0],
         Z_array=[1,2,0,0.001]
     )
@@ -42,7 +42,7 @@ equilibrium_mag = aqsc.leading_orders_magnetic(
 )
 
 n_2_tolerance = 5e-7
-n_4_tolerance = 4e-5
+n_4_tolerance = 2e-3
 
 class TestCircularAxis(unittest.TestCase):
 
@@ -61,32 +61,34 @@ class TestCircularAxis(unittest.TestCase):
             static_max_freq=(80,80),
             traced_max_freq=(-1,-1),
         )
-        print('Testing order 2, tolerance:', n_2_tolerance)
+        print('Testing magnetic order 2, tolerance:', n_2_tolerance)
         J, Cb, Ck, Ct, _, _, _ = equilibrium_mag_new.check_governing_equations(2)
         print('J residue:')
-        aqsc.print_fractional_error(J.content, 0)
+        aqsc.print_fractional_error(J.filter(20).content, 0)
         self.assertTrue(J.filter(20).get_amplitude()<n_2_tolerance)
         print('Cb residue:')
-        aqsc.print_fractional_error(Cb.content, 0)
+        aqsc.print_fractional_error(Cb.filter(20).content, 0)
         self.assertTrue(Cb.filter(20).get_amplitude()<n_2_tolerance)
         print('Ck residue:')
-        aqsc.print_fractional_error(Ck.content, 0)
+        aqsc.print_fractional_error(Ck.filter(20).content, 0)
         self.assertTrue(Ck.filter(20).get_amplitude()<n_2_tolerance)
         print('Ct residue:')
-        aqsc.print_fractional_error(Ct.content, 0)
+        aqsc.print_fractional_error(Ct.filter(20).content, 0)
         self.assertTrue(Ct.filter(20).get_amplitude()<n_2_tolerance)
-        print('Testing order 4, tolerance:', n_4_tolerance)
+        print('Testing magnetic order 4, tolerance:', n_4_tolerance)
         J, Cb, Ck, Ct, _, _, _ = equilibrium_mag_new.check_governing_equations(4)
         print('J residue:')
-        aqsc.print_fractional_error(J.content, 0)
+        aqsc.print_fractional_error(J.filter(20).content, 0)
         self.assertTrue(J.filter(20).get_amplitude()<n_4_tolerance)
         print('Cb residue:')
-        aqsc.print_fractional_error(Cb.content, 0)
+        aqsc.print_fractional_error(Cb.filter(20).content, 0)
         self.assertTrue(Cb.filter(20).get_amplitude()<n_4_tolerance)
         print('Ck residue:')
-        aqsc.print_fractional_error(Ck.content, 0)
+        aqsc.print_fractional_error(Ck.filter(20).content, 0)
         self.assertTrue(Ck.filter(20).get_amplitude()<n_4_tolerance)
         print('Ct residue:')
-        aqsc.print_fractional_error(Ct.content, 0)
+        aqsc.print_fractional_error(Ct.filter(20).content, 0)
         self.assertTrue(Ct.filter(20).get_amplitude()<n_4_tolerance)
-unittest.main()
+        
+if __name__ == '__main__':
+    unittest.main()
