@@ -13,13 +13,6 @@ from .config import *
 if use_pyQSC:
     from qsc import Qsc
 
-# Size of the chi and phi grid used for evaluation
-n_grid_phi = n_grid_phi
-n_grid_chi = n_grid_chi
-points = jnp.linspace(0, 2*np.pi*(1-1/n_grid_phi), n_grid_phi)
-chi = np.linspace(0, 2*np.pi*(1-1/n_grid_chi), n_grid_chi)
-phi = points
-
 def rand_splines(len_chi, amp_range = (0.5,2), n_points=5):
     amplitude = np.random.random()*(amp_range[1]-amp_range[0])+amp_range[0]
     # Random anchor points
@@ -78,12 +71,14 @@ def rand_ChiPhiEpsFunc(order, nfp=1, zero_outer=False):
 # Evaluate a callable on 'points' (defined above)
 # not nfp-dependent
 def evaluate(func):
-    return(func(chi.reshape(-1,1), phi))
+    phi = np.linspace(0, 2*np.pi*(1-1/n_grid_phi), n_grid_phi) 
+    chi = np.linspace(0, 2*np.pi*(1-1/n_grid_chi), n_grid_chi)
+    return(func(chi[:, None], phi[None, :]))
 
 # Evaluate a ChiPhiFunc on 'points' (defined above)
 # not nfp-dependent
 def evaluate_ChiPhiFunc(chiphifunc_in):
-    return(evaluate(chiphifunc_in.get_lambda()))
+    return(evaluate(chiphifunc_in.eval))
 
 # # Evaluate every elements of a ChiPhiEpsFunc on 'points', and returns
 # # a ChiPhiEpsFunc where all elements are np arrays storing evaluation results

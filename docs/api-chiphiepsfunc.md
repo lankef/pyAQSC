@@ -45,6 +45,20 @@ Parameters:
 Returns: 
 - A new `ChiPhiEpsFunc`.
 
+### `aqsc.ChiPhiEpsFunc.eval(psi, chi=0, phi=0, sq_eps_series:bool=False, n_max=float('inf'))`
+A vectorized function that evaluates the value of the `ChiPhiEpsFunc`, $f(\psi, \chi, \phi)$, at given `psi`, `chi` and `phi`. The $\phi$ interpolation is performed by `jax.numpy.interp`. When `sq_eps_series` is set to `True`, the series is treated as an even power series, which $\bar\iota$ and $B_\alpha$ are expanded as.
+$$
+F(\psi, \chi, \phi) = \sum_{n=0}^{n_{max}}F_n(\chi, \phi)\epsilon^{2n}.
+$$
+
+Parameters:
+- `psi, chi, phi : array or scalar` (traced) - $\psi$, $\chi$, $\phi$'s to evaluate at.
+- `sq_eps_series : bool` (static) - Whether to treat the series as an even power series.
+- `n_max=float('inf')` (static) - The order to evaluate to. If larger than highest available $n$, evaluates to highest available $n$.
+
+Returns: 
+- An `jnp.array` evaluation result.
+
         
 ### `aqsc.ChiPhiEpsFunc.zero_append(n=1)` **DEPRECIATED**
 Does nothing. Previously appends one or more `ChiPhiFunc(nfp=0)` at the end of `self`. Does not modify `self`. Returns the original `ChiPhiEpsFunc`. Was created to for use with `mask` to evaluate expressions setting an unknown, highest order term in an `ChiPhiEpsFunc` to zero, back when out-of-index returns a unique `ChiPhiFuncSpecial`, rather than 0 to check for mistakes in governing equations. This is no longer needed because now out-of-index items are `ChiPhiFunc(nfp=0)`.
@@ -78,6 +92,12 @@ Produces a `ChiPhiFunc(nfp=0)`-filled ChiPhiEpsFunc with the same $n$ as another
 
 Returns:
 - A `ChiPhiEpsFunc`.
+  
+### `aqsc.ChiPhiEpsFunc.get_lambda()`
+Produces a vectorized callable that evaluates the quantity w.r.t $\psi, \chi, \phi$.
+
+Returns:
+- A `callable(psi, chi, phi)`.
 
 ### `aqsc.ChiPhiEpsFunc.__str__(self)`
 Overrides str(aqsc.ChiPhiEpsFunc). Produces a string summarizing all elements in `self.chiphifunc_list`.

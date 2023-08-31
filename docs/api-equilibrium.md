@@ -84,13 +84,13 @@ Parameters:
 Saves `self` as a `.npy` file.
 
 Parameters:
-- `file_name : str` : The name of the save file (without extension).
+- `file_name : str` - The name of the save file (without extension).
   
 ### `aqsc.Equilibrium.load(file_name)`
 Loads from a `.npy` file created by `aqsc.Equilibrium.save()`.
 
 Parameters:
-- `file_name : str` : The name of the save file (with extension).
+- `file_name : str` - The name of the save file (with extension).
 Returns: 
 - An `aqsc.Equilibrium`.
 
@@ -104,11 +104,43 @@ Parameters:
 Loads from a `.npy` file created by `aqsc.Equilibrium.save_plain()`.
 
 Parameters:
-- `file_name : str` : The name of the save file (without extension).
+- `file_name : str` - The name of the save file (without extension).
 Returns: 
 - An `aqsc.Equilibrium`.
 
 ## Functions for output
+### `aqsc.Equilibrium.flux_to_frenet(psi, chi, phi, n_max=float('inf'))`
+### `aqsc.Equilibrium.flux_to_cylindrical(psi, chi, phi, n_max=float('inf'))`
+### `aqsc.Equilibrium.flux_to_xyz(psi, chi, phi, n_max=float('inf'))`
+Vectorized functions that transforms points in the flux coordinte $(\psi, \chi, \phi)$ into points in the Frenet coordinate $(\textit{curvature}, \textit{binormal}, \textit{tangent})$, cylindrical coordinate $(R, \Phi, Z)$, or Cartesian coordinate $(x, y, z)$ using the self-consistently solved coordinate transformations $X, Y, Z(\psi, \chi, \phi)$. ($Z$ here is different from $Z$ in the cylindrical coordinate. See [background](background-solves-for.md) for its definition.)
+
+Parameters:
+- `psi, chi, phi : array or scalar` (traced) - Points in the flux coordinate.
+- `n_max : scalar` (static) - Max order $n$ of the coordinate transform $X, Y, Z$ to use. If larger than the highest known order, uses all known orders. By default uses all known orders.
+
+Returns:
+- 3 `jnp.arrays`. `(curvature, binormal, tangent)`, `(R, Phi, Z)` or `(x, y, z)`
+
+### `aqsc.Equilibrium.frenet_basis_phi(phi)`
+A vectorized function that evaluates the axis shape $\textbf{r}_0[l(\phi)]$ and Frenet basis $(\hat{\boldsymbol{\kappa}}_0, \hat{\boldsymbol{\tau}}_0, \hat{\boldsymbol{b}}_0)[l(\phi)]$ in the cylindrical coordinate $(R, \Phi, Z)$ at a given $\phi$.
+
+Parameters:
+- `phi : array or scalar` (traced) - The toroidal angle $\phi$ on axis. 
+  
+Returns:
+- `axis_r0_phi_R : jnp.array`
+- `axis_r0_phi_Phi : jnp.array`
+- `axis_r0_phi_Z : jnp.array`
+- `tangent_phi_R : jnp.array`
+- `tangent_phi_Phi : jnp.array`
+- `tangent_phi_Z : jnp.array`
+- `normal_phi_R : jnp.array`
+- `normal_phi_Phi : jnp.array`
+- `normal_phi_Z : jnp.array`
+- `binormal_phi_R : jnp.array`
+- `binormal_phi_Phi : jnp.array`
+- `binormal_phi_Z : jnp.array`
+
 ### `aqsc.Equilibrium.get_order()`
 Gets the highest known order $n$ of `self`.
 
@@ -133,8 +165,19 @@ Returns:
 - `II : ChiPhiFunc` (traced) - The residual of the force balance equation II.
 - `II : ChiPhiFunc` (traced) - The residual of the force balance equation III.
 
-### `aqsc.Equilibrium.display_order`
+### `aqsc.Equilibrium.display_order(n:int)`
 Plots all quantities at order $n$.
 
 Parameters:
+- `n : int` - Order to plot.
+
+### `aqsc.Equilibrium.display(psi_max:float=0.03)`
+Plots a boundary with given $\psi$ and some flux surfaces.
+
+Parameters:
+- `psi_max : float` - Max $\psi$ to plot to. 
+
+
+Parameters:
 - `n_unknown : int` (static) - Order to plot.
+

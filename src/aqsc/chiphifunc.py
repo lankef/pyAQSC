@@ -914,7 +914,7 @@ class ChiPhiFunc:
 
 
     ''' I.1.5 Output and plotting '''
-    def get_lambda(self):
+    def eval(self, chi, phi):
         '''
         Getting a 2d vectorized function, f(chi, phi) for plotting a ChiPhiFunc.
 
@@ -926,20 +926,19 @@ class ChiPhiFunc:
         len_phi = self.content.shape[1]
 
         # Create 'x' for interpolation. 'x' is wrapped for periodicity.
-        phi_looped = jnp.linspace(0,2*jnp.pi/self.nfp, len_phi+1)
-        # wrapping
-        content_looped = wrap_grid_content_jit(self.content)
-
-        ind_chi = len_chi-1
-        mode_chi = jnp.linspace(-ind_chi, ind_chi, len_chi)
+        phi_grid = jnp.linspace(0,2*jnp.pi/self.nfp*(1-1/len_phi), len_phi)
 
         # The outer dot product is summing along axis 0.
-        return(jnp.vectorize(
-            lambda chi, phi : sum(
-                [jnp.e**(1j*(chi)*mode_chi[i]) * jnp.interp((phi)%(2*jnp.pi/self.nfp),
-                 phi_looped, content_looped[i]) for i in range(len_chi)]
-            )
-        ))
+        out = 0
+        for i in range(len_chi):
+            out+=jnp.e**(1j*(chi)*(i*2-len_chi+1))\
+                *jnp.interp(
+                    phi, 
+                    phi_grid, 
+                    self.content[i], 
+                    period=2*jnp.pi/self.nfp
+                )
+        return(out)
 
     def display_content(self, trig_mode=False, colormap_mode=False):
         '''
@@ -1038,8 +1037,7 @@ class ChiPhiFunc:
         # static methods used for evaluation.
         chi = jnp.linspace(0, 2*jnp.pi*0.99, size[0])
         phi = jnp.linspace(0, 2*jnp.pi*0.99/self.nfp, size[1])
-        f = self.get_lambda()
-        eval = f(chi, phi.reshape(-1,1))
+        eval = self.eval(chi, phi.reshape(-1,1))
         plt.pcolormesh(chi, phi, jnp.real(eval))
         plt.title('ChiPhiFunc, real component')
         plt.xlabel('chi')

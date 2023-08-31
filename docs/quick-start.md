@@ -2,27 +2,36 @@
 
 ## Circular axis
 The simplest equilibrium to construct with pyAQSC is the circular-axis equilibrium in [Ref.3](https://aip.scitation.org/doi/10.1063/5.0027575). Run:
-
-    import aqsc
-    new_equilibrium = aqsc.circular_axis()
+```
+import aqsc
+equilibrium_circ = aqsc.circular_axis()
+equilibrium_circ.display()
+# Continued below
+```
+![The circular axis equilibrium](/assets/display.png "The circular axis equilibrium")
 
 This constructs the circular axis, anisotropic pressure equilibrium to order $n=2$ as an `aqsc.Equilibrium`.
 
 To list all available unknowns, constants and axis information, run
-
-    new_equilibrium.unknown.keys()
-    new_equilibrium.constant.keys()
-    new_equilibrium.axis_info.keys()
-
+```
+# Continuing above
+equilibrium_circ.unknown.keys()
+equilibrium_circ.constant.keys()
+equilibrium_circ.axis_info.keys()
+# Continued below
+```
 To plot the power series coefficients of $B_\theta(\psi, \chi, \phi)$ in $(\chi, \phi)$, run
-
-    new_equilibrium.unknown['B_theta_coef_cp'][2].display()
-
+```
+# Continuing above
+equilibrium_circ.unknown['B_theta_coef_cp'][2].display()
+# Continued below
+```
 To save and load results to and from a `.npy` file, run
-
-    new_equilibrium.save(file_name='circular_axis_saved')
-    new_equilibrium2 = aqsc.Equilibrium.load(file_name='circular_axis_saved')
-
+```
+# Continuting above
+equilibrium_circ.save(file_name='circular_axis_saved')
+equilibrium_circ2 = aqsc.Equilibrium.load(file_name='circular_axis_saved')
+```
 Please continue to the [next part](init-and-iterate-eq.md) for constructing new cases and to higher orders.
 
 ## Very important notes on JAX's quirk

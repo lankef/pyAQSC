@@ -13,7 +13,7 @@ The $\phi$ dependence of $F_{n,\pm m}(\phi)$ are stored on $n$ uniformly spaced 
 
 **Numerical operations between ChiPhiFunc's with different grid number or nfp are not supported.**
 
-Internally, the coefficients are stored as the 2D numpy array, `ChiPhiFunc.content`, whose `axis=0` corresponds to $m=-n, -n+2, ..., n$, and `axis=1` corresponds to $\phi$ grid points.
+Internally, the coefficients are stored as the 2D numpy array, `ChiPhiFunc.content`, whose `axis=0` corresponds to $m=-n, -n+2, ..., n$, and `axis=1` corresponds to $\phi$ grid points. To evaluate a `ChiPhiFunc`, use `ChiPhiFunc.eval(chi, phi)`.
 
 `ChiPhiFunc` supports a number of numerical operations, including:
  - Basic arithmetic operations `+, -, *, /, **`, 
@@ -26,7 +26,7 @@ Internally, the coefficients are stored as the 2D numpy array, `ChiPhiFunc.conte
 For more information, please refer to [ChiPhiFunc API](api-chiphifunc.md).
 
 ## ChiPhiEpsFunc
-`ChiPhiEpsFunc` is a list-like class containing scalars,  `ChiPhiFunc`'s, and `ChiPhiFuncSpecial`'s. It is the primary data structure pyAQSC stores results in. 
+`ChiPhiEpsFunc` is a list-like class containing scalars,  `ChiPhiFunc`'s, and `ChiPhiFuncSpecial`'s. It is the primary data structure pyAQSC stores results in. To evaluate a `ChiPhiEpsFunc`, use `ChiPhiEpsFunc.eval(psi, chi, phi, sq_eps_series)`.
 
 `ChiPhiEpsFunc` manages the power-Fourier series:
 $$

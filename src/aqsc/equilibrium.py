@@ -2,10 +2,11 @@
 # in parsed/. Necessary masking and/or n-substitution are included. All iterate_*
 # methods returns ChiPhiFunc's.
 import jax.numpy as jnp
+import numpy as np # used in save_plain
 # from jax import jit, vmap, tree_util
 from jax import tree_util
-from functools import partial # for JAX jit with static params
-from matplotlib import pyplot as plt
+# from functools import partial # for JAX jit with static params
+# from matplotlib import pyplot as plt
 
 # ChiPhiFunc and ChiPhiEpsFunc
 from .chiphifunc import *
@@ -17,6 +18,10 @@ import aqsc.looped_solver as looped_solver
 import aqsc.parsed as parsed
 import aqsc.MHD_parsed as MHD_parsed
 import aqsc.looped_coefs as looped_coefs
+
+# Plotting
+import matplotlib.pyplot as plt
+from matplotlib import cm, colors
 
 ''' I. Magnetic equations '''
 # The magnetic equations alone can serve as a set of recursion relations,
@@ -398,7 +403,6 @@ class Equilibrium:
         self.nfp = nfp
         self.magnetic_only = magnetic_only
         self.axis_info = axis_info
-
         # Check if every term is on the same order
         # self.check_order_consistency()
 
@@ -457,6 +461,7 @@ class Equilibrium:
             unknown['p_perp_coef_cp'] = ChiPhiEpsFunc.zeros_like(X_coef_cp)
         if not unknown['Delta_coef_cp']:
             unknown['Delta_coef_cp'] = ChiPhiEpsFunc.zeros_like(X_coef_cp)
+
         return(Equilibrium(
             unknown=unknown,
             constant=constant,
@@ -464,7 +469,116 @@ class Equilibrium:
             magnetic_only=magnetic_only,
             axis_info=axis_info,
         ))
+    
+    ''' Coordinate transformations '''
+    def frenet_basis_phi(self, phi):
+        ''' 
+        Calculates frenet basis vectors (in R, Phi, Z) from the flux coordinat phi. 
+        '''
+        varphi = self.axis_info['varphi']
+        R0 = self.axis_info['R0']
+        phi_grids = self.axis_info['phi']
+        Z0 = self.axis_info['Z0']
+        tangent_cylindrical = self.axis_info['tangent_cylindrical']
+        normal_cylindrical = self.axis_info['normal_cylindrical']
+        binormal_cylindrical = self.axis_info['binormal_cylindrical']
+        nfp=self.nfp
+        # axis location and basis in term of Boozer phi
+         
+        axis_r0_phi_R = jnp.interp(phi, varphi, R0, period = 2*jnp.pi/nfp)
+        axis_r0_phi_Phi = jnp.interp(phi, varphi, phi_grids, period = 2*jnp.pi/nfp)
+        axis_r0_phi_Z = jnp.interp(phi, varphi, Z0, period = 2*jnp.pi/nfp)
+        tangent_phi_R = jnp.interp(phi, varphi, tangent_cylindrical[:, 0], period = 2*jnp.pi/nfp)
+        tangent_phi_Phi = jnp.interp(phi, varphi, tangent_cylindrical[:, 1], period = 2*jnp.pi/nfp)
+        tangent_phi_Z = jnp.interp(phi, varphi, tangent_cylindrical[:, 2], period = 2*jnp.pi/nfp)
+        normal_phi_R = jnp.interp(phi, varphi, normal_cylindrical[:, 0], period = 2*jnp.pi/nfp)
+        normal_phi_Phi = jnp.interp(phi, varphi, normal_cylindrical[:, 1], period = 2*jnp.pi/nfp)
+        normal_phi_Z = jnp.interp(phi, varphi, normal_cylindrical[:, 2], period = 2*jnp.pi/nfp)
+        binormal_phi_R = jnp.interp(phi, varphi, binormal_cylindrical[:, 0], period = 2*jnp.pi/nfp)
+        binormal_phi_Phi = jnp.interp(phi, varphi, binormal_cylindrical[:, 1], period = 2*jnp.pi/nfp)
+        binormal_phi_Z = jnp.interp(phi, varphi, binormal_cylindrical[:, 2], period = 2*jnp.pi/nfp)
+        return(
+            axis_r0_phi_R,
+            axis_r0_phi_Phi,
+            axis_r0_phi_Z,
+            tangent_phi_R,
+            tangent_phi_Phi,
+            tangent_phi_Z,
+            normal_phi_R,
+            normal_phi_Phi,
+            normal_phi_Z,
+            binormal_phi_R,
+            binormal_phi_Phi,
+            binormal_phi_Z
+        )
 
+    
+    def flux_to_frenet(self, psi, chi, phi, n_max=float('inf')):
+        ''' 
+        Transforms positions in the flux coordinate to the frenet frame.
+        Returns (curvature, binormal, tangent) in the Frenet frame.
+        '''
+        if double_precision:
+            target_type=jnp.float64
+        else:
+            target_type=jnp.float32
+        return(
+            jnp.real(self.unknown['X_coef_cp'].eval(psi, chi, phi, n_max)).astype(target_type), 
+            jnp.real(self.unknown['Y_coef_cp'].eval(psi, chi, phi, n_max)).astype(target_type), 
+            jnp.real(self.unknown['Z_coef_cp'].eval(psi, chi, phi, n_max)).astype(target_type)
+        )
+
+    def flux_to_cylindrical(self, psi, chi, phi, n_max=float('inf')):
+        ''' 
+        Transforms positions in the flux coordinate to the 
+        cylindrical coordinate.
+        (R, Phi, Z) in the cylindrical coordinate.
+        '''
+        axis_r0_phi_R,\
+        axis_r0_phi_Phi,\
+        axis_r0_phi_Z,\
+        tangent_phi_R,\
+        tangent_phi_Phi,\
+        tangent_phi_Z,\
+        normal_phi_R,\
+        normal_phi_Phi,\
+        normal_phi_Z,\
+        binormal_phi_R,\
+        binormal_phi_Phi,\
+        binormal_phi_Z = self.frenet_basis_phi(phi)
+        curvature, binormal, tangent = self.flux_to_frenet(psi, chi, phi, n_max)
+        components_R = axis_r0_phi_R\
+            + tangent_phi_R * tangent\
+            + normal_phi_R * curvature\
+            + binormal_phi_R * binormal
+        
+        components_Phi = axis_r0_phi_Phi\
+            + tangent_phi_Phi * tangent\
+            + normal_phi_Phi * curvature\
+            + binormal_phi_Phi * binormal
+        
+        components_Z = axis_r0_phi_Z\
+            + tangent_phi_Z * tangent\
+            + normal_phi_Z * curvature\
+            + binormal_phi_Z * binormal
+        return(
+            components_R,
+            components_Phi,
+            components_Z
+        )
+
+    def flux_to_xyz(self, psi, chi, phi, n_max=float('inf')):
+        ''' 
+        Transforms positions in the flux coordinate to the 
+        XYZ coordinate.
+        Returns (X, Y, Z) in the cylindrical coordinate.
+        '''
+        R, Phi, Z = self.flux_to_cylindrical(psi, chi, phi, n_max)
+        X = R*jnp.cos(Phi)
+        Y = R*jnp.sin(Phi)
+        return(X, Y, Z)
+
+    ''' Saving and loading '''
     def save(self, file_name):
         jnp.save(file_name, self)
 
@@ -472,6 +586,7 @@ class Equilibrium:
         return(jnp.load(file_name, allow_pickle=True).item())
 
     def save_plain(self, file_name):
+        ''' Saves to a npy file that can be read without aqsc or jax. '''
         unknown_dict = {}
         for key in self.unknown.keys():
             unknown_dict[key] = self.unknown[key].to_content_list()
@@ -488,19 +603,23 @@ class Equilibrium:
             = self.constant['dl_p']
         constant_dict['tau_p']\
             = self.constant['tau_p'].content
+        
+        numpy_axis_info = {}
+        for key in self.axis_info.keys():
+            numpy_axis_info[key] = np.asarray(self.axis_info[key])
 
         big_dict = {\
             'unknown':unknown_dict,
             'constant':constant_dict,
             'nfp':self.nfp,
-            'magnetic_only': self.magnetic_only,
-            'axis_info': self.axis_info,
+            'magnetic_only':self.magnetic_only,
+            'axis_info':numpy_axis_info,
         }
-        jnp.save(file_name, big_dict)
+        np.save(file_name, big_dict)
 
     # nfp-dependent!!
     def load_plain(filename):
-        npyfile = jnp.load(filename, allow_pickle=True)
+        npyfile = np.load(filename, allow_pickle=True)
         big_dict = npyfile.item()
         raw_unknown = big_dict['unknown']
         raw_constant = big_dict['constant']
@@ -531,7 +650,7 @@ class Equilibrium:
             unknown=unknown,
             constant=constant,
             nfp=nfp,
-        magnetic_only=magnetic_only,
+            magnetic_only=magnetic_only,
             axis_info=axis_info
         ))
 
@@ -647,8 +766,35 @@ class Equilibrium:
         return(J, Cb, Ck, Ct, I, II, III)
 
     ''' Display '''
+    def display(self, psi_max:float=0.2):
+        fig = plt.figure()
+        fig.set_dpi(400)
+        ax = fig.add_subplot(projection='3d')
+        phis = jnp.linspace(0, np.pi*2*0.9, 100)
+        chis = jnp.linspace(0, np.pi*2, 100)
+        x_surf, y_surf, z_surf = self.flux_to_xyz(psi=psi_max, chi=chis[None, :], phi=phis[:, None])
+        # Coloring by magnitude of B
+        B_denom = self.constant['B_denom_coef_c'].eval(
+            psi=psi_max, chi=chis[None, :], phi=phis[:, None]
+        )
+        B_magnitude = 1/jnp.real(B_denom).astype(jnp.float32)
+
+        norm = colors.Normalize(vmin=jnp.min(B_magnitude), vmax=jnp.max(B_magnitude), clip=True)
+        mapper = cm.ScalarMappable(norm=norm, cmap=cm.plasma)
+
+        facecolors = mapper.to_rgba(B_magnitude)
+
+        ax.plot_surface(x_surf, y_surf, z_surf, zorder=1, facecolors=facecolors)
+        ax.axis('equal')
+        for psi_i in np.linspace(0, psi_max, 5):
+            x_cross, y_cross, z_cross = self.flux_to_xyz(psi=psi_i, chi=chis, phi=0)
+            ax.plot(x_cross, y_cross, z_cross, zorder=2.5, linewidth=0.5)
+        fig.colorbar(mapper, label=r'$|B|^2$', shrink=0.5)
+        fig.show()
+
+
     # not nfp-dependent
-    def display_order(self, n):
+    def display_order(self, n:int):
         if n<2:
             raise ValueError('Can only display order n>1')
         for name in self.unknown.keys():

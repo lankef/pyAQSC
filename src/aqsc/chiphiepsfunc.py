@@ -1,4 +1,5 @@
 import jax.numpy as jnp
+import numpy as np # Used in saving
 # from functools import partial
 # from jax import jit, tree_util
 from jax import tree_util
@@ -133,6 +134,28 @@ class ChiPhiEpsFunc:
         and nfp as another.
         '''
         return(ChiPhiEpsFunc([ChiPhiFuncSpecial(0)]*(other.get_order()+1), other.nfp))
+    
+    ''' Evaluation '''
+    def eval(self, psi, chi=0, phi=0, sq_eps_series:bool=False, n_max=float('inf')):
+        if sq_eps_series:
+            power_arg = psi
+        else:
+            power_arg = jnp.sqrt(psi)
+        out = 0
+        for n in range(min(len(self.chiphifunc_list), n_max+1)):
+            item = self.chiphifunc_list[n]
+            if isinstance(item, ChiPhiFunc):
+                if item.nfp==0:
+                    pass
+                elif item.nfp==self.nfp:
+                    out += item.eval(chi, phi)*power_arg**n 
+                else:
+                    return(jnp.nan)
+            elif jnp.isscalar(item):
+                out += item*power_arg**n 
+            else:
+                return(jnp.nan)
+        return(out)
 
     ''' Printing '''
     def __str__(self):
@@ -161,7 +184,7 @@ class ChiPhiEpsFunc:
                 elif item.nfp<0:
                     content_list.append('err'+str(item.nfp))
                 else:
-                    content_list.append(item.content)
+                    content_list.append(np.asarray(item.content))
             else:
                 content_list.append(item)
         return(content_list)

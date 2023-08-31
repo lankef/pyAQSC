@@ -158,11 +158,14 @@ Returns
 ## Functions for output and plotting
 An overview of a `ChiPhiFunc` can be printed with the built-in `str()` and `print()` statements.
 
-### `aqsc.ChiPhiFunc.get_lambda()`
-Generating a 2d vectorized function, f(chi, phi) for plotting a ChiPhiFunc. The $\phi$ interpolation is performed by `jax.numpy.interp`.
+### `aqsc.ChiPhiFunc.eval(chi, phi)`
+A vectorized function that evaluates the value of the `ChiPhiFunc`, $f(\chi, \phi)$, at given `chi` and `phi`. The $\phi$ interpolation is performed by `jax.numpy.interp`.
+
+Parameters:
+- `chi, phi : array or scalar` (traced) - $\chi$, $\phi$'s to evaluate at.
 
 Returns: 
-- A vectorized JAX callables f(chi, phi).
+- An `jnp.array` evaluation result.
 
 ### `aqsc.ChiPhiFunc.display_content(self, trig_mode=False, colormap_mode=False)`
 Plot the `ChiPhiFunc`'s $\chi$ coefficients as line plots or colormaps.
