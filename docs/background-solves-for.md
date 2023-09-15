@@ -1,8 +1,7 @@
 # Solves for
 
 ## Definitions
-PyAQSC solves the following unknowns self-consistently. 
-
+PyAQSC solves the following unknowns self-consistently. These quantities are managed by instances of `aqsc.Equilibrium`. On how to access these quantities, see [aqsc.Equilibrium API](api-equilibrium.md).
 
 - $X_n,Y_n,Z_n(\chi, \phi)$ - The coordinate transformation between the flux coordinate and a known Frenet frame:
   $$
@@ -18,7 +17,7 @@ PyAQSC solves the following unknowns self-consistently.
   \nabla\cdot\Pi = \nabla\cdot(\Delta\textbf{bb} + p_\perp \mathbb{I})
   $$
 
-When solving only the magnetic equations, $$ will be treated as free parameters.
+When solving only the magnetic equations, $B_\theta, B_\psi$ and $Y$ will be treated as free parameters.
 
 ## Expansion form
 All of other quantities are expanded as:

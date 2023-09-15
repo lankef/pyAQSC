@@ -20,6 +20,7 @@ Required number of field period of the `ChiPhiFunc`'s in `self.chiphifunc_list`.
 ## Constructor
 `aqsc.ChiPhiEpsFunc(self, list:list, nfp:int, check_consistency:bool=False)`
 Parameters:
+
 - `chiphifunc_list : list` (list of traced) - The list containing all power coefficients. A power coefficient can be a scalar or a `ChiPhiFunc.`
 - `nfp : int` (static) - Required number of field period of the `ChiPhiFunc`'s in `self.chiphifunc_list`.
 - `check_consistency : bool` - Runs `aqsc.ChiPhiEpsFunc.check_nfp_consistency()` if set to `True`. The method checks for items with inconsistent `nfp` and replaes them with `ChiPhiFunc(nfp=-14)`.
@@ -31,15 +32,18 @@ Parameters:
 Implements `ChiPhiEpsFunc[n]`. Finds the $n$-th order power coefficient. Returns `ChiPhiFunc(nfp=0)` for negative or out-of-bound `index`.
 
 Parameters:
+
 - `index : int` (static) - index of item. 
 
 Returns:
+
 - A `ChiPhiFunc` or a scalar.
 
 ### `aqsc.ChiPhiEpsFunc.append(item)`
 Returns a new ChiPhiEpsFunc with a new item appended to the end. Checks consistency. Does not modify `self`. Returns a new `ChiPhiEpsFunc`.
 
 Parameters:
+
 - `item` (traced) - Power coefficient to append.
 
 Returns: 
@@ -52,6 +56,7 @@ F(\psi, \chi, \phi) = \sum_{n=0}^{n_{max}}F_n(\chi, \phi)\epsilon^{2n}.
 $$
 
 Parameters:
+
 - `psi, chi, phi : array or scalar` (traced) - $\psi$, $\chi$, $\phi$'s to evaluate at.
 - `sq_eps_series : bool` (static) - Whether to treat the series as an even power series.
 - `n_max=float('inf')` (static) - The order to evaluate to. If larger than highest available $n$, evaluates to highest available $n$.
@@ -64,18 +69,20 @@ Returns:
 Does nothing. Previously appends one or more `ChiPhiFunc(nfp=0)` at the end of `self`. Does not modify `self`. Returns the original `ChiPhiEpsFunc`. Was created to for use with `mask` to evaluate expressions setting an unknown, highest order term in an `ChiPhiEpsFunc` to zero, back when out-of-index returns a unique `ChiPhiFuncSpecial`, rather than 0 to check for mistakes in governing equations. This is no longer needed because now out-of-index items are `ChiPhiFunc(nfp=0)`.
 
 Parameters:
+
 - `n : int` (static) - Does nothing
 
 Returns: 
 - The original `ChiPhiEpsFunc`.
 
-    @partial(jit, static_argnums=(1,))
+
 ### `aqsc.ChiPhiEpsFunc.mask(n)`
 Produces a `ChiPhiEpsFunc` from self containing power coefficients up to order $n$. When $n$ is lower than the highest currently known order, returns a `ChiPhiEpsFunc` containing a sublist of `self.chiphifunc_list`. When $n$ is higher than the highest currently known order, fill in the unknown elements with `ChiPhiFunc(nfp=0)`. 
 
 Does not modify `self`. Returns a new `ChiPhiEpsFunc`.
 
 Parameters:
+
 - `n : int` (static) - Maximum order to extract.
 
 Returns: 
@@ -85,18 +92,21 @@ Returns:
 Returns the highest known order $n$ for a `ChiPhiEpsFunc`. Equivalent to `len(self.chiphifunc_list)`.
 
 Returns:
+
 - `n : int` - The highest known order $n$.
 
 ### `aqsc.ChiPhiEpsFunc.zeros_like(other)`
 Produces a `ChiPhiFunc(nfp=0)`-filled ChiPhiEpsFunc with the same $n$ as another `ChiPhiEpsFunc`.
 
 Returns:
+
 - A `ChiPhiEpsFunc`.
   
 ### `aqsc.ChiPhiEpsFunc.get_lambda()`
 Produces a vectorized callable that evaluates the quantity w.r.t $\psi, \chi, \phi$.
 
 Returns:
+
 - A `callable(psi, chi, phi)`.
 
 ### `aqsc.ChiPhiEpsFunc.__str__(self)`
@@ -112,6 +122,7 @@ Loads a ChiPhiEpsFunc from a list of `int`'s, `array`'s and `string`'s generated
 Replaces all zero scalars and `ChiPhiFunc`'s in a list with `ChiPhiFunc(nfp=0)` and defines a new `ChiPhiEpsFunc`. Cannot be JIT compiled.
 
 Parameters:
+
 - `list : list` - List to create `ChiPhiEpsFunc` from.
 - `nfp : int` - `nfp` to create `ChiPhiEpsFunc` with.
 - `check_consistency : bool` - See constructor.

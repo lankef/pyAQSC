@@ -2,7 +2,7 @@
 # in parsed/. Necessary masking and/or n-substitution are included. All iterate_*
 # methods returns ChiPhiFunc's.
 import jax.numpy as jnp
-import numpy as np # used in save_plain
+import numpy as np # used in save_plain and get_helicity
 # from jax import jit, vmap, tree_util
 from jax import tree_util
 # from functools import partial # for JAX jit with static params
@@ -512,7 +512,6 @@ class Equilibrium:
             binormal_phi_Z
         )
 
-    
     def flux_to_frenet(self, psi, chi, phi, n_max=float('inf')):
         ''' 
         Transforms positions in the flux coordinate to the frenet frame.
@@ -765,7 +764,38 @@ class Equilibrium:
             iota_coef)
         return(J, Cb, Ck, Ct, I, II, III)
 
-    ''' Display '''
+    ''' Display and output'''
+    def get_helicity(self):
+        ''' 
+        Returns the helicity (the normal vector, kappa's 
+        # rotation around the origin)
+        '''
+        # R, phi, Z of the normal vector
+        norm_R = np.pad(self.axis_info['normal_cylindrical'][:, 0], (0, 1), 'wrap')
+        norm_Z = np.pad(self.axis_info['normal_cylindrical'][:, -1], (0, 1), 'wrap')
+        norm_R = norm_R-np.average(norm_R) # zero-centering
+        norm_Z = norm_Z-np.average(norm_Z) # zero-centering
+        # To make arctan accumulate over or under +- pi,
+        # we need to detect crosses between quadrant 2 and 3
+        arctan_offset = np.zeros_like(norm_R)
+        for i in range(len(norm_R)-1):
+            # Sign change in Z
+            if np.sign(norm_Z[i])*np.sign(norm_Z[i+1])==-1:
+                Z_diff = norm_Z[i+1]-norm_Z[i]
+                R_diff = norm_R[i+1]-norm_R[i]
+                R_center = norm_R[i]+R_diff/Z_diff*(-norm_Z[i])
+                # the line segment between two adjacent points 
+                # crosses x<0, y=0.
+                if R_center<0: 
+                    # crossing from quadrant 2 to 3
+                    if norm_Z[i]>0:
+                        arctan_offset[i+1:]+=np.pi*2                
+                    # crossing from quadrant 3 to 2
+                    else:
+                        arctan_offset[i+1:]-=np.pi*2
+        arctan_accumulated = np.arctan2(norm_Z,norm_R)+arctan_offset
+        return(round((arctan_accumulated[-1]-arctan_accumulated[0])/(2*np.pi)))
+
     def display(self, psi_max:float=0.2):
         fig = plt.figure()
         fig.set_dpi(400)
@@ -791,7 +821,6 @@ class Equilibrium:
             ax.plot(x_cross, y_cross, z_cross, zorder=2.5, linewidth=0.5)
         fig.colorbar(mapper, label=r'$|B|^2$', shrink=0.5)
         fig.show()
-
 
     # not nfp-dependent
     def display_order(self, n:int):

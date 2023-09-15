@@ -34,6 +34,7 @@ Number of field period when >0, and error code when <=0. See [Data structure](da
 ## Constructor 
 ### `aqsc.ChiPhiFunc(content:jax.numpy.ndarray, nfp:int, trig_mode:bool=False)`
 Parameters:
+
 - `content : jax.numpy.array` (traced)
 - `nfp : int` (static)
 - `trig_mode : bool`: When set to `True`, treat provided `content` as trigonometric Fourier coefficients:
@@ -52,6 +53,7 @@ Parameters:
 Creates a `ChiPhiFunc` with non-positive `self.nfp`. Its `self.content` will be `np.nan`.
 
 Parameters:
+
 - `int error_code`: the nfp of said `ChiPhiFunc`. If `error_code`>0, it will be defaulted to -2.
 
 ## Arithmetic operators
@@ -115,6 +117,7 @@ IFFT the `axis=1` of content and returns as a ChiPhiFunc.
 An expandable filter. Now only low-pass is available.
 
 Parameters:
+
 - `mode : int` (static) - Filtering mode. Available modes are:
   - `mode=0` - Low_pass.
 
@@ -122,6 +125,7 @@ Parameters:
   - Under low-pass mode, this is the cutoff mode number.
 
 Returns:
+
 - A new `ChiPhiFunc`.
 
 ### `aqsc.ChiPhiFunc.filter_reduced_length(self, arg)`
@@ -139,9 +143,11 @@ Returns:
 
 Implements `ChiPhiEpsFunc[m]`. Finds the $m$-th mode coefficient.   
 Parameters:
+
 - `index : int` (static) - $\chi$ mode number $m$. Must be even or odd (depends on `self.content.shape[0]%2`) and 
 
 Returns:
+
 - A `ChiPhiFunc`.
 
 ### `aqsc.ChiPhiFunc.cap_m(m)` 
@@ -162,6 +168,7 @@ An overview of a `ChiPhiFunc` can be printed with the built-in `str()` and `prin
 A vectorized function that evaluates the value of the `ChiPhiFunc`, $f(\chi, \phi)$, at given `chi` and `phi`. The $\phi$ interpolation is performed by `jax.numpy.interp`.
 
 Parameters:
+
 - `chi, phi : array or scalar` (traced) - $\chi$, $\phi$'s to evaluate at.
 
 Returns: 
@@ -192,16 +199,19 @@ Tiles a `ChiPhiFunc` by `self.nfp` and export a new `ChiPhiFunc` with `nfp==1`.
 Converts a ChiPhiFunc from trig to exp fourier series.
 
 Returns:
+
 - A `ChiPhiFunc`.
 
 ### `aqsc.ChiPhiFunc.exp_to_trig()`
 Converts a ChiPhiFunc from exp to trig fourier series.
 
 Returns:
+
 - A `ChiPhiFunc`.
 
 ### `aqsc.ChiPhiFunc.get_amplitude(self)`
 Calculating the average of the absolute value of elements in `self.content`. If `nfp==0`, returns 0. If `nfp<0`, returns `jnp.inf`.
 
 Returns:
+
 - A real scalar.

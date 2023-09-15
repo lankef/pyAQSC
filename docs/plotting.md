@@ -1,5 +1,5 @@
 # Results and plotting
-All data within an `Equilibrium` are within 3 dictionaries: `aqsc.Equilibrium.unknown`, `aqsc.Equilibrium.constant` and `aqsc.Equilibrium.axis_info`. See [Equilibrium API](api-equilibrium.md) for their contents. 
+All data within an `Equilibrium` are within 3 dictionaries: `aqsc.Equilibrium.unknown`, `aqsc.Equilibrium.constant` and `aqsc.Equilibrium.axis_info`. See [Equilibrium API](api-equilibrium.md) for their contents. In addition, the equilibrium's helicity can be obtained using `aqsc.Equilibrium.get_helicity()`.
 ```
 import aqsc
 import numpy as np
@@ -8,6 +8,7 @@ equilibrium_circ = aqsc.circular_axis()
 print(equilibrium_circ.unknown.keys())
 print(equilibrium_circ.constant.keys())
 print(equilibrium_circ.axis_info.keys())
+print('Helicity is', equilibrium_circ.get_helicity())
 # Continued below
 ```
 All constituents of `aqsc.Equilibrium.unknown` and `aqsc.Equilibrium.constant` are `ChiPhiEpsFunc`'s and `ChiPhiFunc`'s. To evaluate them at a given flux coordinate, use `eval`.

@@ -4,6 +4,7 @@ AS its name suggests, the Equilibrium class manages all information for a QS equ
 ## Class attributes
 ### `self.unknown : {string:ChiPhiEpsFunc}` (dict of traced) 
 All unknowns solved by pyAQSC. Contains keys:
+
 - `'X_coef_cp' : ChiPhiEpsFunc` - $X$. At even order $n$ at all time.
 - `'Y_coef_cp' : ChiPhiEpsFunc` - $Y$. At even order $n$ at all time.
 - `'Z_coef_cp' : ChiPhiEpsFunc` - $Z$. At even order $n$ at all time.
@@ -15,11 +16,13 @@ All unknowns solved by pyAQSC. Contains keys:
 
 ### `self.constant : {string:ChiPhiEpsFunc or ChiPhiFunc}` (dict of traced) 
 All constants (inputs or calculated from inputs). Contains keys:
+
 - `'B_denom_coef_c' : ChiPhiEpsFunc` - $B^-$. At even order $n$ at all time.
 - `'B_alpha_coef' : ChiPhiEpsFunc` - $B_{\alpha}$. At order $n/2$ at all time.
 - `'kap_p' : ChiPhiFunc` - $\kappa$.
 - `'dl_p' : float` - $dl/d\phi$.
 - `'tau_p' : ChiPhiFunc` - $\tau$.
+
 ### `self.axis_info : {string:jax.numpy.array}` (dict of traced) 
 Axis information, not used in further iteration. The naming convention is the same as in [pyQSC](https://landreman.github.io/pyQSC/outputs.html#outputs). Contains keys:
 
@@ -52,6 +55,7 @@ Instead of the constructor, we recommend creating equilibria using `aqsc.leading
 ### `aqsc.Equilibrium(unknown, constant, nfp, magnetic_only, axis_info={})`
 
 Parameters:
+
 - `self.unknown : {string:ChiPhiEpsFunc}` (dict of traced) .
 - `self.constant : {string:ChiPhiEpsFunc or ChiPhiFunc}` (dict of traced) 
 - `self.axis_info : {string:jax.numpy.array}` (dict of traced) 
@@ -84,12 +88,14 @@ Parameters:
 Saves `self` as a `.npy` file.
 
 Parameters:
+
 - `file_name : str` - The name of the save file (without extension).
   
 ### `aqsc.Equilibrium.load(file_name)`
 Loads from a `.npy` file created by `aqsc.Equilibrium.save()`.
 
 Parameters:
+
 - `file_name : str` - The name of the save file (with extension).
 Returns: 
 - An `aqsc.Equilibrium`.
@@ -98,36 +104,58 @@ Returns:
 Saves `self` as a `.npy` file. This `.npy` file contains a dict of `list`'s from `aqsc.ChiPhiEpsFunc.to_content_list()` and does not require pyAQSC to load.
 
 Parameters:
+
 - `file_name : str` : The name of the save file (without extension).
   
 ### `aqsc.Equilibrium.load_plain(filename)`
 Loads from a `.npy` file created by `aqsc.Equilibrium.save_plain()`.
 
 Parameters:
+
 - `file_name : str` - The name of the save file (without extension).
 Returns: 
 - An `aqsc.Equilibrium`.
 
 ## Functions for output
+
+### `aqsc.Equilibrium.get_order()`
+Gets the highest known order $n$ of `self`.
+
+Returns:
+
+- An int $n$.
+
+### `aqsc.Equilibrium.get_helicity()`
+Gets the helicity of `self`, same as the number of rotation of the normal
+basis vector $\kappa$ in the Frenet basis.
+
+Returns:
+
+- An int $n$.
+
 ### `aqsc.Equilibrium.flux_to_frenet(psi, chi, phi, n_max=float('inf'))`
 ### `aqsc.Equilibrium.flux_to_cylindrical(psi, chi, phi, n_max=float('inf'))`
 ### `aqsc.Equilibrium.flux_to_xyz(psi, chi, phi, n_max=float('inf'))`
 Vectorized functions that transforms points in the flux coordinte $(\psi, \chi, \phi)$ into points in the Frenet coordinate $(\textit{curvature}, \textit{binormal}, \textit{tangent})$, cylindrical coordinate $(R, \Phi, Z)$, or Cartesian coordinate $(x, y, z)$ using the self-consistently solved coordinate transformations $X, Y, Z(\psi, \chi, \phi)$. ($Z$ here is different from $Z$ in the cylindrical coordinate. See [background](background-solves-for.md) for its definition.)
 
 Parameters:
+
 - `psi, chi, phi : array or scalar` (traced) - Points in the flux coordinate.
 - `n_max : scalar` (static) - Max order $n$ of the coordinate transform $X, Y, Z$ to use. If larger than the highest known order, uses all known orders. By default uses all known orders.
 
 Returns:
+
 - 3 `jnp.arrays`. `(curvature, binormal, tangent)`, `(R, Phi, Z)` or `(x, y, z)`
 
 ### `aqsc.Equilibrium.frenet_basis_phi(phi)`
 A vectorized function that evaluates the axis shape $\textbf{r}_0[l(\phi)]$ and Frenet basis $(\hat{\boldsymbol{\kappa}}_0, \hat{\boldsymbol{\tau}}_0, \hat{\boldsymbol{b}}_0)[l(\phi)]$ in the cylindrical coordinate $(R, \Phi, Z)$ at a given $\phi$.
 
 Parameters:
+
 - `phi : array or scalar` (traced) - The toroidal angle $\phi$ on axis. 
   
 Returns:
+
 - `axis_r0_phi_R : jnp.array`
 - `axis_r0_phi_Phi : jnp.array`
 - `axis_r0_phi_Z : jnp.array`
@@ -141,12 +169,6 @@ Returns:
 - `binormal_phi_Phi : jnp.array`
 - `binormal_phi_Z : jnp.array`
 
-### `aqsc.Equilibrium.get_order()`
-Gets the highest known order $n$ of `self`.
-
-Returns:
-- An int $n$
-
 ### `aqsc.Equilibrium.check_order_consistency()`
 Checks whether all items in `self.unknown` and `self.constant` has consistent highest known order. If not, throws `AttributeError`'s. **Cannot be JIT compiled.**
 
@@ -154,9 +176,11 @@ Checks whether all items in `self.unknown` and `self.constant` has consistent hi
 Evaluates the residual (LHS-RHS) of all governing equations at a given order. The results should be as close to 0 as possible.
 
 Parameters:
+
 - `n_unknown : int` (static) - Order to evaluate residuals at.
 
 Returns:
+
 - `J : ChiPhiFunc` (traced) - The residual of the Jacobian equation
 - `Cb : ChiPhiFunc` (traced) - The residual of the co/contravariant equation's tangent component.
 - `Ck : ChiPhiFunc` (traced) - The residual of the co/contravariant equation's normal component. 
@@ -169,15 +193,18 @@ Returns:
 Plots all quantities at order $n$.
 
 Parameters:
+
 - `n : int` - Order to plot.
 
 ### `aqsc.Equilibrium.display(psi_max:float=0.03)`
 Plots a boundary with given $\psi$ and some flux surfaces.
 
 Parameters:
+
 - `psi_max : float` - Max $\psi$ to plot to. 
 
 
 Parameters:
+
 - `n_unknown : int` (static) - Order to plot.
 
