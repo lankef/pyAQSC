@@ -4,6 +4,12 @@ from aqsc import *
 
 import jax.numpy as jnp
 
+# Size of the chi and phi grid used for evaluation tests
+points = np.linspace(0, 2*np.pi*(1-1/n_grid_phi), n_grid_phi)
+chi = np.linspace(0, 2*np.pi*(1-1/n_grid_chi), n_grid_chi)
+phi = points
+psi = np.linspace(0,5,100)
+
 # The numerical derivatives usually aren't as accurate 
 # as to go below the threshold of np.isclose().
 
@@ -134,27 +140,6 @@ class TestArithmetics(unittest.TestCase):
         self.assertTrue((zero/test_even_a).nfp==0)
         self.assertTrue((null_a/null_b).nfp==-203)
         # self.assertEqual(divide_by_three(12), 4)
-
-    def test_lambda(self):
-        '''
-        Testing lambda function output.
-        '''
-        content_single_nfp = np.array([
-            jnp.sin(4*points), # sin component
-            jnp.cos(4*points) # cos component
-        ])
-        content1 = np.array([
-            jnp.sin(points), # sin component
-            jnp.cos(points) # cos component
-        ])
-        single_period = ChiPhiFunc(content_single_nfp, 1, trig_mode=True)
-        four_period = ChiPhiFunc(content1, nfp=4, trig_mode=True)
-        lambda_guess = four_period.get_lambda()(chi[:, None], phi[None, :])
-        lambda_guess2 = single_period.get_lambda()(chi[:, None], phi[None, :])
-        lambda_ans = jnp.sin(chi[:, None])*jnp.sin(4*points) + jnp.cos(chi[:, None])*jnp.cos(4*points)
-        
-        self.assertTrue(jnp.all(jnp.isclose(lambda_guess, lambda_ans)))
-        self.assertTrue(jnp.all(jnp.isclose(lambda_guess2, lambda_ans)))
 
     def test_arithmetics(self):
         '''

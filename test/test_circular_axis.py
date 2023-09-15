@@ -28,6 +28,9 @@ B_psi_coef_cp, B_theta_coef_cp, \
 
 class TestCircularAxis(unittest.TestCase):
 
+    def test_helicity(self):
+        self.assertTrue(circ_equilibrium.get_helicity()==0)
+
     def test_B_psi(self):
         print('Testing leading order: B_psi[0]')
         print_fractional_error(

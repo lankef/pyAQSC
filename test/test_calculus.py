@@ -7,6 +7,13 @@ import jax.numpy as jnp
 # The phi derivative tests are done with splines, for which the 
 # specral method is not very well-suited.
 diff_tolerance = 5e-4
+
+# Size of the chi and phi grid used for evaluation tests
+points = np.linspace(0, 2*np.pi*(1-1/n_grid_phi), n_grid_phi)
+chi = np.linspace(0, 2*np.pi*(1-1/n_grid_chi), n_grid_chi)
+phi = points
+psi = np.linspace(0,5,100)
+
 def is_roughly_close(array_a, array_b):
     return(jnp.abs(array_a-array_b)<diff_tolerance)
 
