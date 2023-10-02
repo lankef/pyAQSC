@@ -811,7 +811,6 @@ class Equilibrium:
 
         norm = colors.Normalize(vmin=jnp.min(B_magnitude), vmax=jnp.max(B_magnitude), clip=True)
         mapper = cm.ScalarMappable(norm=norm, cmap=cm.plasma)
-
         facecolors = mapper.to_rgba(B_magnitude)
 
         ax.plot_surface(x_surf, y_surf, z_surf, zorder=1, facecolors=facecolors)
