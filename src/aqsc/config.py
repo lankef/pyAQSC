@@ -6,7 +6,7 @@
 # chiphifunc_test_suite.py
 # - import_from_stel(): Loading equilibria from pyQSC
 # - read_first_three_orders(): Loading equilibria from ref [1-3]
-use_pyQSC = True
+use_pyQSC = False
 
 ''' Numerical settings (chiphifunc.py) '''
 double_precision = True
