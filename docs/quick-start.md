@@ -8,7 +8,7 @@ equilibrium_circ = aqsc.circular_axis()
 equilibrium_circ.display()
 # Continued below
 ```
-![The circular axis equilibrium](/assets/display.png "The circular axis equilibrium")
+![The circular axis equilibrium](./assets/display.png "The circular axis equilibrium")
 
 This constructs the circular axis, anisotropic pressure equilibrium to order $n=2$ as an `aqsc.Equilibrium`.
 

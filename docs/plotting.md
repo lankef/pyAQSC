@@ -29,7 +29,7 @@ plt.colorbar(label=r'$B_\theta$')
 plt.show()
 # Continued below
 ```
-![$B_\theta$ colormap](/assets/b_theta.png "$B_\theta$ colormap")
+![$B_\theta$ colormap](./assets/b_theta.png "$B_\theta$ colormap")
 
 To transform the flux coordinate of an `Equilibrium` into Frenet, cylindrical or xyz coordinates, use `aqsc.Equilibrium.flux_to_frenet`
 ```
@@ -44,7 +44,7 @@ plt.ylabel('Z')
 plt.show()
 # Continued below
 ```
-![Flux surfaces](/assets/flux.png "Flux surfaces")
+![Flux surfaces](./assets/flux.png "Flux surfaces")
 
 An order of an `Equilibrium` can be plotted with `aqsc.Equilibrium.display_order(n)`. See [Equilibrium API](api-equilibrium.md) for its usage.
 
