@@ -1,5 +1,5 @@
 # Equilibrium API
-AS its name suggests, the Equilibrium class manages all information for a QS equilibrium or magnetic field. For the definition of quantities, see the sections on [unknowns](background-solves-for.md) and [free parameters](background-free-params.md).
+As its name suggests, the Equilibrium class manages all information for a QS equilibrium or magnetic field. For the definition of quantities, see the sections on [unknowns](background-solves-for.md) and [free parameters](background-free-params.md).
 
 ## Class attributes
 ### `self.unknown : {string:ChiPhiEpsFunc}` (dict of traced) 
@@ -63,7 +63,7 @@ Parameters:
 - `self.magnetic_only : bool` (static) 
 
 ### `from_known(X_coef_cp, Y_coef_cp, Z_coef_cp, B_psi_coef_cp, B_theta_coef_cp, B_denom_coef_c, B_alpha_coef, kap_p, dl_p, tau_p, iota_coef, p_perp_coef_cp, Delta_coef_cp, axis_info={}, magnetic_only=False )`
-Constructs an equilibrium from known quantities. **Does not** check order consistency, nfp, grid number or whether the known quantities obey the ordered governing equations. We recommend creating equilibria using `aqsc.leading_orders()` (see [iteration API](api-iteration.md)). 
+Constructs an equilibrium from known quantities. **Does not** check order consistency, nfp, grid number or whether the known quantities obey the ordered governing equations. We recommend creating equilibria using `aqsc.leading_orders()` (see [Quick start](api-iteration.md)). 
 
 Parameters:
 

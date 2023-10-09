@@ -1,2 +1,2 @@
 # Iteration API
-See the [tutorial chapter](init-and-iterate).
+See the relevant [tutorial chapters](init-and-iterate-eq.md).

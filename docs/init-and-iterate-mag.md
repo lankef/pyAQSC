@@ -8,6 +8,8 @@ Each configuration is managed by a object of the traced class `Equilibrium`. An 
 
 This part shows how to create a new QS magnetic field from scratch and iterate to higher orders.
 
+All grid values must be provided at $\phi=0, \frac{1}{n_\text{grid}}\frac{2\pi}{n_\text{field period}}, ..., \frac{n_\text{grid}-1}{n_\text{grid}}\frac{2\pi}{n_\text{field period}}$.
+
 ## Creating new configrations
 `aqsc.leading_orders_magnetic()` creates a QS equilibrium and performs leading order ($n=2$) calculations:
 
@@ -19,7 +21,7 @@ This part shows how to create a new QS magnetic field from scratch and iterate t
         B_psi_00,
         Y20,
         B_alpha_1,
-        B0, B11c, B2, 
+        B0, B11c, B22s, B20, B22c,
         len_phi,
         static_max_freq,
         traced_max_freq,
@@ -34,7 +36,7 @@ Parameters:
 - `B_psi_00 : 1d array` (traced) - $B_{\psi 0,0}$.
 - `Y20 : 1d array` (traced) - $B_{\psi 0,0}$.
 - `B_alpha_1 : float` (traced) - The 1st order component of flux funtion $B_\alpha$
-- `B0, B11c, B2 : float, float, ChiPhiFunc` (Traced) - Leading components of the magnetic field magnitude $B^-$.
+- `B0, B11c, B22s, B20, B22c : float` (Traced) - Leading components of the magnetic field magnitude $B^-$.
 - `len_phi` (static) - The $\phi$ grid number
 - `static_max_freq : int` (static) - The cut-off frequency for the low-pass filter on the results. Tied to array sizes during spectral solve, and lower value drastically increases solving speeds. Changing will result in recompiling.
 - `traced_max_freq` (traced) - The cut-off frequency for the low-pass filter on the results. Doesn't impact speed and doesn't require recompiling.

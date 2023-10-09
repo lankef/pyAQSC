@@ -8,7 +8,7 @@ Each configuration is managed by a object of the traced class `Equilibrium`. An 
 
 This part shows how to create a new QS equilibrium from scratch and iterate to higher orders. For creating a QS magnetic field without force balance, see the [next part](init-and-iterate-mag.md).
 
-
+All grid values must be provided at $\phi=0, \frac{1}{n_\text{grid}}\frac{2\pi}{n_\text{field period}}, ..., \frac{n_\text{grid}-1}{n_\text{grid}}\frac{2\pi}{n_\text{field period}}$.
 
 ## Creating new configrations
 `aqsc.leading_orders()` creates a QS equilibrium and performs leading order ($n=2$) calculations:
@@ -21,7 +21,7 @@ This part shows how to create a new QS equilibrium from scratch and iterate to h
         iota_0,
         B_theta_20_avg,
         B_alpha_1, 
-        B0, B11c, B2,
+        B0, B11c, B22s, B20, B22c,
         len_phi,
         static_max_freq,
         traced_max_freq,
@@ -30,13 +30,13 @@ This part shows how to create a new QS equilibrium from scratch and iterate to h
 Parameters:
 
 - `nfp : int` (static) - The number of field period.
-- `Rc, Rs, Zc, Zs : array` (traced) - $sin(i\Phi)$, $cos(i\Phi)$ coefficients of axis shape $R_0$ and $Z_0$ w.r.t. cylindrical $\Phi$. The $i$-th component is the $i$-th mode coefficient.
-- `p0 : array` (traced) - The on-axis pressure. 
+- `Rc, Rs, Zc, Zs : list(float)` (traced) - $sin(i\Phi)$, $cos(i\Phi)$ coefficients of axis shape $R_0$ and $Z_0$ w.r.t. cylindrical $\Phi$. The $i$-th component is the $i$-th mode coefficient.
+- `p0 : array` (traced) - The on-axis pressure as a function of general Boozer coordinate angle $\phi$ in one field period on grids. 
 - `Delta_0_avg : float` (traced) - The average on-axis anisotropy.
 - `iota_0 : float` (traced) - The 0th order rotational transform.
 - `B_theta_20_avg : float` (traced) - The average $\chi$-independent component of $\bar{B}_{\theta 2}$.
 - `B_alpha_1 : float` (traced) - The 1st order component of flux funtion $B_\alpha$
-- `B0, B11c, B2 : float, float, ChiPhiFunc` (Traced) - Leading components of the magnetic field magnitude $B^-$.
+- `B0, B11c, B22s, B20, B22c : float` (Traced) - Leading components of the magnetic field magnitude $B^-$.
 - `len_phi` (static) - The $\phi$ grid number
 - `static_max_freq : int` (static) - The cut-off frequency for the low-pass filter on the results. Tied to array sizes during spectral solve, and lower value drastically increases solving speeds. Changing will result in recompiling.
 - `traced_max_freq` (traced) - The cut-off frequency for the low-pass filter on the results. Doesn't impact speed and doesn't require recompiling.
