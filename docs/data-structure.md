@@ -26,7 +26,7 @@ Internally, the coefficients are stored as the 2D numpy array, `ChiPhiFunc.conte
 For more information, please refer to [ChiPhiFunc API](api-chiphifunc.md).
 
 ## ChiPhiEpsFunc
-`ChiPhiEpsFunc` is a list-like class containing scalars,  `ChiPhiFunc`'s, and `ChiPhiFuncSpecial`'s. It is the primary data structure pyAQSC stores results in. To evaluate a `ChiPhiEpsFunc`, use `ChiPhiEpsFunc.eval(psi, chi, phi, sq_eps_series)`.
+`ChiPhiEpsFunc` is a list-like class containing scalars,  `ChiPhiFunc`'s, and `ChiPhiFuncSpecial`'s. It is the primary data structure pyAQSC stores results in. To evaluate a `ChiPhiEpsFunc`, use `ChiPhiEpsFunc.eval(psi, chi, phi, sq_eps_series)`. The $\epsilon$, $\chi$, $\phi$ derivative of a `ChiPhiEpsFunc` can be calculated with `ChiPhiEpsFunc.depsilon()`, `ChiPhiEpsFunc.dchi()` and `ChiPhiEpsFunc.dphi()`.
 
 `ChiPhiEpsFunc` manages the power-Fourier series:
 $$
