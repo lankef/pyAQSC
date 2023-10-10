@@ -136,7 +136,7 @@ class ChiPhiEpsFunc:
         return(ChiPhiEpsFunc([ChiPhiFuncSpecial(0)]*(other.get_order()+1), other.nfp))
     
     ''' Evaluation '''
-    def depsilon(self):
+    def deps(self):
         new_chiphifunc_list = []
         for i in range(len(self.chiphifunc_list)-1):
             order_i = i+1

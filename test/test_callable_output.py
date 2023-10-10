@@ -5,7 +5,7 @@ import numpy as np
 
 # Size of the chi and phi grid used for evaluation tests
 points = jnp.linspace(0, 2*np.pi*(1-1/n_grid_phi), n_grid_phi)
-chi = jnp.linspace(0, 2*np.pi*(1-1/n_grid_chi), n_grid_chi)
+chi = points
 phi = points
 psi = jnp.linspace(0,5,100)
 
@@ -119,7 +119,7 @@ class TestCallables(unittest.TestCase):
         gradient_chi_X = np.gradient(X_chis, phis)
         gradient_phi_X = np.gradient(X_phis, phis)
         # First and last elements of jnp.gradient are incorrect.
-        jnp.all(is_roughly_close(test_chiphiepsfunc.depsilon().eval(epsilons**2, 0, 0), gradient_eps_X)[1:-1])
+        jnp.all(is_roughly_close(test_chiphiepsfunc.deps().eval(epsilons**2, 0, 0), gradient_eps_X)[1:-1])
         jnp.all(is_roughly_close(test_chiphiepsfunc.dchi().eval(1, phis, 0), gradient_chi_X)[1:-1])
         jnp.all(is_roughly_close(test_chiphiepsfunc.dphi().eval(1, 0, phis), gradient_phi_X)[1:-1]) # First and last elements of np.gradient are unreliable
 

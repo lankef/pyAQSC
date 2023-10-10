@@ -64,7 +64,7 @@ Parameters:
 Returns: 
 - An `jnp.array` evaluation result.
 
-### `aqsc.ChiPhiEpsFunc.depsilon()`, `aqsc.ChiPhiEpsFunc.dchi()`, `aqsc.ChiPhiEpsFunc.dphi()`
+### `aqsc.ChiPhiEpsFunc.deps()`, `aqsc.ChiPhiEpsFunc.dchi()`, `aqsc.ChiPhiEpsFunc.dphi()`
 Calculates the $\epsilon$, $\chi$ or $\phi$ derivative of a `ChiPhiEpsFunc`.
 
 Returns: 
