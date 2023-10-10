@@ -1,24 +1,61 @@
 import unittest
 from aqsc import *
 import jax.numpy as jnp
+import numpy as np
 
 # Size of the chi and phi grid used for evaluation tests
-points = np.linspace(0, 2*np.pi*(1-1/n_grid_phi), n_grid_phi)
-chi = np.linspace(0, 2*np.pi*(1-1/n_grid_chi), n_grid_chi)
+points = jnp.linspace(0, 2*np.pi*(1-1/n_grid_phi), n_grid_phi)
+chi = jnp.linspace(0, 2*np.pi*(1-1/n_grid_chi), n_grid_chi)
 phi = points
-psi = np.linspace(0,5,100)
+psi = jnp.linspace(0,5,100)
 
+# Generating test objects
 content_single_nfp = jnp.array([
     jnp.sin(4*points), # sin component
     jnp.cos(4*points) # cos component
 ])
-content1 = np.array([
+content1 = jnp.array([
     jnp.sin(points), # sin component
     jnp.cos(points) # cos component
 ])
-
 single_period = ChiPhiFunc(content_single_nfp, 1, trig_mode=True)
 four_period = ChiPhiFunc(content1, nfp=4, trig_mode=True)
+
+content0 = jnp.array([
+    jnp.sin(9*points)
+])
+content1 = jnp.array([
+    jnp.sin(3*points), # sin component
+    jnp.cos(4*points) # cos component
+])
+content2 = jnp.array([
+    jnp.cos(6*points), # sin component
+    jnp.sin(3*points), # 0 component
+    jnp.cos(4*points) # cos component
+])
+content3 = jnp.array([
+    jnp.sin(3*points), # sin component
+    jnp.cos(4*points), # sin component
+    jnp.sin(3*points), # cos component
+    jnp.cos(4*points) # cos component
+])
+chiphifunc0 = ChiPhiFunc(content0, nfp=4, trig_mode=True)
+chiphifunc1 = ChiPhiFunc(content1, nfp=4, trig_mode=True)
+chiphifunc2 = ChiPhiFunc(content2, nfp=4, trig_mode=True)
+chiphifunc3 = ChiPhiFunc(content3, nfp=4, trig_mode=True)
+test_chiphiepsfunc = ChiPhiEpsFunc([
+    chiphifunc0, 
+    chiphifunc1, 
+    chiphifunc2, 
+    chiphifunc3
+], nfp=4)
+
+
+# np.gradient is not very accurate, but it allows us to benchmark our
+# different implementation
+solver_tolerance = 5e-4
+def is_roughly_close(array_a, array_b):
+    return(jnp.abs(array_a-array_b)<solver_tolerance)
 
 class TestCallables(unittest.TestCase):
     
@@ -48,36 +85,6 @@ class TestCallables(unittest.TestCase):
         )))
     
     def test_chiphiepsfunc_lambda(self):
-        content0 = jnp.array([
-            jnp.sin(9*points)
-        ])
-        content1 = jnp.array([
-            jnp.sin(3*points), # sin component
-            jnp.cos(4*points) # cos component
-        ])
-        content2 = jnp.array([
-            jnp.cos(6*points), # sin component
-            jnp.sin(3*points), # 0 component
-            jnp.cos(4*points) # cos component
-        ])
-        content3 = jnp.array([
-            jnp.sin(3*points), # sin component
-            jnp.cos(4*points), # sin component
-            jnp.sin(3*points), # cos component
-            jnp.cos(4*points) # cos component
-        ])
-
-        chiphifunc0 = ChiPhiFunc(content0, nfp=4, trig_mode=True)
-        chiphifunc1 = ChiPhiFunc(content1, nfp=4, trig_mode=True)
-        chiphifunc2 = ChiPhiFunc(content2, nfp=4, trig_mode=True)
-        chiphifunc3 = ChiPhiFunc(content3, nfp=4, trig_mode=True)
-        test_chiphiepsfunc = ChiPhiEpsFunc([
-            chiphifunc0, 
-            chiphifunc1, 
-            chiphifunc2, 
-            chiphifunc3
-        ], nfp=4)
-
         def lambda_ans(psi, chi, phi):
             phi = phi*4
             eps = jnp.sqrt(psi)
@@ -102,6 +109,20 @@ class TestCallables(unittest.TestCase):
             lambda_ans(psi[:,None,None], chi[None,:,None], phi[None,None,:])
         )))
 
-    
+    def test_chiphiepsfunc_diff(self):
+        epsilons = jnp.linspace(0,10,1000)
+        phis = jnp.linspace(0,2*jnp.pi*0.999,1000)
+        X_epsilons = test_chiphiepsfunc.eval(epsilons**2, 0, 0)
+        X_chis = test_chiphiepsfunc.eval(1, phis, 0)
+        X_phis = test_chiphiepsfunc.eval(1, 0, phis)
+        gradient_eps_X = np.gradient(X_epsilons, epsilons)
+        gradient_chi_X = np.gradient(X_chis, phis)
+        gradient_phi_X = np.gradient(X_phis, phis)
+        # First and last elements of jnp.gradient are incorrect.
+        jnp.all(is_roughly_close(test_chiphiepsfunc.depsilon().eval(epsilons**2, 0, 0), gradient_eps_X)[1:-1])
+        jnp.all(is_roughly_close(test_chiphiepsfunc.dchi().eval(1, phis, 0), gradient_chi_X)[1:-1])
+        jnp.all(is_roughly_close(test_chiphiepsfunc.dphi().eval(1, 0, phis), gradient_phi_X)[1:-1]) # First and last elements of np.gradient are unreliable
+
+
 if __name__ == '__main__':
     unittest.main()

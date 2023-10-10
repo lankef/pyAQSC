@@ -136,6 +136,34 @@ class ChiPhiEpsFunc:
         return(ChiPhiEpsFunc([ChiPhiFuncSpecial(0)]*(other.get_order()+1), other.nfp))
     
     ''' Evaluation '''
+    def depsilon(self):
+        new_chiphifunc_list = []
+        for i in range(len(self.chiphifunc_list)-1):
+            order_i = i+1
+            new_chiphifunc_list.append(order_i*self.chiphifunc_list[order_i])
+        return(ChiPhiEpsFunc(new_chiphifunc_list, self.nfp))
+    
+    def dchi_or_phi(self, chi_mode):
+        new_chiphifunc_list = []
+        for i in range(len(self.chiphifunc_list)):
+            item = self.chiphifunc_list[i]
+            if isinstance(item, ChiPhiFunc) and (item.nfp==self.nfp or item.nfp<=0):
+                if chi_mode:
+                    new_chiphifunc_list.append(item.dchi())
+                else:
+                    new_chiphifunc_list.append(item.dphi())
+            elif jnp.isscalar(item) or item.ndim==0:
+                new_chiphifunc_list.append(ChiPhiFuncSpecial(0))
+            else:
+                new_chiphifunc_list.append(ChiPhiFuncSpecial(-14))
+        return(ChiPhiEpsFunc(new_chiphifunc_list, self.nfp))
+
+    def dchi(self):
+        return(self.dchi_or_phi(True))
+
+    def dphi(self):
+        return(self.dchi_or_phi(False))
+
     def eval(self, psi, chi=0, phi=0, sq_eps_series:bool=False, n_max=float('inf')):
         if sq_eps_series:
             power_arg = psi
