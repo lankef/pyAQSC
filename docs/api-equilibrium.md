@@ -118,6 +118,32 @@ Returns:
 
 ## Functions for output
 
+### `aqsc.Equilibrium.get_eps_crit(n_max=float('inf'), n_grid_chi=100, n_grid_phi=100, eps_cap = 2.0, n_newton_iter = 10)`
+### `aqsc.Equilibrium.get_psi_crit(n_max=float('inf'), n_grid_chi=100, n_grid_phi=100, eps_cap = 2.0, n_newton_iter = 10)`
+Estimates the critical $\epsilon=\sqrt{\psi}$ or $\psi$ where flux surface self-intersects
+by numerically finding the zero of $\sqrt{g}(\epsilon, \chi, \phi)$ with the smallest $\epsilon$ or $\psi$ using Newton's method. At each search step, $\sqrt{g}(\epsilon_i, \chi, \phi)$ is evaluated on a `n_grid_chi`x`n_grid_phi` grid.
+
+This function can be slow to JIT compile. When good accuracy is not required, reducing `n_newton_iter`, `n_grid_chi` and `n_grid_phi` can substantially increase the compile speed.
+
+JIT compiling the function setting `eps_cap` as traced will not cause errors, but it increases compile time and is not recommended.
+
+Parameters:
+
+- `n_max` (static) - maximum order to evaluate coordinate transformation to.
+
+- `n_grid_chi, n_grid_phi : int` (static) - Grid size to evaluate Jacobian $\sqrt{g}$ on. 
+The critical point occurs when $min(\sqrt{g}\leq0)$.
+
+- `eps_cap : float` (static) - An initial guess of an epsilon>epsilon_crit used in Newton's 
+method. Need to be beyond t
+
+- `n_newton_iter : int` (static) - Maximum number of steps in Newton's method.
+higher number gives better acuracy but is slower to jit.
+
+Returns: 
+
+- `(eps_crit, jacobian_residue)`: $\epsilon_{crit}$ and the flux surface min of the Jacobian at eps_crit.
+
 ### `aqsc.Equilibrium.get_order()`
 Gets the highest known order $n$ of `self`.
 

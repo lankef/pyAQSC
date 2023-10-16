@@ -397,7 +397,7 @@ def iterate_delta_n_0_offset(n_eval,
 # All coef inputs must be ChiPhiEpsFunc's.
 class Equilibrium:
     # nfp-dependent!!
-    def __init__(self, unknown, constant, nfp, magnetic_only, axis_info={}):
+    def __init__(self, unknown, constant, axis_info, nfp, magnetic_only):
         self.unknown = unknown
         self.constant = constant
         self.nfp = nfp
@@ -418,7 +418,6 @@ class Equilibrium:
             'magnetic_only': self.magnetic_only
         }  # static values
         return (children, aux_data)
-
     @classmethod
     def _tree_unflatten(cls, aux_data, children):
         return cls(*children, **aux_data)
@@ -465,9 +464,9 @@ class Equilibrium:
         return(Equilibrium(
             unknown=unknown,
             constant=constant,
+            axis_info=axis_info,
             nfp=nfp,
             magnetic_only=magnetic_only,
-            axis_info=axis_info,
         ))
     
     ''' Coordinate transformations '''
@@ -522,9 +521,9 @@ class Equilibrium:
         else:
             target_type=jnp.float32
         return(
-            jnp.real(self.unknown['X_coef_cp'].eval(psi, chi, phi, n_max)).astype(target_type), 
-            jnp.real(self.unknown['Y_coef_cp'].eval(psi, chi, phi, n_max)).astype(target_type), 
-            jnp.real(self.unknown['Z_coef_cp'].eval(psi, chi, phi, n_max)).astype(target_type)
+            self.unknown['X_coef_cp'].eval(psi, chi, phi, n_max=n_max), 
+            self.unknown['Y_coef_cp'].eval(psi, chi, phi, n_max=n_max), 
+            self.unknown['Z_coef_cp'].eval(psi, chi, phi, n_max=n_max)
         )
 
     def flux_to_cylindrical(self, psi, chi, phi, n_max=float('inf')):
@@ -607,7 +606,7 @@ class Equilibrium:
         for key in self.axis_info.keys():
             numpy_axis_info[key] = np.asarray(self.axis_info[key])
 
-        big_dict = {\
+        big_dict = {
             'unknown':unknown_dict,
             'constant':constant_dict,
             'nfp':self.nfp,
@@ -648,9 +647,9 @@ class Equilibrium:
         return(Equilibrium(
             unknown=unknown,
             constant=constant,
+            axis_info=axis_info,
             nfp=nfp,
             magnetic_only=magnetic_only,
-            axis_info=axis_info
         ))
 
     # Order consistency check --------------------------------------------------
@@ -765,6 +764,182 @@ class Equilibrium:
         return(J, Cb, Ck, Ct, I, II, III)
 
     ''' Display and output'''
+
+    def get_psi_crit(
+        self, n_max=float('inf'), 
+        n_grid_chi=100, n_grid_phi=100, 
+        eps_cap = 3.0,
+        n_newton_iter = 20):
+        eps_crit, jacobian_residue = self.get_eps_crit(
+            n_max=n_max, 
+            n_grid_chi=n_grid_chi, 
+            n_grid_phi=n_grid_phi, 
+            eps_cap=eps_cap,
+            n_newton_iter=n_newton_iter
+        )
+        return(eps_crit**2, jacobian_residue)
+        
+
+    def get_eps_crit(
+        self, n_max=float('inf'), 
+        n_grid_chi=100, n_grid_phi=100, 
+        eps_cap = 2.0,
+        n_newton_iter = 10):
+        '''
+        Estimates the critical epsilon where flux surface self-intersects.
+        by finding the zero of $min_{\chi, \phi}[\sqrt{g}(\epsilon, \chi, \phi)]=0$
+        using binary search. \sqrt{g}(\epsilon, \chi, \phi) At each search step 
+        is evaluated on a grid of given size.
+        Can be diffed but is slow to compile, because it relies on newton iteration
+        for root finding. Reducing `n_newton_iter` substantially speeds up jit.
+
+        Parameters;
+
+        - `n_max` - maximum order to evaluate coordinate transformation to.
+
+        - `n_grid_chi, n_grid_phi : int`- Grid size to evaluate Jacobian $\sqrt{g}$ on. 
+        The critical point occurs when $min(\sqrt{g}\leq0)$.
+
+        - `bad_eps_init` - An initial guess of an epsilon>epsilon_crit used in Newton's 
+        method. Need to be beyond t
+
+        - `n_newton_iter:int` (static) - Maximum number of steps in Newton's method.
+        higher number gives better acuracy but is slower to jit.
+
+        Returns: 
+        
+        - (eps_crit, jacobian_residue): eps_crit and the flux surface min of the Jacobian at eps_crit.
+        '''
+        points = jnp.linspace(0, 2*np.pi*(1-1/n_grid_phi), n_grid_phi)
+        points_chi = jnp.linspace(0, 2*np.pi*(1-1/n_grid_chi), n_grid_chi)
+        axis_r0_phi_R,\
+        axis_r0_phi_Phi,\
+        axis_r0_phi_Z,\
+        tangent_phi_R,\
+        tangent_phi_Phi,\
+        tangent_phi_Z,\
+        normal_phi_R,\
+        normal_phi_Phi,\
+        normal_phi_Z,\
+        binormal_phi_R,\
+        binormal_phi_Phi,\
+        binormal_phi_Z = self.frenet_basis_phi(points)
+        axis_r0 = jnp.real(jnp.array([
+            axis_r0_phi_R,
+            axis_r0_phi_Phi,
+            axis_r0_phi_Z
+        ]))
+        tangent = jnp.real(jnp.array([
+            tangent_phi_R,
+            tangent_phi_Phi,
+            tangent_phi_Z
+        ]))
+        normal = jnp.real(jnp.array([
+            normal_phi_R,
+            normal_phi_Phi,
+            normal_phi_Z
+        ]))
+        binormal = jnp.real(jnp.array([
+            binormal_phi_R,
+            binormal_phi_Phi,
+            binormal_phi_Z
+        ]))
+
+        # These quantities are periodic, and we apply
+        # spectral derivatives, taking advantage of implementation
+        # in aqsc.
+        tangent_dphi = jnp.real(ChiPhiFunc(tangent, self.nfp).dphi().content)
+        normal_dphi = jnp.real(ChiPhiFunc(normal, self.nfp).dphi().content)
+        binormal_dphi = jnp.real(ChiPhiFunc(binormal, self.nfp).dphi().content)
+        axis_r0_dphi = jnp.real(jnp.gradient(axis_r0, points[1]-points[0], axis=1)) # First and last 2 elems untrustworthy
+        X_coef_cp = self.unknown['X_coef_cp']
+        Y_coef_cp = self.unknown['Y_coef_cp']
+        Z_coef_cp = self.unknown['Z_coef_cp']
+
+        # Returns (n_grid, n_grid) arrays. Axis=1 is Phi.
+        X_grid = lambda eps: jnp.real(X_coef_cp.eval(eps**2, points_chi[:, None], points[None, :], n_max=n_max))
+        Y_grid = lambda eps: jnp.real(Y_coef_cp.eval(eps**2, points_chi[:, None], points[None, :], n_max=n_max))
+        Z_grid = lambda eps: jnp.real(Z_coef_cp.eval(eps**2, points_chi[:, None], points[None, :], n_max=n_max))
+        deps_X_grid = lambda eps: jnp.real(X_coef_cp.deps().eval(eps**2, points_chi[:, None], points[None, :], n_max=n_max))
+        deps_Y_grid = lambda eps: jnp.real(Y_coef_cp.deps().eval(eps**2, points_chi[:, None], points[None, :], n_max=n_max))
+        deps_Z_grid = lambda eps: jnp.real(Z_coef_cp.deps().eval(eps**2, points_chi[:, None], points[None, :], n_max=n_max))
+        dchi_X_grid = lambda eps: jnp.real(X_coef_cp.dchi().eval(eps**2, points_chi[:, None], points[None, :], n_max=n_max))
+        dchi_Y_grid = lambda eps: jnp.real(Y_coef_cp.dchi().eval(eps**2, points_chi[:, None], points[None, :], n_max=n_max))
+        dchi_Z_grid = lambda eps: jnp.real(Z_coef_cp.dchi().eval(eps**2, points_chi[:, None], points[None, :], n_max=n_max))
+        dphi_X_grid = lambda eps: jnp.real(X_coef_cp.dphi().eval(eps**2, points_chi[:, None], points[None, :], n_max=n_max))
+        dphi_Y_grid = lambda eps: jnp.real(Y_coef_cp.dphi().eval(eps**2, points_chi[:, None], points[None, :], n_max=n_max))
+        dphi_Z_grid = lambda eps: jnp.real(Z_coef_cp.dphi().eval(eps**2, points_chi[:, None], points[None, :], n_max=n_max))
+
+        deps_r = lambda eps:(
+            deps_X_grid(eps)[None, :, :]*normal[:, None, :]
+            +deps_Y_grid(eps)[None, :, :]*binormal[:, None, :]
+            +deps_Z_grid(eps)[None, :, :]*tangent[:, None, :]
+        )
+
+        dchi_r = lambda eps:(
+            dchi_X_grid(eps)[None, :, :]*normal[:, None, :]
+            +dchi_Y_grid(eps)[None, :, :]*binormal[:, None, :]
+            +dchi_Z_grid(eps)[None, :, :]*tangent[:, None, :]
+        )
+
+        dphi_r = lambda eps:(
+            axis_r0_dphi[:, None, :]
+            +dphi_X_grid(eps)[None, :, :]*normal[:, None, :]
+            +dphi_Y_grid(eps)[None, :, :]*binormal[:, None, :]
+            +dphi_Z_grid(eps)[None, :, :]*tangent[:, None, :]
+            +X_grid(eps)[None, :, :]*normal_dphi[:, None, :]
+            +Y_grid(eps)[None, :, :]*binormal_dphi[:, None, :]
+            +Z_grid(eps)[None, :, :]*tangent_dphi[:, None, :]
+        )
+        # Sqrt g on grid
+        # HACKY: np.gradient seem unreliable for the leading and trailing 2 elements/
+        # Because g is a smooth function, we remove these two cols and assume errors 
+        # from neglecting 2 cols of grid points in argmin{min[g(r)]<=0} is negligible.
+        jacobian_grid = lambda eps: jnp.sum(
+            jnp.cross(
+                deps_r(eps), 
+                dchi_r(eps), 
+                axisa=0, axisb=0, axisc=0
+            )*dphi_r(eps), 
+            axis=0
+        )[:, 2:-2] 
+
+        # Finding jacobian_min=0 using Newtom's method.
+        jacobian_min = lambda eps: jnp.min(jacobian_grid(eps))
+        jacobian_min_prime = jax.grad(jacobian_min)
+        def q(x):
+            return x - jacobian_min(x) / jacobian_min_prime(x)
+        eps_i = eps_cap
+        for i in range(n_newton_iter):
+            y = q(eps_i)
+            eps_i = y
+        return(eps_i, jacobian_min(eps_i))
+        '''
+        # Zero-finding with binary search is faster but cannot be jitted.
+        # Binary search for jacobian_min=0,
+        # knowing jacobian_min(0)=0 and assuming jacobian_min is concave.
+        x_left = 0
+        x_right = bad_eps_init
+        # g_tol is the tolerance and supposed to
+        error = g_tol + 1
+        n_iter = 0
+        n_bindary_iter_max = 200
+        # Tolerance-based stopping is disabled for now
+        # while error > g_tol and n_iter < n_bindary_iter_max:
+        # while error > g_tol and n_iter < n_bindary_iter_max:
+            # We assume that jacobian_min is concave and is 0 at 0.
+            x_mid = .5*x_left + .5*x_right
+            y_mid = jacobian_min(x_mid)
+            if y_mid>0:
+                x_left = x_mid
+            else: 
+                x_right = x_mid
+            error = jnp.abs(y_mid)
+            n_iter += 1
+        '''      
+
+
+
     def get_helicity(self):
         ''' 
         Returns the helicity (the normal vector, kappa's 
@@ -986,8 +1161,6 @@ def iterate_2_magnetic_only(equilibrium,
         Yn1c_avg=Yn1c_avg
     )
     Y_coef_cp = Y_coef_cp.append(Ynm1.filter(traced_max_freq[0]))
-
-
 
     # Order n_eval ---------------------------------------------------
     # no need to ignore_mode_0 for chi integral. This is an odd order.
