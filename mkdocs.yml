@@ -15,6 +15,7 @@ nav:
     - 'New QS magnetic field': 'init-and-iterate-mag.md'
     - 'Data structures': 'data-structure.md'
     - 'Plotting': 'plotting.md'
+    - 'GPU and auto-differentiation': 'JAX.md'
   - 'API guide': 
     - 'Equilibrium': 'api-equilibrium.md'
     - 'ChiPhiFunc': 'api-chiphifunc.md'
