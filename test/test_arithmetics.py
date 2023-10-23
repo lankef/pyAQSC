@@ -119,7 +119,7 @@ class TestArithmetics(unittest.TestCase):
         self.assertTrue((zero+zero).nfp==0)
         self.assertTrue((zero+null_a).nfp==-2)
         self.assertTrue((null_a+zero).nfp==-2)
-        self.assertTrue((null_a+null_b).nfp==-203)
+        self.assertTrue((null_a+null_b).nfp==-2)
         self.assertTrue((test_even_a*test_even_b).content.shape[0]==7)
         self.assertTrue((test_even_a*2).content.shape[0]==5)
         self.assertTrue((test_even_a*zero).nfp==0)
@@ -128,7 +128,7 @@ class TestArithmetics(unittest.TestCase):
         self.assertTrue((zero*zero).nfp==0)
         self.assertTrue((zero*null_a).nfp==-2)
         self.assertTrue((null_a*zero).nfp==-2)
-        self.assertTrue((null_a*null_b).nfp==-203)
+        self.assertTrue((null_a*null_b).nfp==-2)
         self.assertTrue((test_even_a/test_even_b).is_special())
         self.assertTrue((test_even_a/2).content.shape[0]==5)
         self.assertTrue((2/test_even_b).is_special())
@@ -138,7 +138,7 @@ class TestArithmetics(unittest.TestCase):
         self.assertTrue((zero/2).nfp==0)
         self.assertTrue((test_even_a/zero).nfp==-8)
         self.assertTrue((zero/test_even_a).nfp==0)
-        self.assertTrue((null_a/null_b).nfp==-203)
+        self.assertTrue((null_a/null_b).nfp==-2)
         # self.assertEqual(divide_by_three(12), 4)
 
     def test_arithmetics(self):

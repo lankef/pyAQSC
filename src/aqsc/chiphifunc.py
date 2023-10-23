@@ -132,37 +132,6 @@ def jit_fftfreq_int(int_in:int):
     out = jnp.arange(int_in)
     return(jnp.where(out>(int_in-1)//2,out-int_in,out))
 
-# Contains static argument.
-# @partial(jit, static_argnums=(0,))
-def ChiPhiFuncSpecial(error_code:int):
-    '''
-    Creates a special ChiPhiFunc that represents 0 or an error.
-    This is necessary because JAX does not know the value of traced
-    values at compile time. Having a special zero type allows simplifications
-    like 0*n=0, and prevents even-oddness mismatch when zero odd order
-    ChiPhiFunc's (which have even number of chi components) are treated as
-    scalar 0. For example:
-
-    odd + ChiPhiFuncSpecial(0)
-    = ChiPhiFunc(nfp=odd) + ChiPhiFunc(nfp=0)
-    = ChiPhiFunc(nfp=0)
-    odd + 0
-    = ChiPhiFunc(nfp=odd) + (traced int with unknown value)
-    = illegal operation.
-
-    Input: -----
-
-    An integer. Must be smaller than or equal to 0. This represents the type
-    of the special ChiPhiFunc and will be stored as its nfp.
-
-    Output: -----
-
-    A ChiPhiFunc with the given nfp (if error_code>0 then it's set to -2) and
-    content=np.nan
-    '''
-    if error_code>0:
-        return(ChiPhiFunc(jnp.nan, -2))
-    return(ChiPhiFunc(jnp.nan, error_code)) # , is_special=True))
 
 '''
 Convolves 2 2d arrays along axis=0.
@@ -390,7 +359,7 @@ class ChiPhiFunc:
         even/odd self + ChiPhiFunc(nfp<0) other => ChiPhiFunc(nfp<0) other
         ChiPhiFunc(nfp<0) self + even/odd other => ChiPhiFunc(nfp<0) self
         ChiPhiFunc(nfp<=0) self + ChiPhiFunc(nfp<=0) other
-            => ChiPhiFunc(self.nfp*100+other.nfp)
+            => ChiPhiFunc(self.nfp)
         '''
         if isinstance(other, ChiPhiFunc):
             if self.nfp==0:
@@ -402,7 +371,7 @@ class ChiPhiFunc:
                     # if self.nfp==-1 or other.nfp==-1:
                     #     return(ChiPhiFuncSpecial(-1))
                     # else:
-                    return(ChiPhiFuncSpecial(self.nfp*100+other.nfp))
+                    return(ChiPhiFuncSpecial(self.nfp))
                 return(self)
             if other.is_special():
                 return(other)
@@ -474,7 +443,7 @@ class ChiPhiFunc:
         ChiPhiFunc(nfp<0) self * even/odd other => ChiPhiFunc(nfp<0) self
         even/odd self * ChiPhiFunc(nfp<0) other => ChiPhiFunc(nfp<0) other
         ChiPhiFunc(nfp<0) * ChiPhiFunc(nfp<0) other
-            => ChiPhiFunc(self.nfp*100+other.nfp)
+            => ChiPhiFunc(self.nfp)
         '''
         if isinstance(other, ChiPhiFunc):
             if self.nfp==0:
@@ -490,7 +459,7 @@ class ChiPhiFunc:
                     # if self.nfp==-1 or other.nfp==-1:
                     #     return(ChiPhiFuncSpecial(-1))
                     # else:
-                    return(ChiPhiFuncSpecial(self.nfp*100+other.nfp))
+                    return(ChiPhiFuncSpecial(self.nfp))
                 return(self)
             if other.is_special():
                 return(other)
@@ -550,7 +519,7 @@ class ChiPhiFunc:
                     # if self.nfp==-1 or other.nfp==-1:
                     #     return(ChiPhiFuncSpecial(-1))
                     # else:
-                    return(ChiPhiFuncSpecial(self.nfp*100+other.nfp))
+                    return(ChiPhiFuncSpecial(self.nfp))
                 return(other)
             # Handles zero/(not error)
             if self.nfp==0:
@@ -785,7 +754,7 @@ class ChiPhiFunc:
             cut_f_signal = jnp.where(W[None, :]>arg, 0, cut_f_signal)
             return(ChiPhiFunc(jnp.fft.ifft(cut_f_signal, axis=1), self.nfp))
         else:
-            return(ChiPhiFuncSpecial())
+            return(ChiPhiFuncSpecial(-16))
 
     # @partial(jit, static_argnums=(1,))
     def filter_reduced_length(self, arg:int):
@@ -1777,3 +1746,45 @@ def linear_least_sq_2d_svd(A, b):
     u, s, vh = jnp.linalg.svd(A, full_matrices=False)
     Eps_inv = jnp.diag(1/s)
     return(vh.conjugate().T@Eps_inv@u.conjugate().T@b)
+
+# Contains static argument.
+# Does not create new instances of the class.
+# This speeds up compole.
+ChiPhiFuncSpecial_originals=[]
+for i in range (18):
+    error_code=-i
+    ChiPhiFuncSpecial_originals.append(ChiPhiFunc(jnp.nan, error_code))
+    
+# @partial(jit, static_argnums=(0,))
+def ChiPhiFuncSpecial(error_code:int):
+    '''
+    Creates a special ChiPhiFunc that represents 0 or an error.
+    This is necessary because JAX does not know the value of traced
+    values at compile time. Having a special zero type allows simplifications
+    like 0*n=0, and prevents even-oddness mismatch when zero odd order
+    ChiPhiFunc's (which have even number of chi components) are treated as
+    scalar 0. For example:
+
+    odd + ChiPhiFuncSpecial(0)
+    = ChiPhiFunc(nfp=odd) + ChiPhiFunc(nfp=0)
+    = ChiPhiFunc(nfp=0)
+    odd + 0
+    = ChiPhiFunc(nfp=odd) + (traced int with unknown value)
+    = illegal operation.
+
+    Input: -----
+
+    An integer. Must be smaller than or equal to 0. This represents the type
+    of the special ChiPhiFunc and will be stored as its nfp.
+
+    Output: -----
+
+    A ChiPhiFunc with the given nfp (if error_code>0 then it's set to -2) and
+    content=np.nan
+    '''
+    if error_code>0 or error_code<=-len(ChiPhiFuncSpecial_originals):
+        return(ChiPhiFuncSpecial_originals[2])
+        # return(ChiPhiFunc(jnp.nan, -2))
+
+    return(ChiPhiFuncSpecial_originals[-error_code])
+    # return(ChiPhiFunc(jnp.nan, error_code)) # , is_special=True))

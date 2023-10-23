@@ -61,7 +61,7 @@ Each call creates a new `Equilubrium`.
 
 Parameters:
 - `equilibrium : Equilibrium` (traced) - The `Equilibrium` to iterate.
-- `B_alpha_nb2 : ChiPhiFunc` (traced) - $B_{\alpha n/2}$
+- `B_alpha_nb2 : float` (traced) - $B_{\alpha n/2}$
 - `B_denom_nm1 : ChiPhiFunc` (traced) - $B^-_{n-1}$
 - `B_denom_n : ChiPhiFunc` (traced) - $B^-_n$
 - `iota_new : float` (traced) - $\bar{\iota}$

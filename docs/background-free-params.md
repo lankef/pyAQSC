@@ -7,7 +7,7 @@ When constructing a QS anisotropic equilibrium, PyAQSC requires the following qu
 - $p_{\perp 0,0}(\phi)$ - The on-axis pressure.
 - $\bar{\Delta}_0\equiv\oint\Delta_0d\phi$ - The average on-axis anisotropy.
 - $\bar{B}_{\theta 2,0}(\phi)$ - The average $\chi$-independent component of $\bar{B}_{\theta 2}$.
-- $B^-(\psi)\equiv B^{-2}(\psi)$ - The magnetic field strength.
+- $B^-(\chi, \psi)\equiv B^{-2}(\chi, \psi)$ - The magnetic field strength.
 - $B_{\alpha}(\psi)$ - The flux function component of $B_\phi$.
 - $\bar{\iota}(\psi)\equiv\iota(\psi)-N/M, M=1$ - The rotational transform. $N/M$ is the helicity.
 
@@ -27,7 +27,7 @@ Because the force blance constraints are dropped, pyAQSC requires additional fre
 - $B_{\theta n,m}(\phi)$ - The $\theta$ component of the magnetic field.
 - $\bar{B}_{\psi n-2,0}(\phi)$ - The $\chi$-independent part of $B_\psi$. 
 - $Y_{n,0}(\phi)$ - The $\chi$-independent part of $Y_n$, part of the transformation functions that defines $(\psi, \chi, \phi)$.
-- $B^-(\psi)$ - The magnetic field magnitude.
+- $B^-(\chi, \psi)$ - The magnetic field magnitude.
 - $B_{\alpha}(\psi)$ - The flux function component of $B_\phi$.  
 - $\bar\iota(\psi)$ - The rotational transform
 

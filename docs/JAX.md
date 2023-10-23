@@ -4,7 +4,15 @@
 
 pyAQSC uses JAX for auto-differentiation and just-in-time (JIT) compilation. Compiled functions run on GPU/TPU with substantial speed up (~30s/case to ~10ms/case). Most functions in pyAQSC supports JIT.
 
-Time required to JIT an iteration step scales $O(n^3)$. Iteration steps beyond $n>4$ can take **hours** to compile. By default, JIT is **disabled** for all pyAQSC functions, and we do not recommend enabling on CPU runs.
+Time required to JIT an iteration step scales $O(n^3)$. Iteration steps beyond $n>4$ can take **hours** to compile. By default, JIT is **disabled** for all pyAQSC functions, and we do not recommend enabling them on CPU runs.
+
+
+| Order                          | Compile time (V100 GPU)        | Compile memory requirement | Run time (V100 GPU) | Run memory requirement |                         
+| ------------------------------ | ------------------------       |----------------------------|---------------------|------------|
+| Leading order                  | 1min 23s                       | 2.08G                      | 51ms                | 2.1M, <br />15.67G total with compiled instructions|
+| 3, 4                           | 13min 33s, <br />14min 56s total     | 4.53G, <br />6.61G total         | 125ms, <br />176ms total  | <1M additional memory usage
+| 5, 6 (setting all vars static) | 25min 26s, <br />40min 22s total     | 3.21G, <br />9.82G total         | 195ms, <br />371ms total  | <1M additional memory usage
+| 7, 8 (setting all vars static) | 45min 58s, <br />1hr 26min 20s total | 5.86G, <br />15.67G total        | 232ms, <br />703ms total  | <1M additional memory usage
 
 ## JIT for GPU acceleration
 
