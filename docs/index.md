@@ -9,16 +9,19 @@ For an intriduction on near-axis expansion and the formulation behind pyAQSC, se
 
 For a quick example, see [quick start](quick-start.md).
 
-## Dependencies
+## Installation and dependencies
 pyAQSC requires only Numpy, Matplotlib, and JAX. To install a JAX version matching your hardware, see the official [JAX installation guide](https://jax.readthedocs.io/en/latest/installation.html).
+
+After installing JAX, install pyAQSC by:
+
+```
+pip install aqsc
+```
 
 Some unit tests uses Matt Landreman's [pyQSC](https://github.com/landreman/pyQSC). The code does not require pyQSC to function. PyQSC import is disabled by default, and can be enabled in `config.py` when needed.
 
 Notebooks in `MHD_recursion_relations/` and `magnetic_recursion_relations/` requires [wxMaxima](https://wxmaxima-developers.github.io/wxmaxima/) to view. The notebooks are not required to
 run pyAQSC, but contains source expressions that pyAQSC evaluates.
-
-## Installation
-This code can currently only be used by downloading from Github and importing locally.
 
 ## Importing
 To use pyAQSC, simply run
