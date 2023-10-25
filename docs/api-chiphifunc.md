@@ -210,7 +210,7 @@ Returns:
 - A `ChiPhiFunc`.
 
 ### `aqsc.ChiPhiFunc.get_amplitude(self)`
-Calculating the average of the absolute value of elements in `self.content`. If `nfp==0`, returns 0. If `nfp<0`, returns `jnp.inf`.
+Calculating the maximum of the absolute value of elements in `self.content`. If `nfp==0`, returns 0. If `nfp<0`, returns `jnp.inf`.
 
 Returns:
 
