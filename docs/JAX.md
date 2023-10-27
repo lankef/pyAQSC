@@ -2,9 +2,11 @@
 
 ## Introduction
 
-pyAQSC uses JAX for auto-differentiation and just-in-time (JIT) compilation. Compiled functions run on GPU/TPU with substantial speed up (~30s/case to ~10ms/case). Most functions in pyAQSC supports JIT.
+pyAQSC uses JAX for auto-differentiation and just-in-time (JIT) compilation. Compiled functions 
+run on GPU/TPU with substantial speed up (~30s/case to ~10ms/case). Most functions in pyAQSC supports JIT.
 
-Time required to JIT an iteration step scales $O(n^3)$. Iteration steps beyond $n>4$ can take **hours** to compile. By default, JIT is **disabled** for all pyAQSC functions, and we do not recommend enabling them on CPU runs.
+Time required to JIT an iteration step scales $O(n^3)$. Iteration steps beyond $n>4$ can take 
+**hours** to compile. By default, JIT is **disabled** for all pyAQSC functions, and we do not recommend enabling them on CPU runs.
 
 
 | Order                          | Compile time (V100 GPU)        | Compile memory requirement | Run time (V100 GPU) | Run memory requirement |                         
@@ -14,13 +16,26 @@ Time required to JIT an iteration step scales $O(n^3)$. Iteration steps beyond $
 | 5, 6 (setting all vars static) | 25min 26s, <br />40min 22s total     | 3.21G, <br />9.82G total         | 195ms, <br />371ms total  | <1M additional memory usage
 | 7, 8 (setting all vars static) | 45min 58s, <br />1hr 26min 20s total | 5.86G, <br />15.67G total        | 232ms, <br />703ms total  | <1M additional memory usage
 
+**Caution**: When running on GPU, JAX favors single-precision, and **aggressively 
+downgrades** floats into single precision. This is different from the default behavior
+in numpy or python. This can drastically increase high-frequency noise from numerical derivatives. To enforce double precision, run
+```
+from jax import config
+config.update("jax_enable_x64", True)
+```
+at launch. Currently, we also strongly advise initializing new quantities with explicit 
+typing `dtype=jnp.float64`. Running on cpu behaves identically to numpy and python.
+
 ## JIT for GPU acceleration
 
-Use `jax.jit()` to enable JIT compile for any given function:
+Use `jax.jit()` to enable JIT compile for any given function. 
 
 ```
 import jax
 import aqsc
+from jax import config
+config.update("jax_enable_x64", True)
+
 leading_orders_compiled = jax.jit(
     aqsc.leading_orders,
     static_argnums = (0,15,16)

@@ -521,9 +521,9 @@ class Equilibrium:
         else:
             target_type=jnp.float32
         return(
-            self.unknown['X_coef_cp'].eval(psi, chi, phi, n_max=n_max), 
-            self.unknown['Y_coef_cp'].eval(psi, chi, phi, n_max=n_max), 
-            self.unknown['Z_coef_cp'].eval(psi, chi, phi, n_max=n_max)
+            self.unknown['X_coef_cp'].eval(psi=psi, chi=chi, phi=phi, n_max=n_max), 
+            self.unknown['Y_coef_cp'].eval(psi=psi, chi=chi, phi=phi, n_max=n_max), 
+            self.unknown['Z_coef_cp'].eval(psi=psi, chi=chi, phi=phi, n_max=n_max)
         )
 
     def flux_to_cylindrical(self, psi, chi, phi, n_max=float('inf')):
@@ -544,7 +544,7 @@ class Equilibrium:
         binormal_phi_R,\
         binormal_phi_Phi,\
         binormal_phi_Z = self.frenet_basis_phi(phi)
-        curvature, binormal, tangent = self.flux_to_frenet(psi, chi, phi, n_max)
+        curvature, binormal, tangent = self.flux_to_frenet(psi=psi, chi=chi, phi=phi, n_max=n_max)
         components_R = axis_r0_phi_R\
             + tangent_phi_R * tangent\
             + normal_phi_R * curvature\
@@ -571,7 +571,7 @@ class Equilibrium:
         XYZ coordinate.
         Returns (X, Y, Z) in the cylindrical coordinate.
         '''
-        R, Phi, Z = self.flux_to_cylindrical(psi, chi, phi, n_max)
+        R, Phi, Z = self.flux_to_cylindrical(psi=psi, chi=chi, phi=phi, n_max=n_max)
         X = R*jnp.cos(Phi)
         Y = R*jnp.sin(Phi)
         return(X, Y, Z)
@@ -700,10 +700,10 @@ class Equilibrium:
     # results into the original form of the governing equations.
     # not nfp-dependent
     def check_governing_equations(self, n_unknown:int):
-        if n_unknown is None:
-            n_unknown = self.get_order()
-        elif n_unknown>self.get_order():
-            raise ValueError('Validation order should be <= than the current order')
+        # if n_unknown is None:
+        #     n_unknown = self.get_order()
+        # elif n_unknown>self.get_order():
+        #     raise ValueError('Validation order should be <= than the current order')
 
         X_coef_cp = self.unknown['X_coef_cp']
         Y_coef_cp = self.unknown['Y_coef_cp']
@@ -971,13 +971,13 @@ class Equilibrium:
         arctan_accumulated = np.arctan2(norm_Z,norm_R)+arctan_offset
         return(round((arctan_accumulated[-1]-arctan_accumulated[0])/(2*np.pi)))
 
-    def display(self, psi_max:float=0.2):
+    def display(self, n_max=float('inf'), psi_max:float=0.2):
         fig = plt.figure()
         fig.set_dpi(400)
         ax = fig.add_subplot(projection='3d')
         phis = jnp.linspace(0, np.pi*2*0.9, 100)
         chis = jnp.linspace(0, np.pi*2, 100)
-        x_surf, y_surf, z_surf = self.flux_to_xyz(psi=psi_max, chi=chis[None, :], phi=phis[:, None])
+        x_surf, y_surf, z_surf = self.flux_to_xyz(psi=psi_max, chi=chis[None, :], phi=phis[:, None], n_max=n_max)
         # Coloring by magnitude of B
         B_denom = self.constant['B_denom_coef_c'].eval(
             psi=psi_max, chi=chis[None, :], phi=phis[:, None]
@@ -991,7 +991,7 @@ class Equilibrium:
         ax.plot_surface(x_surf, y_surf, z_surf, zorder=1, facecolors=facecolors)
         ax.axis('equal')
         for psi_i in np.linspace(0, psi_max, 5):
-            x_cross, y_cross, z_cross = self.flux_to_xyz(psi=psi_i, chi=chis, phi=0)
+            x_cross, y_cross, z_cross = self.flux_to_xyz(psi=psi_i, chi=chis, phi=0, n_max=n_max)
             ax.plot(x_cross, y_cross, z_cross, zorder=2.5, linewidth=0.5)
         fig.colorbar(mapper, label=r'$|B|^2$', shrink=0.5)
         fig.show()
