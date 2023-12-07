@@ -1,6 +1,8 @@
 # pyAQSC
 Welcome to pyAQSC documentations!
 
+![The circular axis equilibrium](./assets/display.png "The circular axis equilibrium")
+
 PyAQSC directly constructs globally quasi-symmetric, anisotropic stellarator equilibria without costly optimization using the method of near-axis expansion (NAE). The construction procedure is GPU accelerated and fully auto-differentiable.
 
 PyAQSC is the first NAE code incorporating pressure anisotropy. It can explore new design spaces for equilibria with good quasisymmetry and small pressure anisotropy. It can also model higher order ($n\geq3$) physical quanties unavailable to scalar-pressure NAE (such as magnetic shear $\iota$) without special parameter choices.

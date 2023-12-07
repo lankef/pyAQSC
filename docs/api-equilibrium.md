@@ -216,7 +216,7 @@ Returns:
 - `II : ChiPhiFunc` (traced) - The residual of the force balance equation III.
 
 ### `aqsc.Equilibrium.display_order(n:int)`
-Plots all quantities at order $n$.
+Plots all quantities at order $n$. By default, display flux surfaces up to $\psi=0.8\psi_{crit}$.
 
 Parameters:
 
