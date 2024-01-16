@@ -24,11 +24,24 @@ def py_sum(expr, lower:int, upper:int):
         # Originally the code is -1. Since the formula
         # are checked correct, these are made 0.
         return(ChiPhiFuncSpecial(0))
+    # This scan implementation may be faster, but the index is a 
+    # traced var in this formulation, and conditionals like is_seq
+    # will not work.
+    # indices = jnp.arange(lower_ceil,upper_floor+1)
+    # # The second argument is redundant. 
+    # # The loop os controlled by carry
+    # def map_arg(carry, ind):
+    #     out, ind_prev = carry
+    #     out+=expr(ind_prev)
+    #     return((out, ind_prev+1), out)
+    # (out, _), _ = jax.lax.scan(f=map_arg, init=(0, lower_ceil), xs=indices)
+    # return(out)
     indices = list(range(lower_ceil,upper_floor+1))
     out_list = jax.tree_util.tree_map(expr, indices)
     for item in out_list:
         out = out+item
     return(out)
+
 
 # In the JAX implementation, there is no distinction between how the outmost and
 # inner sums are evaluated.

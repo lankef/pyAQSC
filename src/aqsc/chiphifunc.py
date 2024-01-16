@@ -891,6 +891,11 @@ class ChiPhiFunc:
 
         A vectorized callables f(chi, phi).
         '''
+        if self.nfp == 0:
+            return(0)
+        if self.nfp < 0:
+            return(jnp.nan)
+        
         len_chi = self.content.shape[0]
         len_phi = self.content.shape[1]
 
@@ -1423,7 +1428,6 @@ def solve_ODE(coeff_arr, coeff_dp_arr, f_arr:jnp.ndarray, static_max_freq:int=No
     The solution to the equation system as 2d arrays.
     '''
     len_phi = f_arr.shape[1]
-    len_chi = f_arr.shape[0]
 
     if static_max_freq is None:
         static_max_freq = len_phi//2
@@ -1556,7 +1560,7 @@ def solve_dphi_iota_dchi(iota, f, static_max_freq: int):
         solve_ODE_chi(
             coeff=0,
             coeff_dp=1,
-            coeff_dc = iota,
+            coeff_dc=iota,
             f=f,
             static_max_freq=static_max_freq
         )

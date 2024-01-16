@@ -971,7 +971,11 @@ class Equilibrium:
         arctan_accumulated = np.arctan2(norm_Z,norm_R)+arctan_offset
         return(round((arctan_accumulated[-1]-arctan_accumulated[0])/(2*np.pi)))
 
-    def display(self, n_max=float('inf'), psi_max:float=0.2):
+    def display(self, n_max=float('inf'), psi_max=None):
+        if not psi_max:
+            psi_max = self.get_psi_crit()[0]
+            print('Plotting to 0.8(critical psi):', psi_max)
+            psi_max*=0.8
         fig = plt.figure()
         fig.set_dpi(400)
         ax = fig.add_subplot(projection='3d')
@@ -990,9 +994,25 @@ class Equilibrium:
 
         ax.plot_surface(x_surf, y_surf, z_surf, zorder=1, facecolors=facecolors)
         ax.axis('equal')
-        for psi_i in np.linspace(0, psi_max, 5):
+
+        # Plotting flux surfaces.
+        # Plot the first separately 
+        x_cross, y_cross, z_cross = self.flux_to_xyz(psi=0, chi=chis, phi=0, n_max=n_max)
+        ax.plot(x_cross, y_cross, z_cross, zorder=2.5, linewidth=0.5, color='lightgrey', label=r'$(\epsilon=\sqrt{\psi}, \chi)$')
+        eps_max = np.sqrt(psi_max)
+        for psi_i in np.linspace(eps_max/8, eps_max, 8)**2:
             x_cross, y_cross, z_cross = self.flux_to_xyz(psi=psi_i, chi=chis, phi=0, n_max=n_max)
-            ax.plot(x_cross, y_cross, z_cross, zorder=2.5, linewidth=0.5)
+            ax.plot(x_cross, y_cross, z_cross, zorder=2.5, linewidth=0.5, color='lightgrey')
+        x_axis, y_axis, z_axis = self.flux_to_xyz(psi=0, chi=0, phi=chis, n_max=n_max)
+        # Plotting the chi surfaces
+        psis_dense = np.linspace(0, psi_max, 50)
+        for chi_i in np.linspace(0.125, 1, 8)*np.pi*2:
+            x_cross, y_cross, z_cross = self.flux_to_xyz(psi=psis_dense, chi=chi_i, phi=0, n_max=n_max)
+            ax.plot(x_cross, y_cross, z_cross, zorder=2.5, linewidth=0.5, color='lightgrey')
+
+        # Plotting the axis
+        ax.plot(x_axis, y_axis, z_axis, zorder=3.5, linewidth=0.5, linestyle='dashed', color='lightgrey', label='Magnetic axis')
+        fig.legend()
         fig.colorbar(mapper, label=r'$|B|^2$', shrink=0.5)
         fig.show()
 

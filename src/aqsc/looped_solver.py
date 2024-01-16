@@ -117,7 +117,6 @@ def generate_RHS(
             iota_coef).filter(traced_max_freq)
         X_coef_cp_no_unknown = X_coef_cp.mask(n_eval-2)
         X_coef_cp_no_unknown = X_coef_cp_no_unknown.append(Xn_no_B_psi)
-
         Deltan_no_B_psi = equilibrium.iterate_delta_n_0_offset(n_eval=n_unknown,
             B_denom_coef_c=B_denom_coef_c,
             p_perp_coef_cp=p_perp_coef_cp_no_unknown,
@@ -1207,95 +1206,7 @@ def generate_tensor_operator(
     # (n_unknown(+1), len_tensor, n_unknown(+1), len_tensor)
     out_dict_tensor['filtered_looped_fft_operator'] = filtered_looped_fft_operator
     return(out_dict_tensor)
-
-''' III. Calculating Delta_offset and padding solution '''
-# At even order, calculate B_psi[n-2,0], Y[n,0] and the average of Delta[n,0]
-# (called 'Delta_offset' below)
-# target_len_phi: target phi length of the solution
-# coef_iota_nm1b2_in_Delta: Coefficient of iota (n-1)/2 in Delta. Is a constant
-# in the Equilibrium object. Needed for odd orders.
-# @partial(jit, static_argnums=(0, 1, 2, ))
-# TODO
-# TODO
-# TODO Calculate the iota dependence of the RHS and the unit iota contribution to the LHS
-# TODO sigma 0 is a special constraint because it constrains the sum of certain
-# TODO fourier mode coefficients, rather than the value of any single one?
-# TODO However, the biggest trouble comes from B_theta[2, 0]. Because the solution
-# TODO to it is non-unique, it's highly likely the LHS operator is nearly
-# TODO singular, but only possible to invert due to rounding errors.
-# TODO Now, how do we encode avg of B_theta or stellarator symmetry into the
-# TODO differential operator??
-# def solve_free_param(n_unknown, nfp, target_len_phi,
-#     filtered_inv_looped_fft_operator, filtered_RHS_0_offset,
-#     coef_Delta_offset = 0,
-#     # B_theta_np10_avg = 0 # Only used at odd orders, when B_theta[n+1,0] is a free param.
-#     ):
-#     out_dict_solve = {}
-#     # Solution with zero value for the free constant parameter
-#     filtered_solution = jnp.tensordot(
-#         filtered_inv_looped_fft_operator,
-#         filtered_RHS_0_offset, # + B_theta_np10_avg*filtered_RHS_0_offset.shape[1],
-#         2
-#     )
-#     # To have periodic B_psi, values for a constant free marameter, Delt_offset
-#     # must be found at even orders.
-#     # Integral(B_psi') = 0 is equivalent to filtered_solution[-1,0] = 0.
-#     # (-1: B_psi is always the second last row in the solution. 0: m=0 mode
-#     # in a jnp.fft.fft array.)
-#     # Because the looped ODE is now treated as a linear equation,
-#     # the Delta_offset dependence of filtered_solution[-1,0] is linear.
-
-#     # Making a blank ChiPhiFunc with the correct shape. The free parameter's
-#     # contribution only has 2 chi components, and will cause errors when
-#     # n_unknown>2.
-#     Delta_offset_unit_contribution = ChiPhiFunc(
-#         jnp.zeros((
-#             filtered_inv_looped_fft_operator.shape[0],
-#             filtered_inv_looped_fft_operator.shape[1]
-#         )),
-#         nfp
-#     )
-#     # How much a Delta_offset of 1 shift -filtered_solution[-1,0]
-#     # This has shape (2, len_tensor)
-#     Delta_offset_unit_contribution += coef_Delta_offset
-#     # Sampling the rate of change of filtered_solution[-2,0] wrt Delta_offset.
-#     # The free parameter is a scalar, but its coefficient is a ChiPhiFunc. This
-#     # means that its contribution exists in all phi Fourier mode of the RHS.
-#     # It's easier to calculate the ratio this way.
-#     if n_unknown%2==0:
-#         # FFT the contribution
-#         fft_Delta_offset_unit_contribution = Delta_offset_unit_contribution.fft().content
-#         # Contribition to the LHS vector
-#         sln_Delta_offset_unit_contribution = jnp.tensordot(filtered_inv_looped_fft_operator, fft_Delta_offset_unit_contribution)
-#         # The amount of Delta_offset required
-#         Delta_offset = -filtered_solution[-1,0]/sln_Delta_offset_unit_contribution[-1,0]
-#         # Output the offset for calculating Delta
-#         out_dict_solve['Delta_offset'] = Delta_offset
-#         # Making a blank ChiPhiFunc with the correct shape. The free parameter's
-#         # contribution only has 2 chi components, and will cause errors when
-#         # n_unknown>2.
-#         Delta_offset_correction = ChiPhiFunc(
-#             jnp.zeros((
-#                 filtered_inv_looped_fft_operator.shape[0],
-#                 filtered_inv_looped_fft_operator.shape[1]
-#             )),
-#             nfp
-#         )
-#         Delta_offset_correction += Delta_offset_unit_contribution*Delta_offset
-#         # Adding the free parameter's contributions to the solution
-#         filtered_solution += jnp.tensordot(filtered_inv_looped_fft_operator, Delta_offset_correction.fft().content, 2)
-
-#     # Padding solution to a desired len_phi
-#     padded_solution = fft_pad(
-#         filtered_solution,
-#         target_len_phi,
-#         axis=1
-#     )
-#     ifft_solution = jnp.fft.ifft(padded_solution, axis=1)
-#     out_dict_solve['solution'] = ifft_solution
-#     return(out_dict_solve)
-
-''' IV. Wrapper '''
+''' III. Wrapper '''
 # Outputs a dictionary containing
 # B_theta_n
 # Delta_offset (even order only)
@@ -1318,8 +1229,6 @@ def iterate_looped(
     # B_theta_np10_avg = 0,
     max_k_diff_pre_inv=-1
 ):
-    # if target_len_phi<traced_max_freq*2:
-    #     raise ValueError('target_len_phi must >= traced_max_freq*2.')
     # First calculate RHS
     out_dict_RHS = generate_RHS(
         n_unknown=n_unknown,

@@ -164,7 +164,7 @@ class ChiPhiEpsFunc:
     def dphi(self):
         return(self.dchi_or_phi(False))
 
-    def eval(self, psi, chi=0, phi=0, sq_eps_series:bool=False, n_max=float('inf')):
+    def eval(self, psi, chi, phi, sq_eps_series:bool=False, n_max=float('inf')):
         if sq_eps_series:
             power_arg = psi
         else:
