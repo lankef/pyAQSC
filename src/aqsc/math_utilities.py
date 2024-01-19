@@ -25,8 +25,8 @@ def py_sum(expr, lower:int, upper:int):
         # are checked correct, these are made 0.
         return(ChiPhiFuncSpecial(0))
     # This scan implementation may be faster, but the index is a 
-    # traced var in this formulation, and conditionals like is_seq
-    # will not work.
+    # traced var in this formulation, and conditionals like is_seq,
+    # as well as indexing in ChiPhiEpsFunc will not work.
     # indices = jnp.arange(lower_ceil,upper_floor+1)
     # # The second argument is redundant. 
     # # The loop os controlled by carry
@@ -42,30 +42,33 @@ def py_sum(expr, lower:int, upper:int):
         out = out+item
     return(out)
 
-
 # In the JAX implementation, there is no distinction between how the outmost and
 # inner sums are evaluated.
 py_sum_parallel = py_sum
 
 ## Condition operators
-
 # Used to make sure new indices of terms and new upper bounds are within the
 # bound of the original summations
 # is_seq(a,b): 1 if a<=b
-# @partial(jit, static_argnums=(0, 1,))
+# Using where, not if saves 10% compile time
 def is_seq(a, b):
-    if a<=b:
-        return(1)
-    else:
-        return(ChiPhiFuncSpecial(0))
+    return(jnp.where(a<=b, 1, 0))
+    # if a<=b:
+    #     return(1)
+    # else:
+    #     return(0)
+        # return(ChiPhiFuncSpecial(0))
+
 # Used to ensure new index values (after removing the innermost sum) are integers.
 # is_integer(a): 1 if a is integer
-# @partial(jit, static_argnums=(0,))
+# Redundant for the series we are considering, by observation.
+# Removing the if statement saves 10% compile time.
 def is_integer(a):
-    if a%1==0:
-        return(1)
-    else:
-        return(ChiPhiFuncSpecial(0))
+    return(1)
+    # if a%1==0:
+    #     return(1)
+    # else:
+    #     return(ChiPhiFuncSpecial(0))
 
 # @partial(jit, static_argnums=(1, 2, ))
 def diff_backend(y, is_chi:bool, order):

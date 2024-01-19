@@ -39,8 +39,7 @@ def generate_RHS(
     B_psi_coef_cp, B_theta_coef_cp,
     B_alpha_coef, B_denom_coef_c,
     kap_p, tau_p, dl_p,
-    iota_coef, 
-    Y1c_mode=False 
+    iota_coef
 ):
 # n_eval is the order at which the "looped" equations are evaluated at
     n_eval = n_unknown+1
@@ -52,7 +51,7 @@ def generate_RHS(
             n_unknown=n_unknown,
             X_coef_cp=X_coef_cp,
             B_alpha_coef=B_alpha_coef,
-            Y1c_mode=Y1c_mode
+            Y1c_mode=False
         )
     out_dict_RHS['O_einv'] = O_einv
     out_dict_RHS['vector_free_coef'] = vector_free_coef

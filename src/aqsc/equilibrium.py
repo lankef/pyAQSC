@@ -1333,7 +1333,7 @@ def iterate_2(equilibrium,
     solution_nm1_known_iota = looped_solver.iterate_looped(
         n_unknown=n_eval-1,
         nfp=equilibrium.nfp,
-        target_len_phi=1000,
+        target_len_phi=X_coef_cp[n_eval-2].content.shape[1],
         X_coef_cp=X_coef_cp,
         Y_coef_cp=Y_coef_cp,
         Z_coef_cp=Z_coef_cp,

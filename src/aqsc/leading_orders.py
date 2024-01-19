@@ -28,6 +28,30 @@ def circular_axis_legacy():
         traced_max_freq=(15, 20)
     ))
 
+def circular_axis():
+    Rc, Rs = ([1, 0, 0.0001], [0, 0, 0])
+    Zc, Zs = ([0, 0, 0], [0, 0, 0.001])
+    phis_2pi = jnp.linspace(0,2*jnp.pi*0.999,1000)
+    return(leading_orders(
+        nfp=1,
+        Rc=Rc,
+        Rs=Rs,
+        Zc=Zc,
+        Zs=Zs,
+        p0=1+0.1*jnp.cos(phis_2pi)+0.1*jnp.cos(2*phis_2pi),
+        Delta_0_avg=0,
+        B_theta_20_avg=1.5125089,
+        # iota_0 should be 0.52564852,
+        B_alpha_1=0.1,
+        B0=1,
+        B11c=-1.8,
+        B22c=0.01, B20=0.01, B22s=0.01,
+        len_phi=1000,
+        static_max_freq=(15, 20),
+        traced_max_freq=(15, 20),
+        riccati_secant_n_iter=(15, 20)
+    ))
+
 def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
     '''
     Axis length, tau and kappa
