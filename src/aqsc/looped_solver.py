@@ -39,9 +39,16 @@ def generate_RHS(
     B_psi_coef_cp, B_theta_coef_cp,
     B_alpha_coef, B_denom_coef_c,
     kap_p, tau_p, dl_p,
-    iota_coef
+    iota_coef_in, solve_iota
 ):
-# n_eval is the order at which the "looped" equations are evaluated at
+    # Set iota to 0 at even order when it, rather than B_theta[n+1,0] is the 
+    # free variable.
+    if solve_iota and n_unknown%2==1:
+        iota_coef = iota_coef_in.mask((n_unknown-1)//2).append(0.0)
+    else:
+        iota_coef = iota_coef_in
+    # n_eval is the order at which the "looped" equations are evaluated at
+    # It's one higher than the iteration order
     n_eval = n_unknown+1
     out_dict_RHS = {}
     ''' O_einv and vec_free for Y. Y is unknown at all orders '''
@@ -258,21 +265,93 @@ def generate_RHS(
             dl_p = dl_p,
             tau_p = tau_p,
         kap_p = kap_p)[0]
+        # For self-consistent iota solving.
 
         # Setting looped center to be II.
         # cap_m guaranteed loop_center's shape to be (n_unknown, len_phi).
         # [0] guaranteed
         # Since we'll immediately redefine looped_RHS_0_offset, set always_copy
         # to False to save a bit of time
+        print('looped_RHS_0_offset', looped_RHS_0_offset.content.shape)
         looped_content = looped_RHS_0_offset.content
         II_content = II_RHS_no_unknown.content
         D3_RHS_content = D3_RHS_no_unknown.content
+        # Calculating iota dependence of RHS
+        if solve_iota:
+            # Delta with iota set to 1 and 0
+            Deltan_iota_1 = equilibrium.iterate_delta_n_0_offset(n_eval=n_unknown,
+                B_denom_coef_c=B_denom_coef_c,
+                p_perp_coef_cp=p_perp_coef_cp_no_unknown,
+                Delta_coef_cp=Delta_coef_cp,
+                iota_coef=iota_coef_in.mask((n_unknown-3)//2).append(1.0),
+                static_max_freq=static_max_freq,
+                no_iota_masking = True).filter(traced_max_freq)
+            Deltan_iota_0 = Deltan_with_iota_no_B_theta
+            print('Deltan_iota_1')
+            Deltan_iota_1.display_content()
+            print('Deltan_iota_0')
+            Deltan_iota_0.display_content()
+            # Iota coeff in the looped equation.
+            iota_coef_in_looped = (
+                (Delta_coef_cp[0]-1)*iota_coef[0]*diff(Y_coef_cp[1],True,1)*diff(Y_coef_cp[1],True,2)*(2*n_eval-3)
+                +(Delta_coef_cp[0]-1)*iota_coef[0]*diff(X_coef_cp[1],True,1)*diff(X_coef_cp[1],True,2)*(2*n_eval-3)
+                +2*(Delta_coef_cp[0]-1)*diff(Y_coef_cp[1],True,1)*diff(Y_coef_cp[1],True,1,False,1)*(n_eval-1)
+                +diff(Delta_coef_cp[0],False,1)*(diff(Y_coef_cp[1],True,1))**2*(n_eval-1)
+                +2*(Delta_coef_cp[0]-1)*diff(X_coef_cp[1],True,1)*diff(X_coef_cp[1],True,1,False,1)*(n_eval-1)
+                +diff(Delta_coef_cp[0],False,1)*(diff(X_coef_cp[1],True,1))**2*(n_eval-1)
+                +B_alpha_coef[0]*B_denom_coef_c[0]*(2*Delta_coef_cp[0]-2)*diff(B_theta_coef_cp[2],True,1)
+                +(1-Delta_coef_cp[0])*diff(Y_coef_cp[1],True,2)*diff(Y_coef_cp[1],False,1)
+                +(1-Delta_coef_cp[0])*iota_coef[0]*Y_coef_cp[1]*diff(Y_coef_cp[1],True,3)
+                +(1-Delta_coef_cp[0])*Y_coef_cp[1]*diff(Y_coef_cp[1],True,2,False,1)
+                -Y_coef_cp[1]*diff(Delta_coef_cp[0],False,1)*diff(Y_coef_cp[1],True,2)
+                +(1-Delta_coef_cp[0])*diff(X_coef_cp[1],True,2)*diff(X_coef_cp[1],False,1)
+                +(1-Delta_coef_cp[0])*iota_coef[0]*X_coef_cp[1]*diff(X_coef_cp[1],True,3)
+                +(1-Delta_coef_cp[0])*X_coef_cp[1]*diff(X_coef_cp[1],True,2,False,1)
+                -X_coef_cp[1]*diff(Delta_coef_cp[0],False,1)*diff(X_coef_cp[1],True,2)
+                +(
+                    2*B_alpha_coef[0]*B_denom_coef_c[0]
+                    -2*B_alpha_coef[0]*B_denom_coef_c[0]*Delta_coef_cp[0]
+                )*diff(B_psi_coef_cp[0],True,2)
+            )/(B_alpha_coef[0]*n_eval)
+            Delta_coef_in_looped = -(B_alpha_coef[0]*B_denom_coef_c[1].dchi())*(n_eval-1)/2/n_eval
+            dchi_Delta_coef_in_looped = (B_alpha_coef[0]*B_denom_coef_c[1])/2/n_eval
+            iota_coef_in_looped_tot = -(
+                Delta_coef_in_looped * (Deltan_iota_1 - Deltan_iota_0)
+                + dchi_Delta_coef_in_looped * (Deltan_iota_1 - Deltan_iota_0).dchi()
+                + iota_coef_in_looped
+            ).cap_m(n_unknown-1)
+            print('iota_coef_in_looped_tot', iota_coef_in_looped_tot.content.shape)
+            iota_coef_in_looped_tot.display_content()
+            # Iota coeff in II[0]
+            iota_coef_in_II_0 = (B_denom_coef_c[0]*Delta_coef_cp[0]-B_denom_coef_c[0])*B_theta_coef_cp[2].dchi()
+            print('iota_coef_in_II_0')
+            iota_coef_in_II_0.display_content()
+            Delta_coef_in_II_0 = -B_alpha_coef[0]*B_denom_coef_c[1].dchi()/2
+            print('Delta_coef_in_II_0')
+            Delta_coef_in_II_0.display_content()
+            iota_coef_in_II_0_tot = -(
+                Delta_coef_in_II_0 * (Deltan_iota_1 - Deltan_iota_0)
+                + iota_coef_in_II_0
+            )[0]
+            print('iota_coef_in_II_0_tot', iota_coef_in_II_0_tot.content.shape)
+            iota_coef_in_II_0_tot.display_content()
+            # iota_coeff in D3
+            iota_coef_in_D3 = -(Y_coef_cp[1].dchi()**2+X_coef_cp[1].dchi()**2)[0]
+            print('iota_coef_in_D3', iota_coef_in_D3.content.shape)
+            iota_coef_in_D3.display_content()
+            iota_coef_content = iota_coef_in_looped_tot.content
+            iota_coef_content = iota_coef_content.at[n_unknown//2].set(iota_coef_in_II_0_tot.content[0])
+            iota_coef_content = jnp.concatenate((iota_coef_content, iota_coef_in_D3.content), axis=0)
+            iota_coef_RHS_0_offset = ChiPhiFunc(iota_coef_content, iota_coef_in_looped_tot.nfp)
+            out_dict_RHS['iota_coef_RHS_0_offset'] = fft_filter(iota_coef_RHS_0_offset.fft().content, static_max_freq*2, axis=1)
+            out_dict_RHS['iota_coef_RHS_0_offset_ChiPhiFunc'] = iota_coef_RHS_0_offset
 
         looped_content = looped_content.at[n_unknown//2].set(II_content[0])
         looped_content = jnp.concatenate((looped_content, D3_RHS_content), axis=0)
         looped_RHS_0_offset = ChiPhiFunc(looped_content, looped_RHS_0_offset.nfp)
 
     out_dict_RHS['filtered_RHS_0_offset'] = fft_filter(looped_RHS_0_offset.fft().content, static_max_freq*2, axis=1)
+    out_dict_RHS['filtered_RHS_0_offset_ChiPhiFunc'] = looped_RHS_0_offset
     return(out_dict_RHS)
 
 ''' II. Tensor operator '''
@@ -325,6 +404,8 @@ def generate_tensor_operator(
     # Tilde II has n_unknown components at order n_unknown.
     n_eval = n_unknown+1
     # len_tensor is the number of phi modes kept in a tensor.
+    if static_max_freq is None or static_max_freq<=0:
+        static_max_freq = X_coef_cp[n_unknown-1].content.shape[1]//2
     len_tensor = static_max_freq*2
     # dphi_array
     # Multiply a dphi matrix to the end of source.
@@ -1225,8 +1306,9 @@ def iterate_looped(
     # lambda for the coefficient of the scalar free parameter in RHS
     static_max_freq,
     traced_max_freq,
-    # B_theta_np10_avg = 0,
-    max_k_diff_pre_inv=-1
+    B_theta_np10_avg=0.0,
+    solve_iota=True,
+    max_k_diff_pre_inv=-1,
 ):
     # First calculate RHS
     out_dict_RHS = generate_RHS(
@@ -1245,7 +1327,8 @@ def iterate_looped(
         kap_p=kap_p,
         tau_p=tau_p,
         dl_p=dl_p,
-        iota_coef=iota_coef
+        iota_coef_in=iota_coef,
+        solve_iota=solve_iota
     )
     O_einv = out_dict_RHS['O_einv']
     vector_free_coef = out_dict_RHS['vector_free_coef']
@@ -1662,7 +1745,18 @@ def iterate_looped(
             # 'dphi_B_psi_nm2_0': dphi_B_psi_nm2_0
         })
     else:
+        # solve for iota_0
         filtered_looped_fft_operator = out_dict_tensor['filtered_looped_fft_operator']
+        if solve_iota:
+            B_theta_np10_avg_current = filtered_solution[-1, 0]/filtered_solution.shape[1]
+            LHS_iota_coeff = jnp.tensordot(
+                filtered_inv_looped_fft_operator,
+                out_dict_RHS['iota_coef_RHS_0_offset'],
+            )
+            # Calculated in generate_RHS by comparing RHS when iota is 0 and 1
+            B_theta_np10_avg_change_rate = LHS_iota_coeff[-1, 0]/filtered_solution.shape[1]
+            iota_nm1b2 = (B_theta_np10_avg - B_theta_np10_avg_current)/B_theta_np10_avg_change_rate
+            filtered_solution += LHS_iota_coeff * iota_nm1b2
         padded_solution = fft_pad(
             filtered_solution,
             target_len_phi,
@@ -1847,7 +1941,7 @@ def iterate_looped(
                 tau_p=tau_p,
                 n_eval=n_unknown+1)*B_denom_coef_c[0]*B_theta_in_B_psi.dphi()
         )
-        return({
+        out_dict = {
             'B_theta_n': B_theta_n.filter(traced_max_freq),
             'B_theta_np10': ChiPhiFunc(jnp.array([solution[-1]]), nfp),
             # These filters are here because dphi and B_theta_in_B_psi still produce error
@@ -1863,7 +1957,10 @@ def iterate_looped(
             'solution': solution,
             'out_dict_RHS':out_dict_RHS,
             'out_dict_tensor':out_dict_tensor,
-        })
+        }
+        if solve_iota:
+            out_dict['iota_nm1b2'] = iota_nm1b2
+        return(out_dict)
 
 ''' V. Utilities '''
 # The diff in the mode numbers coupled by two elements.

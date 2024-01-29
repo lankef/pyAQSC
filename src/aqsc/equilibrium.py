@@ -1287,7 +1287,8 @@ def iterate_2(equilibrium,
     # given value for the other 2.
     # free_param_values need to be a 2-element tuple.
     # Now only implemented avg(B_theta_n0)=0 and given iota.
-    iota_new, # arg 4
+    iota_new=None, # arg 4
+    B_theta_n0_avg=None,
     static_max_freq=(-1,-1),
     traced_max_freq=(-1,-1),
     # Traced.
@@ -1322,13 +1323,21 @@ def iterate_2(equilibrium,
     dl_p = equilibrium.constant['dl_p']
     tau_p = equilibrium.constant['tau_p']
 
-    iota_coef = iota_coef.append(iota_new)
     B_denom_coef_c = B_denom_coef_c.append(B_denom_nm1)
     B_denom_coef_c = B_denom_coef_c.append(B_denom_n)
     B_alpha_coef = B_alpha_coef.append(B_alpha_nb2)
-
-    # Evaluating order n_eval-1
-
+    if (iota_new is not None) and (B_theta_n0_avg is not None):
+        raise ValueError('Only one of iota[n/2-1] and B_theta[n,0] avg should be provided.')
+    # B_theta average is zero by default
+    # for current-free configs.
+    if (iota_new is None):
+        if (B_theta_n0_avg is None):
+            B_theta_n0_avg = 0.0
+    else:
+        # Append iota only if it's provided.
+        # Otherwise, iterate_looped will work with
+        # iota that's one element short automatically.
+        iota_coef = iota_coef.append(iota_new)
     # print('iota 1 right before loop',iota_coef[1])
     solution_nm1_known_iota = looped_solver.iterate_looped(
         n_unknown=n_eval-1,
@@ -1350,7 +1359,11 @@ def iterate_2(equilibrium,
         static_max_freq=static_max_freq[0],
         traced_max_freq=traced_max_freq[0],
         max_k_diff_pre_inv=max_k_diff_pre_inv[0],
+        solve_iota=iota_new is None,
+        B_theta_np10_avg=B_theta_n0_avg
     )
+    if (iota_new is None):
+        iota_coef = iota_coef.append(solution_nm1_known_iota['iota_nm1b2'])
     B_theta_coef_cp = B_theta_coef_cp.append(solution_nm1_known_iota['B_theta_n']) 
     B_psi_coef_cp = B_psi_coef_cp.append(solution_nm1_known_iota['B_psi_nm2']) 
     X_coef_cp = X_coef_cp.append(solution_nm1_known_iota['Xn']) 
@@ -1383,7 +1396,7 @@ def iterate_2(equilibrium,
     solution_n = looped_solver.iterate_looped(
         n_unknown=n_eval,
         nfp=equilibrium.nfp,
-        target_len_phi=1000,
+        target_len_phi=X_coef_cp[n_eval-2].content.shape[1],
         X_coef_cp=X_coef_cp,
         Y_coef_cp=Y_coef_cp,
         Z_coef_cp=Z_coef_cp,

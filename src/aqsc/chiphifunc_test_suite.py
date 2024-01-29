@@ -291,8 +291,6 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
         raise AttributeError(
             'use_pyQSC must be enabled to use test datasets from Eduardo Rodriguez.'
         )
-
-
     nfp_read, Xi_0, eta, B20, B22c, B22s, B31c, B31s, B33c, B33s, Ba0, Ba1 = np.loadtxt(path+'inputs.dat')
     print('Configuration has',nfp_read,'field periods.')
     if nfp_enabled:
@@ -478,25 +476,6 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
     if plot_axis:
         print('Axis shape:')
         stel.plot_axis(frenet=False)
-
-    if numerical_mode:
-        return(
-        evaluate_ChiPhiEpsFunc(B_psi_coef_cp),
-        evaluate_ChiPhiEpsFunc(B_theta_coef_cp),
-        evaluate_ChiPhiEpsFunc(X_coef_cp),
-        evaluate_ChiPhiEpsFunc(Y_coef_cp),
-        evaluate_ChiPhiEpsFunc(Z_coef_cp),
-        evaluate_ChiPhiEpsFunc(iota_e),
-        dl_p,
-        int(nfp_read),
-        Xi_0,
-        eta,
-        evaluate_ChiPhiEpsFunc(B_denom_coef_c),
-        evaluate_ChiPhiEpsFunc(B_alpha_e),
-        kap_p.content,
-        tau_p.content
-    )
-
     return(
         B_psi_coef_cp, 
         B_theta_coef_cp,

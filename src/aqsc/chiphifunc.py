@@ -153,9 +153,8 @@ def phi_avg(in_quant):
             jnp.mean(in_quant.content,axis=1)
         ]).T
         return(ChiPhiFunc(new_content,in_quant.nfp))
-    if not jnp.isscalar(in_quant):
-        if in_quant.ndim!=0: # 0-d np array will check false for isscalar.
-            return(ChiPhiFuncSpecial(-5))
+    if not jnp.array(in_quant).ndim==0:
+        return(ChiPhiFuncSpecial(-5))
     return(in_quant)
 
 ''' I.1 Grid implementation '''
@@ -400,9 +399,8 @@ class ChiPhiFunc:
             ])
             return(ChiPhiFunc(a_padded+b_padded, self.nfp))
         else:
-            if not jnp.isscalar(other):
-                if other.ndim!=0: # 0-d np array will check false for isscalar.
-                    return(ChiPhiFuncSpecial(-5))
+            if not jnp.array(other).ndim==0:
+                return(ChiPhiFuncSpecial(-5))
             if self.is_special():
                 if self.nfp==0:
                     return(other)
@@ -475,9 +473,8 @@ class ChiPhiFunc:
             b = other.content+stretch_phi
             return(ChiPhiFunc(batch_convolve(a,b), self.nfp))
         else:
-            if not jnp.isscalar(other):
-                if other.ndim!=0: # 0-d np array will check false for isscalar.
-                    return(ChiPhiFuncSpecial(-5))
+            if not jnp.array(other).ndim==0:
+                return(ChiPhiFuncSpecial(-5))
             if self.is_special():
                 return(self)
             return(ChiPhiFunc(other * self.content, self.nfp))
@@ -539,9 +536,8 @@ class ChiPhiFunc:
         else:
             if self.nfp==0:
                 return(self)
-            if not jnp.isscalar(other):
-                if other.ndim!=0: # 0-d np array will check false for isscalar.
-                    return(ChiPhiFuncSpecial(-5))
+            if not jnp.array(other).ndim==0:
+                return(ChiPhiFuncSpecial(-5))
             return(ChiPhiFunc(self.content/other, self.nfp))
 
 
@@ -566,9 +562,8 @@ class ChiPhiFunc:
                 # Handles non-zero/non-zero and error/non-zero
                 return(ChiPhiFunc(other.content/self.content, self.nfp))
             else:
-                if not jnp.isscalar(other):
-                    if other.ndim!=0: # 0-d np array will check false for isscalar.
-                        return(ChiPhiFuncSpecial(-5))
+                if not jnp.array(other).ndim==0:
+                    return(ChiPhiFuncSpecial(-5))
                 return(ChiPhiFunc(other/self.content, self.nfp))
 
 
@@ -1344,7 +1339,7 @@ def solve_1d_asym(p_eff, f_eff): # not nfp-dependent
     Solution to the equation
     when p_eff is 0, y is the anti-derivative of f with zero average.
     '''
-    if jnp.isscalar(p_eff):
+    if jnp.array(p_eff).ndim==0:
         p_eff = p_eff*jnp.ones_like(f_eff)
 
     ai = f_eff/p_eff # f/p
@@ -1385,13 +1380,16 @@ def solve_1d_fft(p_eff, f_eff, static_max_freq:int=None): # not nfp-dependent
     statement.
     '''
     len_phi = len(f_eff)
-    if jnp.isscalar(p_eff):
+    if jnp.array(p_eff).ndim==0:
         p_eff = p_eff*jnp.ones_like(f_eff)
 
     if static_max_freq is None:
-        target_length = len(f_eff)
+        target_length = len_phi
+    elif static_max_freq<=0:
+        target_length = len_phi
     else:
         target_length = static_max_freq*2
+    print('target_length', target_length)
     p_fft = fft_filter(jnp.fft.fft(p_eff), target_length, axis=0)
     f_fft = fft_filter(jnp.fft.fft(f_eff), target_length, axis=0)
 
@@ -1439,7 +1437,7 @@ def solve_ODE(coeff_arr, coeff_dp_arr, f_arr:jnp.ndarray, static_max_freq:int=No
     # f_eff_scaling = jnp.average(jnp.abs(f_eff))
     # f_eff = f_eff/f_eff_scaling
 
-    if jnp.isscalar(p_eff):
+    if jnp.array(p_eff).ndim==0:
         p_eff = p_eff+jnp.zeros_like(f_arr)
 
     # We always assume f is phi-dependent.
@@ -1526,6 +1524,9 @@ def solve_ODE_chi(coeff, coeff_dp, coeff_dc, f, static_max_freq: int):
     Output: -----
     y is a ChiPhiFunc's content
     '''
+    # print('f', f)
+    # print('coeff_dp', coeff_dp)
+    # print('coeff_dc', coeff_dc)
     len_chi = f.shape[0]
     # Chi harmonics
     ind_chi = len_chi-1

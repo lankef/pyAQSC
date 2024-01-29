@@ -47,7 +47,7 @@ class ChiPhiEpsFunc:
                 #     continue
                 continue
             # Do not modify scalars
-            if jnp.isscalar(item) or item.ndim==0:
+            if jnp.array(item).ndim==0:
                 # Force known zeros to be special zeros.
                 # if item==0:
                 #     self.chiphifunc_list[i] = ChiPhiFuncSpecial(0)
@@ -77,10 +77,9 @@ class ChiPhiEpsFunc:
             # to preserve the error message
             if item.nfp!=self.nfp and not item.is_special():
                 return(ChiPhiEpsFunc(self.chiphifunc_list+[ChiPhiFuncSpecial(-14)], self.nfp))
-        elif not jnp.isscalar(item):
+        elif jnp.array(item).ndim!=0:
             # Jax scalars are 0-d DeviceArrays.
-            if item.ndim!=0:
-                return(ChiPhiEpsFunc(self.chiphifunc_list+[ChiPhiFuncSpecial(-14)], self.nfp))
+            return(ChiPhiEpsFunc(self.chiphifunc_list+[ChiPhiFuncSpecial(-14)], self.nfp))
         return(ChiPhiEpsFunc(self.chiphifunc_list+[item], self.nfp))
 
     # @partial(jit, static_argnums=(1,))
@@ -152,7 +151,7 @@ class ChiPhiEpsFunc:
                     new_chiphifunc_list.append(item.dchi())
                 else:
                     new_chiphifunc_list.append(item.dphi())
-            elif jnp.isscalar(item) or item.ndim==0:
+            elif jnp.array(item).ndim==0:
                 new_chiphifunc_list.append(ChiPhiFuncSpecial(0))
             else:
                 new_chiphifunc_list.append(ChiPhiFuncSpecial(-14))
@@ -179,7 +178,8 @@ class ChiPhiEpsFunc:
                     out += item.eval(chi, phi)*power_arg**n 
                 else:
                     return(jnp.nan)
-            elif jnp.isscalar(item):
+            # isscalar fails to detect jax float (single-element array)
+            elif jnp.array(item).ndim==0:
                 out += item*power_arg**n 
             else:
                 return(jnp.nan)
@@ -241,7 +241,7 @@ def ChiPhiEpsFunc_remove_zero(list:list, nfp:int, check_consistency:bool=False):
         if isinstance(item, ChiPhiFunc):
             if jnp.all(item.content==0):
                 list[i] = ChiPhiFuncSpecial(0)
-        elif jnp.isscalar(item) or item.ndim==0:
+        elif jnp.array(item).ndim==0:
             if item==0:
                 list[i] = ChiPhiFuncSpecial(0)
     return(ChiPhiEpsFunc(list, nfp, check_consistency))
