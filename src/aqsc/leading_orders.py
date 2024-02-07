@@ -1,8 +1,12 @@
 import jax.numpy as jnp
-from .looped_solver import *
 from .chiphifunc import *
 from .chiphiepsfunc import *
-from .equilibrium import *
+from .math_utilities import diff
+from .looped_solver import iterate_looped
+from .equilibrium import Equilibrium
+from .MHD_parsed import eval_inhomogenous_Delta_n_cp
+from .recursion_relations import iterate_p_perp_n, iterate_delta_n_0_offset, \
+    iterate_dc_B_psi_nm2, iterate_Zn_cp, iterate_Xn_cp, iterate_Yn_cp_magnetic
 
 # Generate the circular axis case in Rodriguez Bhattacharjee
 def circular_axis_legacy():
@@ -187,26 +191,29 @@ def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
 
     # Storing axis info. All quantities are identically defined to pyQSC.
     axis_info = {}
-    axis_info['varphi'] = varphi # Done
-    axis_info['phi'] = phi_grids # Done
-    axis_info['d_phi'] = d_phi # Done
-    axis_info['R0'] = R0[:, 0] # Done
-    axis_info['Z0'] = Z0[:, 0] # Done
-    axis_info['R0p'] = R0p[:, 0] # Done
-    axis_info['Z0p'] = Z0p[:, 0] # Done
-    axis_info['R0pp'] = R0pp[:, 0] # Done
-    axis_info['Z0pp'] = Z0pp[:, 0] # Done
-    axis_info['R0ppp'] = R0ppp[:, 0] # Done
-    axis_info['Z0ppp'] = Z0ppp[:, 0] # Done
+    axis_info['dl_p'] = dl_p # Checked
+    axis_info['kap_p'] = kap_p # Done
+    axis_info['tau_p'] = tau_p # Done
+    axis_info['varphi'] = varphi # Checked
+    axis_info['phi'] = phi_grids # Checked
+    axis_info['d_phi'] = d_phi # Grid spacing. Checked.
+    axis_info['R0'] = R0[:, 0] # Checked
+    axis_info['Z0'] = Z0[:, 0] # Checked
+    axis_info['R0p'] = R0p[:, 0] # Checked
+    axis_info['Z0p'] = Z0p[:, 0] # Checked
+    axis_info['R0pp'] = R0pp[:, 0] # Checked
+    axis_info['Z0pp'] = Z0pp[:, 0] # Checked
+    axis_info['R0ppp'] = R0ppp[:, 0] # Checked
+    axis_info['Z0ppp'] = Z0ppp[:, 0] # Checked
     # Note to self: cartesian. (dl_p = dl/dphi (Boozer) is important in Eduardo's forumlation.)
-    axis_info['d_l_d_phi'] = d_l_d_phi[:, 0] # Done.
-    axis_info['axis_length'] = axis_length # Done
-    axis_info['curvature'] = curvature # Done
-    axis_info['torsion'] = torsion # Done
-    axis_info['tangent_cylindrical'] = tangent_cylindrical # axis=1 is R, phi, Z
-    axis_info['normal_cylindrical'] = normal_cylindrical # axis=1 is R, phi, Z
-    axis_info['binormal_cylindrical'] = binormal_cylindrical # axis=1 is R, phi, Z
-    return(dl_p, kap_p, tau_p, axis_info)
+    axis_info['d_l_d_phi'] = d_l_d_phi[:, 0] # Checked
+    axis_info['axis_length'] = axis_length # Checked
+    axis_info['curvature'] = curvature # Checked
+    axis_info['torsion'] = torsion # Checked
+    axis_info['tangent_cylindrical'] = tangent_cylindrical # axis=1 is R, phi, Z, Checked
+    axis_info['normal_cylindrical'] = normal_cylindrical # axis=1 is R, phi, Z, Checked
+    axis_info['binormal_cylindrical'] = binormal_cylindrical # axis=1 is R, phi, Z, Checked
+    return(axis_info)
 
 def leading_orders_legacy(
     nfp, # Field period
@@ -220,9 +227,12 @@ def leading_orders_legacy(
     B22c, B20, B22s, # Magnetic field strength
     len_phi,
     static_max_freq,
-    traced_max_freq,
-):
-    dl_p, kap_p, tau_p, axis_info = get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi)
+    traced_max_freq):
+
+    axis_info = get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi)
+    dl_p = axis_info['dl_p'] 
+    kap_p = axis_info['kap_p'] 
+    tau_p = axis_info['tau_p'] 
     # The following variables will not be included in a pyAQSC equilibrium.
     # self.G0 = G0 # NA. GBC is different from Boozer Coordinate.
     # self.Bbar = self.spsi * self.B0 # NA
@@ -455,9 +465,37 @@ def leading_orders_magnetic(
     B0, B11c, B22s, B20, B22c,
     len_phi,
     static_max_freq,
-    traced_max_freq,
-):
-    dl_p, kap_p, tau_p, axis_info = get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi)
+    traced_max_freq):
+    axis_info = get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi)
+    leading_orders_magnetic_from_axis(
+        nfp=nfp, # Field period
+        axis_info=axis_info,
+        iota_0=iota_0, # On-axis rotational transform
+        B_theta_20=B_theta_20, # Average B_theta[2,0]
+        B_psi_00=B_psi_00,
+        Y20=Y20,
+        B_alpha_1=B_alpha_1,  # B_alpha
+        B0=B0, B11c=B11c, B22s=B22s, B20=B20, B22c=B22c,
+        len_phi=len_phi,
+        static_max_freq=static_max_freq,
+        traced_max_freq=traced_max_freq,
+    )
+
+def leading_orders_magnetic_from_axis(
+    nfp, # Field period
+    axis_info,
+    iota_0, # On-axis rotational transform
+    B_theta_20, # Average B_theta[2,0]
+    B_psi_00,
+    Y20,
+    B_alpha_1,  # B_alpha
+    B0, B11c, B22s, B20, B22c,
+    len_phi,
+    static_max_freq,
+    traced_max_freq):
+    dl_p = axis_info['dl_p'] 
+    kap_p = axis_info['kap_p'] 
+    tau_p = axis_info['tau_p'] 
     # The following variables will not be included in a pyAQSC equilibrium.
     # self.G0 = G0 # NA. GBC is different from Boozer Coordinate.
     # self.Bbar = self.spsi * self.B0 # NA
@@ -651,15 +689,48 @@ def leading_orders(
     len_phi=1000,
     static_max_freq=(50, 50),
     traced_max_freq=(50, 50),
-    riccati_secant_n_iter=(25, 25)
-):
+    riccati_secant_n_iter=(50, 25)):
+    axis_info = get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi)
+    return(
+        leading_orders_from_axis(
+            nfp=nfp, # Field period
+            axis_info=axis_info, # Axis shape
+            p0=p0, # On-axis pressure
+            Delta_0_avg=Delta_0_avg, # Average anisotropy on axis
+            B_alpha_1=B_alpha_1,  # B_alpha
+            B0=B0, B11c=B11c, 
+            B22c=B22c, B20=B20, B22s=B22s, # Magnetic field strength
+            iota_0=iota_0,
+            B_theta_20_avg=B_theta_20_avg,
+            len_phi=len_phi,
+            static_max_freq=static_max_freq,
+            traced_max_freq=traced_max_freq,
+            riccati_secant_n_iter=riccati_secant_n_iter
+        )
+    )
+
+def leading_orders_from_axis(
+    nfp, # Field period
+    axis_info, # Axis shape
+    p0, # On-axis pressure
+    Delta_0_avg, # Average anisotropy on axis
+    B_alpha_1,  # B_alpha
+    B0, B11c, 
+    B22c, B20, B22s, # Magnetic field strength
+    iota_0=None,
+    B_theta_20_avg=None,
+    len_phi=1000,
+    static_max_freq=(50, 50),
+    traced_max_freq=(50, 50),
+    riccati_secant_n_iter=(25, 25)):
     if len_phi%2!=0:
         raise ValueError('Total grid number must be a even number.')
     if not ((iota_0 is None) ^ (B_theta_20_avg is None)):
         raise ValueError('Please provide one and only one of iota_0 and average B_theta_20.')
     solve_B_theta_20_avg = iota_0 is not None
-
-    dl_p, kap_p, tau_p, axis_info = get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi)
+    dl_p = axis_info['dl_p'] 
+    kap_p = axis_info['kap_p'] 
+    tau_p = axis_info['tau_p'] 
     # The following variables will not be included in a pyAQSC equilibrium.
     # self.G0 = G0 # NA. GBC is different from Boozer Coordinate.
     # self.Bbar = self.spsi * self.B0 # NA
@@ -711,6 +782,8 @@ def leading_orders(
     # p1 and Delta1 has the same formula as higher orders.
     # p1 is not dependent on iota0. (higher order has iota 
     # dependence, though)
+    print('iterate_Yn_cp_magnetic', iterate_Yn_cp_magnetic)
+    print('iterate_p_perp_n', iterate_p_perp_n)
     p1 = iterate_p_perp_n(
         1,
         B_theta_coef_cp,
@@ -733,7 +806,7 @@ def leading_orders(
 
         # At even orders, the free parameter is Delta_offset (the average of Delta n0)
         if n_eval%2==0:
-            Delta_n_inhomog_component = MHD_parsed.eval_inhomogenous_Delta_n_cp(n_eval,
+            Delta_n_inhomog_component = eval_inhomogenous_Delta_n_cp(n_eval,
             B_denom_coef_c,
             p_perp_coef_cp,
             Delta_coef_cp.mask(n_eval-1).zero_append(),
@@ -742,13 +815,13 @@ def leading_orders(
         # no_iota_masking is for debugging
         else:
             if no_iota_masking:
-                Delta_n_inhomog_component = MHD_parsed.eval_inhomogenous_Delta_n_cp(n_eval,
+                Delta_n_inhomog_component = eval_inhomogenous_Delta_n_cp(n_eval,
                 B_denom_coef_c,
                 p_perp_coef_cp,
                 Delta_coef_cp.mask(n_eval-1).zero_append(),
                 iota_coef)
             else:
-                Delta_n_inhomog_component = MHD_parsed.eval_inhomogenous_Delta_n_cp(n_eval,
+                Delta_n_inhomog_component = eval_inhomogenous_Delta_n_cp(n_eval,
                 B_denom_coef_c,
                 p_perp_coef_cp,
                 Delta_coef_cp.mask(n_eval-1).zero_append(),

@@ -1389,7 +1389,6 @@ def solve_1d_fft(p_eff, f_eff, static_max_freq:int=None): # not nfp-dependent
         target_length = len_phi
     else:
         target_length = static_max_freq*2
-    print('target_length', target_length)
     p_fft = fft_filter(jnp.fft.fft(p_eff), target_length, axis=0)
     f_fft = fft_filter(jnp.fft.fft(f_eff), target_length, axis=0)
 
