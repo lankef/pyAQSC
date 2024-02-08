@@ -9,9 +9,6 @@ from .equilibrium import *
 from .math_utilities import is_seq,py_sum,is_integer,diff
 from .config import *
 
-# Detect whether pyQSC is enabled.
-if use_pyQSC:
-    from qsc import Qsc
 
 def rand_splines(len_chi, amp_range = (0.5,2), n_points=5):
     amplitude = np.random.random()*(amp_range[1]-amp_range[0])+amp_range[0]
@@ -287,10 +284,8 @@ def rodriguez_to_landreman(in_array, nfp):
 # X22s.dat		Y22c.dat	Ys1.dat		Z33s.dat
 # nfp-dependent!!
 def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_enabled=False, plot_axis=False):
-    if not use_pyQSC:
-        raise AttributeError(
-            'use_pyQSC must be enabled to use test datasets from Eduardo Rodriguez.'
-        )
+    
+    from qsc import Qsc
     nfp_read, Xi_0, eta, B20, B22c, B22s, B31c, B31s, B33c, B33s, Ba0, Ba1 = np.loadtxt(path+'inputs.dat')
     print('Configuration has',nfp_read,'field periods.')
     if nfp_enabled:
@@ -514,10 +509,8 @@ def chiphifunc_debug_plot():
 
 # nfp-dependent!!
 def import_from_stel(stel, len_phi=1000, nfp_enabled=False):
-    if not use_pyQSC:
-        raise AttributeError(
-            'use_pyQSC must be enabled to use test datasets from qyPSC.'
-        )
+    
+    from qsc import Qsc
     # Spline fit and interpolate to certain elements
     # Or if the item is scalar, creates a filled 1d array of
     # len_phi

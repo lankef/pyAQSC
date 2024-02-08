@@ -330,12 +330,7 @@ class Equilibrium:
     # Checks the accuracy of iteration at order n_unknown by substituting
     # results into the original form of the governing equations.
     # not nfp-dependent
-    def check_governing_equations(self, n_unknown:int):
-        # if n_unknown is None:
-        #     n_unknown = self.get_order()
-        # elif n_unknown>self.get_order():
-        #     raise ValueError('Validation order should be <= than the current order')
-
+    def check_governing_equations(self, n_unknown:int, normalize:bool=True):
         X_coef_cp = self.unknown['X_coef_cp']
         Y_coef_cp = self.unknown['Y_coef_cp']
         Z_coef_cp = self.unknown['Z_coef_cp']
@@ -392,7 +387,32 @@ class Equilibrium:
             B_alpha_coef, B_denom_coef_c,
             p_perp_coef_cp, Delta_coef_cp,
             iota_coef)
-        return(J, Cb, Ck, Ct, I, II, III)
+        if normalize:
+            J_norm = (X_coef_cp[n_unknown]*(2*dl_p**2*kap_p)).get_amplitude()
+            C_norm = (Z_coef_cp[n_unknown]*dl_p).get_amplitude()
+            force_norm = (p_perp_coef_cp[n_unknown]\
+                          *B_alpha_coef[0]*B_denom_coef_c[0]**2).get_amplitude()
+            return(
+                J/J_norm,
+                Cb/C_norm,
+                Ck/C_norm, 
+                Ct/C_norm,
+                I/force_norm, 
+                II/force_norm,
+                III/force_norm
+            )
+        else:
+            return(
+                J, # Unit is X*(2*dl_p^2*kap_p)
+                Cb, # Unit is X*dl_p
+                Ck, # Unit is X*dl_p
+                Ct, # Unit is X*dl_p
+                I, # Unit is (dphi + iota_coef[0] * dchi) Delta*B_denom_coef_c[0]
+                # or p*B_alpha_coef[0]·B_denom_coef_c[0]^2. All components of 
+                # the force balance should have the same unit.
+                II, # Unit is p*B_alpha_coef[0]·B_denom_coef_c[0]^2
+                III # Unit is p*B_alpha_coef[0]*B_denom_coef_c[0]^2
+            )
 
     ''' Display and output'''
 

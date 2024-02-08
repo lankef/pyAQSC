@@ -1,18 +1,17 @@
-from desc.equilibrium import Equilibrium
-from desc.grid import Grid
-from desc.basis import FourierZernikeBasis
-from desc.transform import Transform
-from desc.profiles import FourierZernikeProfile, PowerSeriesProfile
-from scipy import special
-from scipy.constants import mu_0
 import numpy as np
-
 
 def aqsc_to_desc(na_eq, psi_max, M=6, N=8):
     '''
     M is 
     N is 
     '''
+    from desc.equilibrium import Equilibrium
+    from desc.grid import Grid
+    from desc.basis import FourierZernikeBasis
+    from desc.transform import Transform
+    from desc.profiles import FourierZernikeProfile, PowerSeriesProfile
+    from scipy import special
+    from scipy.constants import mu_0
     r=float(psi_max) # Psi_aqsc = Psi/2pi
     L=None # leave this alone
     ntheta=None # leave this alone
@@ -111,10 +110,18 @@ def aqsc_to_desc(na_eq, psi_max, M=6, N=8):
     eq = Equilibrium(**inputs)
     eq.surface = eq.get_surface_at(rho=1)
     eq.axis = eq.get_axis()
+    print()
+
+    print('rho', rho.shape)
+    print('thetaBs', thetaBs.shape)
+    print('phiBs', phiBs.shape)
+    print('psi', psi.shape)
+    print('chis', chis.shape)
     aux_dict = {
         'rho': rho, 
         'thetaBs': thetaBs, 
         'phiBs': phiBs, 
-        'psi': psi
+        'psi': psi,
+        'chis': chis
     }
     return(eq, aux_dict)

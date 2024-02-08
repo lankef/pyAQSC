@@ -723,6 +723,10 @@ def leading_orders_from_axis(
     static_max_freq=(50, 50),
     traced_max_freq=(50, 50),
     riccati_secant_n_iter=(25, 25)):
+    if static_max_freq[0]<=0:
+        static_max_freq = (len_phi//2, static_max_freq[1])
+    if static_max_freq[1]<=0:
+        static_max_freq = (static_max_freq[0], len_phi//2)
     if len_phi%2!=0:
         raise ValueError('Total grid number must be a even number.')
     if not ((iota_0 is None) ^ (B_theta_20_avg is None)):
@@ -782,8 +786,6 @@ def leading_orders_from_axis(
     # p1 and Delta1 has the same formula as higher orders.
     # p1 is not dependent on iota0. (higher order has iota 
     # dependence, though)
-    print('iterate_Yn_cp_magnetic', iterate_Yn_cp_magnetic)
-    print('iterate_p_perp_n', iterate_p_perp_n)
     p1 = iterate_p_perp_n(
         1,
         B_theta_coef_cp,
