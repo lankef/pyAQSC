@@ -6,7 +6,7 @@ When constructing a QS anisotropic equilibrium, PyAQSC requires the following qu
 - $R_0(\Phi)$, $Z_0(\Phi)$ - The axis shape in cylindrical coordinate $(R, \Phi, Z)$.
 - $p_{\perp 0,0}(\phi)$ - The on-axis pressure.
 - $\bar{\Delta}_0\equiv\oint\Delta_0d\phi$ - The average on-axis anisotropy.
-- $\bar{B}_{\theta 2,0}(\phi)$ - The average $\chi$-independent component of $\bar{B}_{\theta 2}$.
+- $\bar{B}_{\theta n,0}\equiv \int_0^{2\pi}d\phi B_{\theta n,0}$ - The average $\chi$-independent component of $\bar{B}_{\theta n}$.
 - $B^-(\chi, \psi)\equiv B^{-2}(\chi, \psi)$ - The magnetic field strength.
 - $B_{\alpha}(\psi)$ - The flux function component of $B_\phi$.
 - $\bar{\iota}(\psi)\equiv\iota(\psi)-N/M, M=1$ - The rotational transform. $N/M$ is the helicity.
@@ -16,7 +16,7 @@ When constructing a QS anisotropic equilibrium, PyAQSC requires the following qu
 | -------------- | ------------------------------------ 
 | Leading order  | $R_0(\Phi), Z_0(\Phi), p_{\perp 0,0}(\phi), \bar{\Delta}_0$ 
 | Every order    | $B^-_{n,m}$ 
-| Every 2 orders | $B_{\alpha(n-1)/2}$ 
+| Every 2 orders | $B_{\alpha(n-1)/2}$, $\bar{B}_{\theta n,0}$, $\bar\iota_{(n-1)/2}$
 
 ## QS field without force balance 
 
@@ -26,7 +26,8 @@ Because the force blance constraints are dropped, pyAQSC requires additional fre
 
 - $B_{\theta n,m}(\phi)$ - The $\theta$ component of the magnetic field.
 - $\bar{B}_{\psi n-2,0}(\phi)$ - The $\chi$-independent part of $B_\psi$. 
-- $Y_{n,0}(\phi)$ - The $\chi$-independent part of $Y_n$, part of the transformation functions that defines $(\psi, \chi, \phi)$.
+- $Y_{n,0}(\phi)$ - The $\chi$-independent part of $Y_n$, part of the transformation functions that defines $(\psi, \chi, \phi)$. 
+- $\bar{Y}_{n,1}^c(\phi)$ - The $\phi$-average of $Y_{n,1}^c$. 
 - $B^-(\chi, \psi)$ - The magnetic field magnitude.
 - $B_{\alpha}(\psi)$ - The flux function component of $B_\phi$.  
 - $\bar\iota(\psi)$ - The rotational transform
@@ -34,8 +35,8 @@ Because the force blance constraints are dropped, pyAQSC requires additional fre
 | Required at    | Variables                            
 | -------------- | ------------------------------------ 
 | Leading order  | $R_0(\Phi), Z_0(\Phi)$ (pressure not modeled) 
-| Every order    | $B_{\theta n,m}(\phi)$, $B_{\psi n-2,0}(\phi)$, $Y_{n,0}$, $B^-_{n,m}$ 
-| Every 2 orders | $B_{\alpha(n-1)/2}$, $\bar\iota_{(n-1)/2}$
+| Every order    | $B_{\theta n,m}(\phi)$, $B^-_{n,m}$ 
+| Every 2 orders | $B_{\alpha(n-1)/2}$, $B_{\psi n-2,0}(\phi)$, $\bar\iota_{(n-1)/2}$, $Y_{n,0}$, $\bar{Y}^c_{n,1}$,  
 
 ## Expansion form
 

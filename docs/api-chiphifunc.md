@@ -209,8 +209,12 @@ Returns:
 
 - A `ChiPhiFunc`.
 
-### `aqsc.ChiPhiFunc.get_amplitude(self)`
-Calculating the maximum of the absolute value of elements in `self.content`. If `nfp==0`, returns 0. If `nfp<0`, returns `jnp.inf`.
+### `aqsc.ChiPhiFunc.get_max(n_chi, n_phi)`
+Calculating the maximum of the absolute value of the function of $\chi$ and $\phi$ represented by this object.
+
+Parameters: 
+
+- `n_chi, n_phi : int` - The grid size for evaluation.
 
 Returns:
 

@@ -101,6 +101,17 @@ Returns:
 
 - `n : int` - The highest known order $n$.
 
+### `aqsc.ChiPhiEpsFunc.get_max_order_by_order(n)`
+Calculating the maximum of the absolute value of the function represented by the Fourier coefficient of each order.
+
+Parameters: 
+
+- `n_chi, n_phi : int` - The grid size for evaluation.
+
+Returns:
+
+- A list of real scalars.
+
 ### `aqsc.ChiPhiEpsFunc.zeros_like(other)`
 Produces a `ChiPhiFunc(nfp=0)`-filled ChiPhiEpsFunc with the same $n$ as another `ChiPhiEpsFunc`.
 
