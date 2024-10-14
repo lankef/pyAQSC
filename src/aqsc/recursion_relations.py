@@ -209,9 +209,6 @@ def iterate_Yn_cp_magnetic(
         
         len_phi = Yn_rhs.content.shape[1]
         Yn_free_content = jnp.fft.ifft(fft_pad(sln_fft, len_phi, axis=0), axis=0)[None, :]
-        
-        len_phi = Yn_rhs.content.shape[1]
-        Yn_free_content = jnp.fft.ifft(fft_pad(sln_fft, len_phi, axis=0), axis=0)[None, :]
         # Yn_free_content = solve_ODE(
         #     coeff_arr=coef_Yn1c_in_D3.content,
         #     coeff_dp_arr=coef_dp_Yn1c_in_D3.content*nfp,

@@ -94,10 +94,10 @@ def aqsc_to_desc(na_eq, psi_max, M=6, N=8):
     inputs = {
         "Psi": r*2*np.pi,
         "NFP": na_eq.nfp,
-        "L": L,
+        "L": L, # Resolution
         "M": M,
         "N": N,
-        "sym": True, #maybe change
+        "sym": True, # Stellarator symmetry
         "spectral_indexing ": spectral_indexing,
         "pressure" : p_perp,
         "iota" : iota,
@@ -110,13 +110,7 @@ def aqsc_to_desc(na_eq, psi_max, M=6, N=8):
     eq = Equilibrium(**inputs)
     eq.surface = eq.get_surface_at(rho=1)
     eq.axis = eq.get_axis()
-    print()
 
-    print('rho', rho.shape)
-    print('thetaBs', thetaBs.shape)
-    print('phiBs', phiBs.shape)
-    print('psi', psi.shape)
-    print('chis', chis.shape)
     aux_dict = {
         'rho': rho, 
         'thetaBs': thetaBs, 

@@ -388,18 +388,41 @@ class Equilibrium:
             p_perp_coef_cp, Delta_coef_cp,
             iota_coef)
         if normalize:
-            J_norm = (X_coef_cp[n_unknown]*(2*dl_p**2*kap_p)).get_amplitude()
-            C_norm = (Z_coef_cp[n_unknown]*dl_p).get_amplitude()
-            force_norm = (p_perp_coef_cp[n_unknown]\
-                          *B_alpha_coef[0]*B_denom_coef_c[0]**2).get_amplitude()
+            J_norm = (X_coef_cp[n_unknown] * (2 * dl_p ** 2 * kap_p)).get_max()
+            Cb_norm = (
+                - n_unknown * B_alpha_coef[0]*X_coef_cp[1].dchi() / 2 * Y_coef_cp[n_unknown]
+                + (B_alpha_coef[0] * X_coef_cp[1]) / 2 * Y_coef_cp[n_unknown].dchi()
+            ).get_max()
+            Ck_norm = (
+                Z_coef_cp[n_unknown] * (-B_alpha_coef[0] * Y_coef_cp[1].dchi()) * (n_unknown+1)
+                + Z_coef_cp[n_unknown].dchi() * (B_alpha_coef[0] * Y_coef_cp[1]) / 2
+            ).get_max()
+            Ct_norm = (
+                Z_coef_cp[n_unknown] * (B_alpha_coef[0]*X_coef_cp[1].dchi()) * (n_unknown+1)
+                - Z_coef_cp[n_unknown].dchi() * (B_alpha_coef[0]*X_coef_cp[1]) / 2
+            ).get_max()
+            I_norm = (
+                (
+                    Delta_coef_cp[n_unknown].dphi() 
+                    + iota_coef[0] * Delta_coef_cp[n_unknown].dchi()
+                )*B_denom_coef_c[0]
+            ).get_max()
+            II_norm = (
+                - (B_denom_coef_c[0]**2 * (p_perp_coef_cp[0].dphi())) * B_theta_coef_cp[n_unknown]
+                + (B_denom_coef_c[0] * Delta_coef_cp[0] - B_denom_coef_c[0]) * iota_coef[0] * B_theta_coef_cp[n_unknown].dchi()
+                + (B_denom_coef_c[0] * Delta_coef_cp[0] - B_denom_coef_c[0]) * B_theta_coef_cp[n_unknown].dphi()
+            ).get_max()
+            III_norm = (
+                n_unknown*B_alpha_coef[0]*B_denom_coef_c[0] ** 2/2 * p_perp_coef_cp[n_unknown]
+            ).get_max()
             return(
                 J/J_norm,
-                Cb/C_norm,
-                Ck/C_norm, 
-                Ct/C_norm,
-                I/force_norm, 
-                II/force_norm,
-                III/force_norm
+                Cb/Cb_norm,
+                Ck/Ck_norm, 
+                Ct/Ct_norm,
+                I/I_norm, 
+                II/II_norm,
+                III/III_norm
             )
         else:
             return(
@@ -596,7 +619,8 @@ class Equilibrium:
         '''
         return(helicity_from_axis(self.axis_info, self.nfp))
 
-    def display(self, n_max=float('inf'), psi_max=None):
+    def display(self, n_max=float('inf'), psi_max=None, n_fs=5):
+        # n_fs: total number of flux surfaces plotted
         if not psi_max:
             psi_max = self.get_psi_crit()[0]
             print('Plotting to 0.8(critical psi):', psi_max)
@@ -604,14 +628,14 @@ class Equilibrium:
         fig = plt.figure()
         fig.set_dpi(400)
         ax = fig.add_subplot(projection='3d')
-        phis = jnp.linspace(0, np.pi*2*0.9, 100)
-        chis = jnp.linspace(0, np.pi*2, 100)
+        phis = jnp.linspace(0, np.pi*2*0.9, 1000)
+        chis = jnp.linspace(0, np.pi*2, 1000)
         x_surf, y_surf, z_surf = self.flux_to_xyz(psi=psi_max, chi=chis[None, :], phi=phis[:, None], n_max=n_max)
         # Coloring by magnitude of B
         B_denom = self.constant['B_denom_coef_c'].eval(
             psi=psi_max, chi=chis[None, :], phi=phis[:, None]
         )
-        B_magnitude = 1/jnp.real(B_denom).astype(jnp.float32)
+        B_magnitude = 1/jnp.sqrt(jnp.real(B_denom)).astype(jnp.float32)
 
         norm = colors.Normalize(vmin=jnp.min(B_magnitude), vmax=jnp.max(B_magnitude), clip=True)
         mapper = cm.ScalarMappable(norm=norm, cmap=cm.plasma)
@@ -625,7 +649,7 @@ class Equilibrium:
         x_cross, y_cross, z_cross = self.flux_to_xyz(psi=0, chi=chis, phi=0, n_max=n_max)
         ax.plot(x_cross, y_cross, z_cross, zorder=2.5, linewidth=0.5, color='lightgrey', label=r'$(\epsilon=\sqrt{\psi}, \chi)$')
         eps_max = np.sqrt(psi_max)
-        for psi_i in np.linspace(eps_max/8, eps_max, 8)**2:
+        for psi_i in np.linspace(eps_max/n_fs, eps_max, n_fs)**2:
             x_cross, y_cross, z_cross = self.flux_to_xyz(psi=psi_i, chi=chis, phi=0, n_max=n_max)
             ax.plot(x_cross, y_cross, z_cross, zorder=2.5, linewidth=0.5, color='lightgrey')
         x_axis, y_axis, z_axis = self.flux_to_xyz(psi=0, chi=0, phi=chis, n_max=n_max)
@@ -638,7 +662,7 @@ class Equilibrium:
         # Plotting the axis
         ax.plot(x_axis, y_axis, z_axis, zorder=3.5, linewidth=0.5, linestyle='dashed', color='lightgrey', label='Magnetic axis')
         fig.legend()
-        fig.colorbar(mapper, label=r'$|B|^2$', shrink=0.5, ax=ax)
+        fig.colorbar(mapper, label=r'Field strength $|B|, (T)$', shrink=0.5, ax=ax)
         fig.show()
 
     # not nfp-dependent
@@ -664,8 +688,8 @@ Equilibrium._tree_flatten,
 Equilibrium._tree_unflatten)
 
 ''' Iteration '''
-# # Evaluates 2 entire orders. Note that no masking is needed for any of the methods
-# # defined in this file. Copies the equilibrium. STOPS AT EVEN ORDERS.
+# Evaluates 2 entire orders. Note that no masking is needed for any of the methods
+# defined in this file. Copies the equilibrium. STOPS AT EVEN ORDERS.
 
 # Iterates the magnetic equations only.
 # Calculates Xn, Yn, Zn, B_psin-2 for 2 orders from lower order values.

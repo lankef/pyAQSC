@@ -126,6 +126,16 @@ class ChiPhiEpsFunc:
         ''' Gets the currently known order of a power series. '''
         return(len(self.chiphifunc_list)-1)
 
+    # Convert to a list of amplitudes
+    def get_max_order_by_order(self, len_chi:int=100, len_phi:int=100):
+        amp_list = []
+        for item in self.chiphifunc_list:
+            if isinstance(item, ChiPhiFunc):
+                amp_list.append(item.get_max(len_chi=len_chi, len_phi=len_phi))
+            else:
+                amp_list.append(jnp.abs(item))
+        return(jnp.array(amp_list))
+
     # @partial(jit, static_argnums=(0,))
     def zeros_like(other):
         '''

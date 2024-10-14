@@ -1,9 +1,8 @@
 import jax.numpy as jnp
 from jax import vmap, tree_util
-# from jax import jit, vmap, tree_util
-# from functools import partial # for JAX jit with static params
+from jax import jit, vmap, tree_util
+from functools import partial # for JAX jit with static params
 
-import math # factorial in dphi_direct
 from matplotlib import pyplot as plt
 
 # Configurations
@@ -484,7 +483,7 @@ class ChiPhiFunc:
         ''' Overloads the other * self operator. See __mul__() for details. '''
         return(self*other)
 
-    # @jit
+    @jit
     def __truediv__(self, other):
         '''
         Overloads the self / other operator. "Division" in the context of NAE
@@ -605,7 +604,7 @@ class ChiPhiFunc:
         return(ChiPhiFunc(jnp.fft.ifft(self.content, axis=1), self.nfp))
 
     # Static argument
-    # @partial(jit, static_argnums=(1,))
+    @partial(jit, static_argnums=(1,))
     def dchi(self, order=1):
         '''
         Derivative in chi.
@@ -643,7 +642,7 @@ class ChiPhiFunc:
         return(ChiPhiFunc(-1j * self.content/temp, self.nfp))
 
     # Static argument
-    # @partial(jit, static_argnums=(1, 2,))
+    @partial(jit, static_argnums=(1, 2,))
     def dphi(self, order:int=1, mode=0):
         if self.is_special():
             return(self)
@@ -681,7 +680,7 @@ class ChiPhiFunc:
         return(ChiPhiFunc(jnp.exp(self.content), self.nfp))
 
     # Input is not order-dependent, and permitted to be static.
-    # @partial(jit, static_argnums=(1,))
+    @partial(jit, static_argnums=(1,))
     def integrate_phi_fft(self, zero_avg):
         '''
         Phi-integrate a ChiPhiFunc over 0 to 2pi or 0 to a given phi.
@@ -699,7 +698,6 @@ class ChiPhiFunc:
         if self.is_special():
             return(self)
         # number of phi grids
-        len_chi = self.content.shape[0]
         len_phi = self.content.shape[1]
         if double_precision:
             phis = jnp.linspace(0, 2*jnp.pi*(1-1/len_phi), len_phi, dtype=jnp.complex128)
@@ -719,7 +717,7 @@ class ChiPhiFunc:
 
     ''' I.1.3 phi Filters '''
     # Static arguments
-    # @partial(jit, static_argnums=(2,))
+    @partial(jit, static_argnums=(2,))
     def filter(self, arg:float, mode:int=0):
         '''
         An expandable filter. Now only low-pass is available.
@@ -751,7 +749,7 @@ class ChiPhiFunc:
         else:
             return(ChiPhiFuncSpecial(-16))
 
-    # @partial(jit, static_argnums=(1,))
+    @partial(jit, static_argnums=(1,))
     def filter_reduced_length(self, arg:int):
         '''
         Low pass filter that reduces the length of a ChiPhiFunc.
@@ -771,9 +769,10 @@ class ChiPhiFunc:
         return(ChiPhiFunc(short_content, self.nfp))
 
     ''' I.1.4 Properties '''
-    def get_amplitude(self):
+    @partial(jit, static_argnums=(1,2))
+    def get_max(self, len_chi:int=100, len_phi:int=100):
         '''
-        Getting the max amplitude of the content
+        Getting the max absolute value of the content
 
         Outputs:
 
@@ -783,7 +782,9 @@ class ChiPhiFunc:
             return(0)
         elif self.nfp<0:
             return(jnp.inf)
-        return(jnp.max(jnp.abs(self.content)))
+        chis = jnp.arange(len_chi)/len_chi*jnp.pi*2
+        phis = jnp.arange(len_phi)/len_phi*jnp.pi*2 
+        return(jnp.max(jnp.abs(self.eval(chis[:, None], phis[None, :]))))
 
     # def real(self):
     #     '''
@@ -808,7 +809,7 @@ class ChiPhiFunc:
     #     if self.is_special():
     #         return(self)
     #     return(ChiPhiFunc(jnp.imag(self.content), self.nfp))
-    # @partial(jit, static_argnums=(1,))
+    @partial(jit, static_argnums=(1,))
     def cap_m(self, m:int):
         '''
         Takes the center m+1 rows of content. If the ChiPhiFunc
@@ -1060,7 +1061,7 @@ tree_util.register_pytree_node(ChiPhiFunc,
 roll_axis_01 = lambda a, shift: jnp.roll(jnp.roll(a, shift, axis=0), shift, axis=1)
 batch_roll_axis_01 = vmap(roll_axis_01, in_axes=0, out_axes=0)
 # @lru_cache(maxsize=10)
-# @partial(jit, static_argnums=(0,))
+@partial(jit, static_argnums=(0,))
 def dphi_op_pseudospectral(n:int):
     """
     Return the spectral differentiation matrix for n grid points
@@ -1105,7 +1106,7 @@ def dphi_op_pseudospectral(n:int):
     return(toeplitz)
 
 ''' II. Deconvolution ("dividing" chi-dependent terms) '''
-# @partial(jit, static_argnums=(2,))
+@partial(jit, static_argnums=(2, 3, ))
 def get_O_O_einv_from_A_B(chiphifunc_A:ChiPhiFunc, chiphifunc_B:ChiPhiFunc, rank_rhs:int, Y1c_mode:bool):
     '''
     Get O, O_einv and vector_free_coef that solves the eqaution system
@@ -1255,7 +1256,7 @@ def batch_matrix_inv_excluding_col(in_matrices:jnp.ndarray):
 # A jitted vectorized version of jnp.roll
 roll_axis_0 = lambda a, shift: jnp.roll(a, shift, axis=0)
 batch_roll_axis_0 = vmap(roll_axis_0, in_axes=1, out_axes=1)
-# @partial(jit, static_argnums=(1,))
+@partial(jit, static_argnums=(1,))
 def conv_tensor(content:jnp.ndarray, n_dim:int):
     '''
     Generate a tensor_coef (see looped_solver.py) convolving a ChiPhiFunc
@@ -1362,7 +1363,7 @@ def solve_1d_asym(p_eff, f_eff): # not nfp-dependent
 
     return(jnp.sum(asym_series, axis=0))
 
-# @partial(jit, static_argnums=(2,))
+@partial(jit, static_argnums=(2,))
 def solve_1d_fft(p_eff, f_eff, static_max_freq:int=None): # not nfp-dependent
     '''
     Solves one linear ODE of form y' + p_eff*y = f_eff.
@@ -1402,7 +1403,7 @@ def solve_1d_fft(p_eff, f_eff, static_max_freq:int=None): # not nfp-dependent
     return(sln)
 
 solve_1d_fft_batch = vmap(solve_1d_fft, in_axes=(0, 0, None), out_axes=0)
-# @partial(jit, static_argnums=(3,))
+@partial(jit, static_argnums=(3,))
 def solve_ODE(coeff_arr, coeff_dp_arr, f_arr:jnp.ndarray, static_max_freq:int=None): # not nfp-dependent
     '''
     Solves simple linear first order ODE systems in batch:
@@ -1463,7 +1464,7 @@ def solve_ODE(coeff_arr, coeff_dp_arr, f_arr:jnp.ndarray, static_max_freq:int=No
 
 
 ''' ONLY USED IN solve_1d(). '''
-# @partial(jit, static_argnums=(0,))
+@partial(jit, static_argnums=(0,))
 def fft_dphi_op(len_phi:int):
     '''
     ONLY USED IN solve_1d().
@@ -1507,7 +1508,7 @@ def fft_conv_op(source):
     # Collapse the first two axes from a diagonal matrix to a 1d array by summing
     return(tensor_eff[0][0])
 
-# @partial(jit, static_argnums=(4,))
+@partial(jit, static_argnums=(4,))
 def solve_ODE_chi(coeff, coeff_dp, coeff_dc, f, static_max_freq: int):
     '''
     For solving the periodic linear 1st order ODE
@@ -1538,7 +1539,7 @@ def solve_ODE_chi(coeff, coeff_dp, coeff_dc, f, static_max_freq: int):
             static_max_freq=static_max_freq)
     )
 
-# @partial(jit, static_argnums=(2,))
+@partial(jit, static_argnums=(2,))
 def solve_dphi_iota_dchi(iota, f, static_max_freq: int):
     '''
     For solving the periodic linear 1st order ODE
@@ -1569,7 +1570,7 @@ def solve_dphi_iota_dchi(iota, f, static_max_freq: int):
 ''' V. utilities '''
 
 ''' V.1. Low-pass filter for simplifying tensor to invert '''
-# @partial(jit, static_argnums=(1,2,))
+@partial(jit, static_argnums=(1,2,))
 def fft_filter(fft_in:jnp.ndarray, target_length:int, axis:int): # not nfp-dependent
     '''
     Shorten an array in FFT representation to leave only target_length elements.
@@ -1598,7 +1599,7 @@ def fft_filter(fft_in:jnp.ndarray, target_length:int, axis:int): # not nfp-depen
     right = fft_in.take(indices=jnp.arange(-(target_length//2), 0), axis=axis)
     return(jnp.concatenate((left, right), axis=axis)*target_length/fft_in.shape[axis])
 
-# @partial(jit, static_argnums=(1,2,))
+@partial(jit, static_argnums=(1,2,))
 def fft_pad(fft_in:jnp.array, target_length:int, axis:int): # not nfp-dependent
     '''
     Pad an array in FFT representation to target_length elements.
@@ -1638,7 +1639,7 @@ V.2 Tensor construction for looped_solver.py
 Theses methods are for constructing differential/convolution tensors
 '''
 
-# @partial(jit, static_argnums=(1,))
+@partial(jit, static_argnums=(1,))
 def to_tensor_fft_op(ChiPhiFunc_in:ChiPhiFunc, len_tensor:int):
     '''
     For solving the looped equations. They are only used in looped_solver.py and
@@ -1649,7 +1650,7 @@ def to_tensor_fft_op(ChiPhiFunc_in:ChiPhiFunc, len_tensor:int):
     tensor_fft_op = fft_conv_tensor_batch(tensor_fft_coef)
     return(tensor_fft_op)
 
-# @partial(jit, static_argnums=(1,2,3,4,5,6))
+@partial(jit, static_argnums=(1,2,3,4,5,6))
 def to_tensor_fft_op_multi_dim(
     ChiPhiFunc_in:ChiPhiFunc, dphi:int, dchi:int,
     num_mode:int, cap_axis0:int,
@@ -1759,7 +1760,7 @@ for i in range (18):
     error_code=-i
     ChiPhiFuncSpecial_originals.append(ChiPhiFunc(jnp.nan, error_code))
     
-# @partial(jit, static_argnums=(0,))
+@partial(jit, static_argnums=(0,))
 def ChiPhiFuncSpecial(error_code:int):
     '''
     Creates a special ChiPhiFunc that represents 0 or an error.

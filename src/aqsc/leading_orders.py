@@ -53,7 +53,7 @@ def circular_axis():
         len_phi=1000,
         static_max_freq=(15, 20),
         traced_max_freq=(15, 20),
-        riccati_secant_n_iter=(15, 20)
+        riccati_secant_n_iter=(50, 50)
     ))
 
 def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
