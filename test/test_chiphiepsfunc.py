@@ -5,7 +5,7 @@ from aqsc import *
 import jax.numpy as jnp
 
 orig_list = [0, 1, 3, jnp.array([666,667])] # legal, legal, legal, illegal
-a = ChiPhiEpsFunc(orig_list, 2, True) 
+a = ChiPhiEpsFunc(orig_list, 2, square_eps_series=False, check_consistency=True) 
 a = a.append(ChiPhiFuncSpecial(0)) # legal, legal
 a = a.append(ChiPhiFuncSpecial(0)) # legal, legal
 a = a.append(66) # legal

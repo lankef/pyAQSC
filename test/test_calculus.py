@@ -81,6 +81,26 @@ class TestCalculus(unittest.TestCase):
         print('Testing chi integral')
         print_fractional_error(guess_ichi.content, test1.content)
 
+    def test_deps(self):
+        a = np.random.rand()-0.5
+        b = np.random.rand()-0.5
+        c = np.random.rand()-0.5
+        # f = a + b*eps   + c*eps^2
+        # f' = b + 2c*eps
+        f_ChiPhiEpsFunc = ChiPhiEpsFunc([a, b, c], 1, False)
+        # g = a + b*eps^2 + c*eps^4
+        #   = 2b*eps + 4c*eps^3
+        g_ChiPhiEpsFunc = ChiPhiEpsFunc([a, b, c], 1, True)
+        eps_arr = np.linspace(0,10,100)
+        self.assertTrue(jnp.all(jnp.isclose(
+            b + 2 * c * eps_arr, 
+            f_ChiPhiEpsFunc.deps().eval_eps(eps_arr, 0, 0)
+        )))
+        self.assertTrue(jnp.all(jnp.isclose(
+            2 * b * eps_arr + 4 * c * eps_arr**3, 
+            g_ChiPhiEpsFunc.deps().eval_eps(eps_arr, 0, 0)
+        )))
+
     def test_dphi_fft(self):
         '''
         phi derivatives

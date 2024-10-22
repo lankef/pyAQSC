@@ -3,6 +3,8 @@ from aqsc import *
 import pathlib
 
 import jax.numpy as jnp
+from jax import config
+config.update("jax_enable_x64", True)
 
 circ_equilibrium = circular_axis()
 circ_axis_tolerance = 5e-6

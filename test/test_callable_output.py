@@ -48,7 +48,7 @@ test_chiphiepsfunc = ChiPhiEpsFunc([
     chiphifunc1, 
     chiphifunc2, 
     chiphifunc3
-], nfp=4)
+], 4, False)
 
 
 # np.gradient is not very accurate, but it allows us to benchmark our
@@ -76,11 +76,11 @@ class TestCallables(unittest.TestCase):
         Sum(iota[n]*eps**(2*i), 0, n)
         = Sum(iota[n]*psi**i, 0, n)
         '''
-        test_iota = ChiPhiEpsFunc([1.2, 3.6, 0, 5.2], 1)
+        test_iota = ChiPhiEpsFunc([1.2, 3.6, 0, 5.2], 1, True)
         lambda_psi_ans = lambda psi: 1.2+3.6*psi+5.2*psi**3
 
         self.assertTrue(jnp.all(jnp.isclose(
-            test_iota.eval(psi, sq_eps_series=True), 
+            test_iota.eval(psi, 0, 0), 
             lambda_psi_ans(psi)
         )))
     

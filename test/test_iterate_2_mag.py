@@ -30,12 +30,7 @@ equilibrium_mag = aqsc.leading_orders_magnetic(
     B_alpha_1=0.1,  # B_alpha
     B0=1,
     B11c=-1.8,
-    B2=aqsc.ChiPhiFunc(
-        jnp.array([[0.005+0.005j],
-                 [0.01 +0.j   ],
-                 [0.005-0.005j]]),
-        nfp=1
-    ),
+    B22c=0.01, B20=0.01, B22s=0.01,
     len_phi=1000,
     static_max_freq=(15, 20),
     traced_max_freq=(15, 20),
@@ -65,30 +60,30 @@ class TestCircularAxis(unittest.TestCase):
         J, Cb, Ck, Ct, _, _, _ = equilibrium_mag_new.check_governing_equations(2)
         print('J residue:')
         aqsc.print_fractional_error(J.filter(20).content, 0)
-        self.assertTrue(J.filter(20).get_amplitude()<n_2_tolerance)
+        self.assertTrue(J.filter(20).get_max()<n_2_tolerance)
         print('Cb residue:')
         aqsc.print_fractional_error(Cb.filter(20).content, 0)
-        self.assertTrue(Cb.filter(20).get_amplitude()<n_2_tolerance)
+        self.assertTrue(Cb.filter(20).get_max()<n_2_tolerance)
         print('Ck residue:')
         aqsc.print_fractional_error(Ck.filter(20).content, 0)
-        self.assertTrue(Ck.filter(20).get_amplitude()<n_2_tolerance)
+        self.assertTrue(Ck.filter(20).get_max()<n_2_tolerance)
         print('Ct residue:')
         aqsc.print_fractional_error(Ct.filter(20).content, 0)
-        self.assertTrue(Ct.filter(20).get_amplitude()<n_2_tolerance)
+        self.assertTrue(Ct.filter(20).get_max()<n_2_tolerance)
         print('Testing magnetic order 4, tolerance:', n_4_tolerance)
         J, Cb, Ck, Ct, _, _, _ = equilibrium_mag_new.check_governing_equations(4)
         print('J residue:')
         aqsc.print_fractional_error(J.filter(20).content, 0)
-        self.assertTrue(J.filter(20).get_amplitude()<n_4_tolerance)
+        self.assertTrue(J.filter(20).get_max()<n_4_tolerance)
         print('Cb residue:')
         aqsc.print_fractional_error(Cb.filter(20).content, 0)
-        self.assertTrue(Cb.filter(20).get_amplitude()<n_4_tolerance)
+        self.assertTrue(Cb.filter(20).get_max()<n_4_tolerance)
         print('Ck residue:')
         aqsc.print_fractional_error(Ck.filter(20).content, 0)
-        self.assertTrue(Ck.filter(20).get_amplitude()<n_4_tolerance)
+        self.assertTrue(Ck.filter(20).get_max()<n_4_tolerance)
         print('Ct residue:')
         aqsc.print_fractional_error(Ct.filter(20).content, 0)
-        self.assertTrue(Ct.filter(20).get_amplitude()<n_4_tolerance)
+        self.assertTrue(Ct.filter(20).get_max()<n_4_tolerance)
         
 if __name__ == '__main__':
     unittest.main()
