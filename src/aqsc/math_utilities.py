@@ -25,16 +25,10 @@ def py_sum(expr, lower:int, upper:int):
         # are checked correct, these are made 0.
         return(ChiPhiFuncSpecial(0))
     # This scan implementation may be faster, but the index is a 
-    # traced var in this formulation, and conditionals like is_seq,
+    # traced var in fori_loop. Because of that, conditionals like is_seq,
     # as well as indexing in ChiPhiEpsFunc will not work.
-    # indices = jnp.arange(lower_ceil,upper_floor+1)
-    # # The second argument is redundant. 
-    # # The loop os controlled by carry
-    # def map_arg(carry, ind):
-    #     out, ind_prev = carry
-    #     out+=expr(ind_prev)
-    #     return((out, ind_prev+1), out)
-    # (out, _), _ = jax.lax.scan(f=map_arg, init=(0, lower_ceil), xs=indices)
+    # body_fun = lambda i, val: val + expr(i)
+    # out = fori_loop(lower_ceil, upper_floor+1, body_fun, 0)
     # return(out)
     indices = list(range(lower_ceil,upper_floor+1))
     out_list = jax.tree_util.tree_map(expr, indices)

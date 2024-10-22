@@ -45,7 +45,7 @@ $$
 B^-(\psi, \chi) = \sum_{n=0}^\infty\epsilon^n\sum_{m=0|1}^{m=n}B^-_{n,m}
 $$
 
-$B_\alpha$ is expanded as:
+$B_\alpha$ and $\bar{\iota}$ are expanded as:
 $$
 B_\alpha(\psi) = \sum_{n=0}^\infty\epsilon^{2n}B_{\alpha n}
 $$

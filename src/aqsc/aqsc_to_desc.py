@@ -1,6 +1,6 @@
 import numpy as np
 
-def aqsc_to_desc(na_eq, psi_max, M=6, N=8):
+def aqsc_to_desc(na_eq, psi_max, M=6, N=8, stellsym=True):
     '''
     M is 
     N is 
@@ -74,7 +74,7 @@ def aqsc_to_desc(na_eq, psi_max, M=6, N=8):
     psi = rho**2*r
     p_perp = na_eq.unknown['p_perp_coef_cp'].eval(psi, chis, phiBs).real / mu_0
     delta = na_eq.unknown['Delta_coef_cp'].eval(psi, chis, phiBs).real
-    iota = na_eq.constant['iota_coef'].eval(rho[:,0,0,]**2*r, 0, 0, sq_eps_series=True) + na_eq.get_helicity()
+    iota = na_eq.constant['iota_coef'].eval(rho[:,0,0,]**2*r, 0, 0) + na_eq.get_helicity()
 
     nu_B = phiBs - phiC
     lmbda = nu_B * iota[:,None,None]
@@ -97,7 +97,7 @@ def aqsc_to_desc(na_eq, psi_max, M=6, N=8):
         "L": L, # Resolution
         "M": M,
         "N": N,
-        "sym": True, # Stellarator symmetry
+        "sym": stellsym, # Stellarator symmetry
         "spectral_indexing ": spectral_indexing,
         "pressure" : p_perp,
         "iota" : iota,
@@ -108,8 +108,8 @@ def aqsc_to_desc(na_eq, psi_max, M=6, N=8):
     }
 
     eq = Equilibrium(**inputs)
-    eq.surface = eq.get_surface_at(rho=1)
-    eq.axis = eq.get_axis()
+    # eq.surface = eq.get_surface_at(rho=1)
+    # eq.axis = eq.get_axis()
 
     aux_dict = {
         'rho': rho, 

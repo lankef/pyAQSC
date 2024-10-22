@@ -4,7 +4,7 @@ PyAQSC expands its governing equations in the flux coordinate
 $$
 (\epsilon\equiv\sqrt{\psi}, \chi\equiv\theta-\frac{N}{M}\phi, \phi),
 $$
-where $\psi$ is the toroidal flux, $\theta$ is the poloidal angle, and $\phi$ is the toroidal angle. The coordinate transformation $\textbf{r}(\psi, \chi, \phi)$ will be self-consistently solved with other physical quantities. 
+where $\psi$ is the toroidal flux normalized by $2\pi$ ($\psi = \Psi/2\pi$. The definition of $\psi$ is identical to that in DESC.), $\theta$ is the poloidal angle, and $\phi$ is the toroidal angle. The coordinate transformation $\textbf{r}(\psi, \chi, \phi)$ will be self-consistently solved with other physical quantities. 
 
 The governing equations solved by pyAQSC are:
 

@@ -51,9 +51,9 @@ def circular_axis():
         B11c=-1.8,
         B22c=0.01, B20=0.01, B22s=0.01,
         len_phi=1000,
-        static_max_freq=(15, 20),
-        traced_max_freq=(15, 20),
-        riccati_secant_n_iter=(50, 50)
+        static_max_freq=(30, 30),
+        traced_max_freq=(30, 30),
+        riccati_secant_n_iter=(30, 30)
     ))
 
 def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
@@ -89,9 +89,9 @@ def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
     # where phi is the cartesian toroidal angle. Contains 2pi/nfp,
     # TODO: need to made static.
     mode_num = jnp.arange(RZ_max_len)*nfp
-    phi_grids = jnp.linspace(0,2*jnp.pi/nfp*(len_phi-1)/len_phi, len_phi)
-    d_phi = phi_grids[1]-phi_grids[0]
-    phi_times_mode = mode_num[:, None]*phi_grids[None, :]
+    Phi0 = jnp.linspace(0,2*jnp.pi/nfp*(len_phi-1)/len_phi, len_phi)
+    d_phi = Phi0[1]-Phi0[0]
+    phi_times_mode = mode_num[:, None]*Phi0[None, :]
 
     cos_arr = jnp.cos(phi_times_mode)
     sin_arr = jnp.sin(phi_times_mode)
@@ -115,14 +115,14 @@ def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
     axis_length = jnp.sum(d_l_d_phi) * d_phi * nfp
     dl_p = axis_length/jnp.pi/2
 
-    # l on cartesian phi grid
+    # l on cylindrical phi grid
     # Setting the first element to 0. Removing the last element.
     l_phi = jnp.cumsum(d_l_d_phi)/len_phi*jnp.pi*2/nfp
     l_phi = jnp.roll(l_phi, 1)
     l_phi = l_phi.at[0].set(0)
 
-    # The Boozer phi on cartesian phi grids.
-    varphi = l_phi/dl_p
+    # The Boozer phi on cylindrical phi grids.
+    phi_gbc = l_phi/dl_p
 
     # d_l_d_phi_wrapped = np.concatenate([d_l_d_phi, [d_l_d_phi[0]]])
     # d_l_d_phi_spline = scipy.interpolate.CubicSpline(np.linspace(0,2*np.pi/nfp, len_phi+1), d_l_d_phi_wrapped, bc_type = 'periodic')
@@ -131,7 +131,7 @@ def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
     # dphi/dl
     # dphidl = 1/d_l_d_phi
 
-    # These are cartesian vectors in R, phi, Z frame
+    # These are cylindrical vectors in R, phi, Z frame
     d_r_d_phi_cylindrical = jnp.concatenate([
         R0p,
         R0,
@@ -154,13 +154,13 @@ def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
     # ])
 
 
-    # (db0/dl on cartesian phi grid)
+    # (db0/dl on cylindrical phi grid)
     d_tangent_d_l_cylindrical = (
         -d_r_d_phi_cylindrical * d2_l_d_phi2 / d_l_d_phi \
         + d2_r_d_phi2_cylindrical
     ) / (d_l_d_phi * d_l_d_phi)
 
-    ''' Calculating axis quantities in cartesian coordinate '''
+    ''' Calculating axis quantities in cylindrical coordinate '''
     curvature = jnp.sqrt(jnp.sum(d_tangent_d_l_cylindrical**2, axis = 1))
     d_r_d_phi_cylindrical_x_d2_r_d_phi2 = jnp.cross(
         d_r_d_phi_cylindrical,
@@ -180,39 +180,40 @@ def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
     binormal_cylindrical = jnp.cross(tangent_cylindrical, normal_cylindrical)
 
     ''' Calculating axis quantities in Boozer coordinate '''
-    # Although phi_grids will be output as the Cartesian phi,
+    # Although Phi0 will be output as the cylindrical phi,
     # it can be reused as the Boozer phi grid because both 
     # uses the same uniformly spaced endpoint grids.
-    kap_p_content = jnp.interp(phi_grids, varphi, curvature, period = 2*jnp.pi/nfp)[None, :]
+    kap_p_content = jnp.interp(Phi0, phi_gbc, curvature, period = 2*jnp.pi/nfp)[None, :]
     kap_p = ChiPhiFunc(kap_p_content, nfp)
     # Note: Rodriguez's paper uses an opposite sign for tau compared to Landreman's.
-    tau_p_content = -jnp.interp(phi_grids, varphi, torsion, period = 2*jnp.pi/nfp)[None, :]
+    tau_p_content = -jnp.interp(Phi0, phi_gbc, torsion, period = 2*jnp.pi/nfp)[None, :]
     tau_p = ChiPhiFunc(tau_p_content, nfp)
 
     # Storing axis info. All quantities are identically defined to pyQSC.
-    axis_info = {}
-    axis_info['dl_p'] = dl_p # Checked
-    axis_info['kap_p'] = kap_p # Done
-    axis_info['tau_p'] = tau_p # Done
-    axis_info['varphi'] = varphi # Checked
-    axis_info['phi'] = phi_grids # Checked
-    axis_info['d_phi'] = d_phi # Grid spacing. Checked.
-    axis_info['R0'] = R0[:, 0] # Checked
-    axis_info['Z0'] = Z0[:, 0] # Checked
-    axis_info['R0p'] = R0p[:, 0] # Checked
-    axis_info['Z0p'] = Z0p[:, 0] # Checked
-    axis_info['R0pp'] = R0pp[:, 0] # Checked
-    axis_info['Z0pp'] = Z0pp[:, 0] # Checked
-    axis_info['R0ppp'] = R0ppp[:, 0] # Checked
-    axis_info['Z0ppp'] = Z0ppp[:, 0] # Checked
-    # Note to self: cartesian. (dl_p = dl/dphi (Boozer) is important in Eduardo's forumlation.)
-    axis_info['d_l_d_phi'] = d_l_d_phi[:, 0] # Checked
-    axis_info['axis_length'] = axis_length # Checked
-    axis_info['curvature'] = curvature # Checked
-    axis_info['torsion'] = torsion # Checked
-    axis_info['tangent_cylindrical'] = tangent_cylindrical # axis=1 is R, phi, Z, Checked
-    axis_info['normal_cylindrical'] = normal_cylindrical # axis=1 is R, phi, Z, Checked
-    axis_info['binormal_cylindrical'] = binormal_cylindrical # axis=1 is R, phi, Z, Checked
+    axis_info = {
+        'dl_p': dl_p, # Checked
+        'kap_p': kap_p, # Done
+        'tau_p': tau_p, # Done
+        'phi_gbc': phi_gbc, # Boozer phi
+        'Phi0': Phi0, # Cylindrical Phi
+        'R0': R0[:, 0], # Checked
+        'Z0': Z0[:, 0], # Checked
+        # Derivatives of R and Z in term of Phi
+        'R0p': R0p[:, 0], # Checked
+        'Z0p': Z0p[:, 0], # Checked
+        'R0pp': R0pp[:, 0], # Checked
+        'Z0pp': Z0pp[:, 0], # Checked
+        'R0ppp': R0ppp[:, 0], # Checked
+        'Z0ppp': Z0ppp[:, 0], # Checked
+        'd_l_d_Phi_cylindrical': d_l_d_phi[:, 0], # Checked
+        'axis_length': axis_length, # Checked
+        'curvature': curvature, # Checked
+        'torsion': torsion, # Checked
+        'tangent_cylindrical': tangent_cylindrical, # axis=1 is R, phi, Z, Checked
+        'normal_cylindrical': normal_cylindrical, # axis=1 is R, phi, Z, Checked
+        'binormal_cylindrical': binormal_cylindrical, # axis=1 is R, phi, Z, Checked
+                # 'd_phi': d_phi, # Grid spacing. Checked.
+    }
     return(axis_info)
 
 def leading_orders_legacy(
@@ -261,22 +262,22 @@ def leading_orders_legacy(
     eta = -B11c/(2*B0) # Defined for simple notation. (Rodriguez 2021, eq. 14)
 
     ''' 1st order quantities '''
-    iota_coef = ChiPhiEpsFunc([iota_0], nfp)
-    B_denom_coef_c = ChiPhiEpsFunc([B0, B1, B2], nfp)
-    B_alpha_coef = ChiPhiEpsFunc([B_alpha0, B_alpha_1], nfp)
-    B_theta_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), ChiPhiFuncSpecial(0)], nfp)
-    B_psi_coef_cp = ChiPhiEpsFunc([], nfp)
-    Delta_coef_cp = ChiPhiEpsFunc([Delta0], nfp)
-    p_perp_coef_cp = ChiPhiEpsFunc([p0], nfp)
-    Y_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0)], nfp)
-    Z_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), ChiPhiFuncSpecial(0)], nfp)
+    iota_coef = ChiPhiEpsFunc([iota_0], nfp, True)
+    B_denom_coef_c = ChiPhiEpsFunc([B0, B1, B2], nfp, False)
+    B_alpha_coef = ChiPhiEpsFunc([B_alpha0, B_alpha_1], nfp, True)
+    B_theta_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), ChiPhiFuncSpecial(0)], nfp, False)
+    B_psi_coef_cp = ChiPhiEpsFunc([], nfp, False)
+    Delta_coef_cp = ChiPhiEpsFunc([Delta0], nfp, False)
+    p_perp_coef_cp = ChiPhiEpsFunc([p0], nfp, False)
+    Y_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0)], nfp, False)
+    Z_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), ChiPhiFuncSpecial(0)], nfp, False)
     # X1 (Rodriguez 2021, eq. 14)
     X11c = eta/kap_p
     X1 = ChiPhiFunc(jnp.array([
         jnp.zeros_like(X11c.content[0]), # sin coeff is zero
         X11c.content[0],
     ]), nfp, trig_mode = True).filter(traced_max_freq[0])
-    X_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), X1], nfp)
+    X_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), X1], nfp, False)
     # p_1 and Delta1 has the same formula as higher orders.
     p_1 = iterate_p_perp_n(1,
         B_theta_coef_cp,
@@ -467,7 +468,7 @@ def leading_orders_magnetic(
     static_max_freq,
     traced_max_freq):
     axis_info = get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi)
-    leading_orders_magnetic_from_axis(
+    return(leading_orders_magnetic_from_axis(
         nfp=nfp, # Field period
         axis_info=axis_info,
         iota_0=iota_0, # On-axis rotational transform
@@ -479,7 +480,7 @@ def leading_orders_magnetic(
         len_phi=len_phi,
         static_max_freq=static_max_freq,
         traced_max_freq=traced_max_freq,
-    )
+    ))
 
 def leading_orders_magnetic_from_axis(
     nfp, # Field period
@@ -521,20 +522,20 @@ def leading_orders_magnetic_from_axis(
     eta = -B11c/(2*B0) # Defined for simple notation. (Rodriguez 2021, eq. 14)
 
     ''' 1st order quantities '''
-    iota_coef = ChiPhiEpsFunc([iota_0], nfp)
-    B_denom_coef_c = ChiPhiEpsFunc([B0, B1, B2], nfp)
-    B_alpha_coef = ChiPhiEpsFunc([B_alpha0, B_alpha_1], nfp)
-    B_theta_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), ChiPhiFuncSpecial(0)], nfp)
-    B_psi_coef_cp = ChiPhiEpsFunc([], nfp)
-    Y_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0)], nfp)
-    Z_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), ChiPhiFuncSpecial(0)], nfp)
+    iota_coef = ChiPhiEpsFunc([iota_0], nfp, True)
+    B_denom_coef_c = ChiPhiEpsFunc([B0, B1, B2], nfp, False)
+    B_alpha_coef = ChiPhiEpsFunc([B_alpha0, B_alpha_1], nfp, True)
+    B_theta_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), ChiPhiFuncSpecial(0)], nfp, False)
+    B_psi_coef_cp = ChiPhiEpsFunc([], nfp, False)
+    Y_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0)], nfp, False)
+    Z_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), ChiPhiFuncSpecial(0)], nfp, False)
     # X1 (Rodriguez 2021, eq. 14)
     X11c = eta/kap_p
     X1 = ChiPhiFunc(jnp.array([
         jnp.zeros_like(X11c.content[0]), # sin coeff is zero
         X11c.content[0],
     ]), nfp, trig_mode = True).filter(traced_max_freq[0])
-    X_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), X1], nfp)
+    X_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), X1], nfp, False)
     # p_1 and Delta1 has the same formula as higher orders.
 
     '''
@@ -768,21 +769,21 @@ def leading_orders_from_axis(
     # - B_theta_20_avg first appears in the B_theta ODE.
     # So both Delta1 and the B_theta ODE need to be packaged 
     # for Secant iteration.
-    B_denom_coef_c = ChiPhiEpsFunc([B0, B1, B2], nfp)
-    B_alpha_coef = ChiPhiEpsFunc([B_alpha0, B_alpha_1], nfp)
-    B_theta_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), ChiPhiFuncSpecial(0)], nfp)
-    B_psi_coef_cp = ChiPhiEpsFunc([], nfp)
-    Delta_coef_cp = ChiPhiEpsFunc([Delta0], nfp)
-    p_perp_coef_cp = ChiPhiEpsFunc([p0], nfp)
-    Y_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0)], nfp)
-    Z_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), ChiPhiFuncSpecial(0)], nfp)
+    B_denom_coef_c = ChiPhiEpsFunc([B0, B1, B2], nfp, False)
+    B_alpha_coef = ChiPhiEpsFunc([B_alpha0, B_alpha_1], nfp, True)
+    B_theta_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), ChiPhiFuncSpecial(0)], nfp, False)
+    B_psi_coef_cp = ChiPhiEpsFunc([], nfp, False)
+    Delta_coef_cp = ChiPhiEpsFunc([Delta0], nfp, False)
+    p_perp_coef_cp = ChiPhiEpsFunc([p0], nfp, False)
+    Y_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0)], nfp, False)
+    Z_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), ChiPhiFuncSpecial(0)], nfp, False)
     # X1 (Rodriguez 2021, eq. 14)
     X11c = eta/kap_p
     X1 = ChiPhiFunc(jnp.array([
         jnp.zeros_like(X11c.content[0]), # sin coeff is zero
         X11c.content[0],
     ]), nfp, trig_mode = True).filter(traced_max_freq[0])
-    X_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), X1], nfp)
+    X_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), X1], nfp, False)
     # p1 and Delta1 has the same formula as higher orders.
     # p1 is not dependent on iota0. (higher order has iota 
     # dependence, though)
@@ -794,7 +795,7 @@ def leading_orders_from_axis(
         B_denom_coef_c,
         p_perp_coef_cp,
         Delta_coef_cp,
-        ChiPhiEpsFunc([0], nfp) # No iota dependence at leading order.
+        ChiPhiEpsFunc([0], nfp, True) # No iota dependence at leading order.
     ).filter(traced_max_freq[0])
     p_perp_coef_cp = p_perp_coef_cp.append(p1)
 
@@ -858,14 +859,13 @@ def leading_orders_from_axis(
     section solves II, m=0 with spectral method given average B_theta[2,0], and
     then solves the linear 2nd order homogenous form of D3 for Yc[1,1].
     '''
-    short_length = static_max_freq[0]*2
     def Delta1_from_iota(iota_temp):
         # First appearance of iota0
         # Delta1 is dependent on iota0.
         # Sinde Delta comes from an ODE solve, it's 
         # linearly dependent on iota but the dependence 
         # doesn't have a easily obtainable symbolic formula.
-        iota_coef = ChiPhiEpsFunc([iota_temp], nfp)
+        iota_coef = ChiPhiEpsFunc([iota_temp], nfp, True)
         Delta1 = iterate_delta_n_0_offset(
             1,
             B_denom_coef_c,
@@ -996,7 +996,6 @@ def leading_orders_from_axis(
         riccati_u_chiphifunc = ChiPhiFunc(riccati_u[None, :], nfp)
         Y11c_temp = -(riccati_u_chiphifunc.dphi()/(q2*riccati_u_chiphifunc))
         # 4th order BC matching
-        delta_phi = np.pi*2/nfp/len_phi
         return(
             jnp.max(jnp.abs((q0+q1*Y11c_temp+q2*Y11c_temp**2 - Y11c_temp.dphi()).content)), 
             Y11c_temp.content[0]
@@ -1142,9 +1141,9 @@ def leading_orders_from_axis(
 
     # Giving value to iota
     if solve_B_theta_20_avg:
-        iota_coef = ChiPhiEpsFunc([iota_0], nfp)
+        iota_coef = ChiPhiEpsFunc([iota_0], nfp, True)
     else:
-        iota_coef = ChiPhiEpsFunc([x_secant_list2[jnp.argmin(f_list2)-1]], nfp)
+        iota_coef = ChiPhiEpsFunc([x_secant_list2[jnp.argmin(f_list2)-1]], nfp, True)
     if solve_B_theta_20_avg:
         print('Solving for average B_{\\theta20} self-consistently:')
         print('\\bar{B}_{\\theta20} =', x_secant_list2[jnp.argmin(f_list2)-1])

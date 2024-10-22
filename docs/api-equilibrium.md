@@ -10,7 +10,6 @@ All unknowns solved by pyAQSC. Contains keys:
 - `'Z_coef_cp' : ChiPhiEpsFunc` - $Z$. At even order $n$ at all time.
 - `'B_psi_coef_cp' : ChiPhiEpsFunc` - $B_{\psi}$. At even order $n-2$ at all time.
 - `'B_theta_coef_cp' : ChiPhiEpsFunc` - $B_{\theta}$. At even order $n$ at all time.
-- `'iota_coef' : ChiPhiEpsFunc` - $\bar{\iota}$. At order $(n-2)/2$ at all time.
 - `'p_perp_coef_cp' : ChiPhiEpsFunc` - $p_\perp$. At even order $n$ at all time.
 - `'Delta_coef_cp' : ChiPhiEpsFunc` - $\Delta$. At even order $n$ at all time.
 
@@ -19,6 +18,7 @@ All constants (inputs or calculated from inputs). Contains keys:
 
 - `'B_denom_coef_c' : ChiPhiEpsFunc` - $B^-$. At even order $n$ at all time.
 - `'B_alpha_coef' : ChiPhiEpsFunc` - $B_{\alpha}$. At order $n/2$ at all time.
+- `'iota_coef' : ChiPhiEpsFunc` - $\bar{\iota}$. At order $(n-2)/2$ at all time.
 - `'kap_p' : ChiPhiFunc` - $\kappa$.
 - `'dl_p' : float` - $dl/d\phi$.
 - `'tau_p' : ChiPhiFunc` - $\tau$.
@@ -26,11 +26,10 @@ All constants (inputs or calculated from inputs). Contains keys:
 ### `self.axis_info : {string:jax.numpy.array}` (dict of traced) 
 Axis information, not used in further iteration. The naming convention is the same as in [pyQSC](https://landreman.github.io/pyQSC/outputs.html#outputs). Contains keys:
 
-- `'varphi' : array` - The Boozer toroidal angle $\phi$ on a uniformly spaced grid of cylindrical toroidal angle $\Phi=0, \frac{2\pi}{n_{fp}}\frac{1}{n_{grid}}, ..., \frac{2\pi}{n_{fp}}\frac{n_{grid}}{n_{grid}}$.
-- `'phi' : array` - A uniformly spaced grid of cylindrical toroidal angle $\Phi=0, \frac{2\pi}{n_{fp}}\frac{1}{n_{grid}}, ..., \frac{2\pi}{n_{fp}}\frac{n_{grid}}{n_{grid}}$.
-- `'d_phi' : float` - $\Phi$ grid spacing
-- `'R0' : array` - $R_0$, axis shape in cylindrical coordinate.
-- `'Z0' : array` - $Z_0$, axis shape in cylindrical coordinate.
+- `'phi_gbc' : array` - The Boozer toroidal angle $\phi$ on a uniformly spaced grid of cylindrical toroidal angle $\Phi=0, \frac{2\pi}{n_{fp}}\frac{1}{n_{grid}}, ..., \frac{2\pi}{n_{fp}}\frac{n_{grid}}{n_{grid}}$.
+- `'Phi0' : array` - $\Phi_0$, the axis shape in cylindrical coordinate. A uniformly spaced grid of cylindrical toroidal angle $\Phi=0, \frac{2\pi}{n_{fp}}\frac{1}{n_{grid}}, ..., \frac{2\pi}{n_{fp}}\frac{n_{grid}}{n_{grid}}$.
+- `'R0' : array` - $R_0$, the axis shape in cylindrical coordinate.
+- `'Z0' : array` - $Z_0$, the axis shape in cylindrical coordinate.
 - `'R0p' : array` - $dR_0/d\Phi$.
 - `'Z0p' : array` - $dZ_0/d\Phi$.
 - `'R0pp' : array` - $d^2Z_0/d\Phi^2$.
@@ -118,12 +117,12 @@ Returns:
 
 ## Functions for output
 
-### `aqsc.Equilibrium.get_eps_crit(n_max=float('inf'), n_grid_chi=100, n_grid_phi=100, eps_cap = 2.0, n_newton_iter = 10)`
-### `aqsc.Equilibrium.get_psi_crit(n_max=float('inf'), n_grid_chi=100, n_grid_phi=100, eps_cap = 2.0, n_newton_iter = 10)`
+### `aqsc.Equilibrium.get_psi_crit(n_max=float('inf'), n_grid_chi=100, n_grid_phi_skip=10, psi_cap = None, n_newton_iter = 10)`
+### `aqsc.Equilibrium.get_eps_crit(n_max=float('inf'), n_grid_chi=100, n_grid_phi_skip=10, eps_cap = None, n_newton_iter = 10)`
 Estimates the critical $\epsilon=\sqrt{\psi}$ or $\psi$ where flux surface self-intersects
-by numerically finding the zero of $\sqrt{g}(\epsilon, \chi, \phi)$ with the smallest $\epsilon$ or $\psi$ using Newton's method. At each search step, $\sqrt{g}(\epsilon_i, \chi, \phi)$ is evaluated on a `n_grid_chi`x`n_grid_phi` grid.
+by numerically the smallest $\epsilon$ or $\psi$ with $\min_{\chi, \phi}\frac{\partial\bold{r}}{\partial\psi}\cdot(\frac{\partial\bold{r}}{\partial\chi}\times\frac{\partial\bold{r}}{\partial\phi})\leq0$. Uses Newton's method. This function evaluates the Jacobian on a grid of $\chi$ and $\phi$ to find the minimum. The $\chi$ grid has `n_grid_chi` uniformly spaced points, and the `\phi` grid takes every `n_grid_phi_skip` element from `self.axis_info['phi_gbc']` to reduce interpolation error.
 
-This function can be slow to JIT compile. When good accuracy is not required, reducing `n_newton_iter`, `n_grid_chi` and `n_grid_phi` can substantially increase the compile speed.
+This function can be slow to JIT compile. When good accuracy is not required, reducing `n_newton_iter`, `n_grid_chi` and increasing `n_grid_phi_skip` can substantially increase the compile speed.
 
 JIT compiling the function setting `eps_cap` as traced will not cause errors, but it increases compile time and is not recommended.
 
@@ -134,15 +133,14 @@ Parameters:
 - `n_grid_chi, n_grid_phi : int` (static) - Grid size to evaluate Jacobian $\sqrt{g}$ on. 
 The critical point occurs when $min(\sqrt{g}\leq0)$.
 
-- `eps_cap : float` (static) - An initial guess of an epsilon>epsilon_crit used in Newton's 
-method. Need to be beyond t
+- `psi_cap = None` (static) - Initial guess for $\psi_{crit}$. By default, uses $B_{axis}R^2_0$.
 
 - `n_newton_iter : int` (static) - Maximum number of steps in Newton's method.
 higher number gives better acuracy but is slower to jit.
 
 Returns: 
 
-- `(eps_crit, jacobian_residue)`: $\epsilon_{crit}$ and the flux surface min of the Jacobian at eps_crit.
+- `(psi_crit, jacobian_residue)` (or `(eps_crit, jacobian_residue)`): The $\psi_{crit}$ (or $\epsilon_{crit}$) and $\min_{\chi, \phi}\frac{\partial\bold{r}}{\partial\psi}\cdot(\frac{\partial\bold{r}}{\partial\chi}\times\frac{\partial\bold{r}}{\partial\phi})$ at $\psi_{crit}$ (or $\epsilon_{crit}$).
 
 ### `aqsc.Equilibrium.get_order()`
 Gets the highest known order $n$ of `self`.
@@ -160,21 +158,23 @@ Returns:
 - An int $n$.
 
 ### `aqsc.Equilibrium.flux_to_frenet(psi, chi, phi, n_max=float('inf'))`
-### `aqsc.Equilibrium.flux_to_cylindrical(psi, chi, phi, n_max=float('inf'))`
 ### `aqsc.Equilibrium.flux_to_xyz(psi, chi, phi, n_max=float('inf'))`
-Vectorized functions that transforms points in the flux coordinte $(\psi, \chi, \phi)$ into points in the Frenet coordinate $(\textit{curvature}, \textit{binormal}, \textit{tangent})$, cylindrical coordinate $(R, \Phi, Z)$, or Cartesian coordinate $(x, y, z)$ using the self-consistently solved coordinate transformations $X, Y, Z(\psi, \chi, \phi)$. ($Z$ here is different from $Z$ in the cylindrical coordinate. See [background](background-solves-for.md) for its definition.)
+### `aqsc.Equilibrium.flux_to_cylinder(psi, chi, phi, n_max=float('inf'))`
+Vectorized functions that transforms points in the flux coordinte $(\psi, \chi, \phi)$ into points in the Frenet coordinate $(\hat\kappa, \hat\tau, \hat b)$, Cartesian coordinate $(\hat X, \hat Y, \hat Z)$, or cylindrical coordinate $(\hat R, \hat\Phi, \hat Z)$ using the self-consistently solved coordinate transformations $X, Y, Z(\psi, \chi, \phi)$. ($Z$ here is the inverse coordinate transform from the GBC to the Frenet frame, and is unrelated to $\hat Z$ in the cylindrical coordinate. See [background](background-solves-for.md) for more.)
+
+**We strongly advise evaluating the coordinate transformation on `phi=self.axis_info['phi_gbc']` to decrease interpolation error due to `jnp.interp`!**
 
 Parameters:
 
 - `psi, chi, phi : array or scalar` (traced) - Points in the flux coordinate.
-- `n_max : scalar` (static) - Max order $n$ of the coordinate transform $X, Y, Z$ to use. If larger than the highest known order, uses all known orders. By default uses all known orders.
+- `n_max : scalar` (static) - Max order $n$ of the inverse coordinate transform $X, Y, Z$ to use. If larger than the highest known order, uses all known orders. By default uses all known orders.
 
 Returns:
 
-- 3 `jnp.arrays`. `(curvature, binormal, tangent)`, `(R, Phi, Z)` or `(x, y, z)`
+- 3 `jnp.arrays`. `(curvature, binormal, tangent)` or `(x, y, z)`
 
-### `aqsc.Equilibrium.frenet_basis_phi(phi)`
-A vectorized function that evaluates the axis shape $\textbf{r}_0[l(\phi)]$ and Frenet basis $(\hat{\boldsymbol{\kappa}}_0, \hat{\boldsymbol{\tau}}_0, \hat{\boldsymbol{b}}_0)[l(\phi)]$ in the cylindrical coordinate $(R, \Phi, Z)$ at a given $\phi$.
+### `aqsc.Equilibrium.frenet_basis_phi(phi=None)`
+A vectorized function that evaluates the axis shape $\textbf{r}_0[l(\phi)]$ and Frenet basis $(\hat{\boldsymbol{\kappa}}_0, \hat{\boldsymbol{\tau}}_0, \hat{\boldsymbol{b}}_0)[l(\phi)]$ in the cylindrical coordinate $(\hat X, \hat Y, \hat Z)$ at a given $\phi$. By default, `phi` is `None`, and the method uses `self.axis_info['phi_gbc']` as evaluation points to minimize interpolation error.
 
 Parameters:
 
@@ -182,18 +182,42 @@ Parameters:
   
 Returns:
 
-- `axis_r0_phi_R : jnp.array`
-- `axis_r0_phi_Phi : jnp.array`
+- `phi : jnp.array` - The phi grid points. Returns the input $\phi$ if it is not `None`. Otherwise, retrns `self.axis_info['phi_gbc']`.
+- `axis_r0_phi_X : jnp.array`
+- `axis_r0_phi_Y : jnp.array`
 - `axis_r0_phi_Z : jnp.array`
-- `tangent_phi_R : jnp.array`
-- `tangent_phi_Phi : jnp.array`
+- `tangent_phi_X : jnp.array`
+- `tangent_phi_Y : jnp.array`
 - `tangent_phi_Z : jnp.array`
-- `normal_phi_R : jnp.array`
-- `normal_phi_Phi : jnp.array`
+- `normal_phi_X : jnp.array`
+- `normal_phi_Y : jnp.array`
 - `normal_phi_Z : jnp.array`
-- `binormal_phi_R : jnp.array`
-- `binormal_phi_Phi : jnp.array`
+- `binormal_phi_X : jnp.array`
+- `binormal_phi_Y : jnp.array`
 - `binormal_phi_Z : jnp.array`
+
+### `aqsc.Equilibrium.get_jacobian_coord(psi, chi, phi, n_max)`
+### `aqsc.Equilibrium.get_jacobian_coord_eps(psi, chi, phi, n_max)`
+### `aqsc.Equilibrium.get_jacobian_nae(psi, chi, n_max)`
+### `aqsc.Equilibrium.get_jacobian_nae_eps(psi, chi, n_max)`
+Calculates
+$$
+J_\text{coord}(\psi, \chi, \psi) \equiv \frac{\partial\textbf{r}}{\partial\psi}\cdot\left(\frac{\partial\textbf{r}}{\partial\chi}\times\frac{\partial\textbf{r}}{\partial\phi}\right)
+$$
+and
+$$
+J_\text{NAE}(\psi, \chi) \equiv \frac{B_\alpha(\psi)}{|B|^2(\psi, \chi)}.
+$$
+As described in the paper, the difference between the two quantities increases at increasing $\psi$. We strongly recommend evaluating at `self.axis_info['phi_gbc']` to reduce interpolation error. The current implementation doesn't work at $\psi=0$. 
+
+Parameters:
+
+- `psi, chi, phi : array or scalar` (traced) - Points in the flux coordinate.
+- `n_max : scalar` (static) - Max order $n$ to use. If larger than the highest known order, uses all known orders. Uses all known orders by default.
+  
+Returns:
+
+- `jacobian : jnp.array`
 
 ### `aqsc.Equilibrium.check_order_consistency()`
 Checks whether all items in `self.unknown` and `self.constant` has consistent highest known order. If not, throws `AttributeError`'s. **Cannot be JIT compiled.**
@@ -216,21 +240,20 @@ Returns:
 - `II : ChiPhiFunc` (traced) - The residual of the force balance equation III.
 
 ### `aqsc.Equilibrium.display_order(n:int)`
-Plots all quantities at order $n$. By default, display flux surfaces up to $\psi=0.8\psi_{crit}$.
+Plots all quantities at order $n$. By default, display flux surfaces up to $\psi=\psi_{crit}$.
 
 Parameters:
 
 - `n : int` - Order to plot.
 
-### `aqsc.Equilibrium.display(psi_max:float=0.03)`
-Plots a boundary with given $\psi$ and some flux surfaces.
+### `aqsc.Equilibrium.display(psi_max=None)`
+### `aqsc.Equilibrium.display_wireframe(psi_max=None)`
+Plots a boundary with given $\psi$ and some additional features. By default, plots the $\psi = \psi_\text{crit}$ surface.
 
 Parameters:
 
 - `psi_max : float` - Max $\psi$ to plot to. 
 
+Returns:
 
-Parameters:
-
-- `n_unknown : int` (static) - Order to plot.
-
+- `(fig, ax)`

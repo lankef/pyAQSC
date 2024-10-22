@@ -16,7 +16,6 @@ run the main code, but contains source expressions much of code is parsed from.
 ## Repository structure and files
 ```
 ├── README.MD
-├── test_data_eduardo/              -> Known leading order terms for some equilibria.
 ├── docs/                           -> Documentations
 ├── dist/                           -> Built python package
 ├── examples/                       -> Jupyter notebooks with use cases for the code.

@@ -33,6 +33,9 @@ To use pyAQSC, simply run
 ## Contact
 Please contact [Lanke Fu](mailto:ffu@pppl.gov) at PPPL for questions and bug reports.
 
+## Caution
+The accuracy bottleneck of the code is in the `jnp.interp` calls and axis length calculations in `aqsc.get_axis_info`, as well as the coordinate transforms in `aqsc.Equilibrium`.
+
 ## References
 1. [Weakly Quasisymmetric Near-Axis Solutions to all Orders](https://doi.org/10.1063/5.0076583)
 2. [Solving the problem of overdetermination of quasisymmetric equilibrium solutions by near-axis expansions. I. Generalized force balance](https://doi.org/10.1063/5.0027574)

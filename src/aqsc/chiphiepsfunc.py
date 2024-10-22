@@ -12,9 +12,10 @@ from .chiphifunc import *
 # Initialization:
 # ChiPhiEpsFunc([X0, X1, X2, ... Xn])
 class ChiPhiEpsFunc:
-    def __init__(self, list:list, nfp:int, check_consistency:bool=False): # nfp-dependent!!
+    def __init__(self, list:list, nfp:int, square_eps_series:bool, check_consistency:bool=False): # nfp-dependent!!
         self.chiphifunc_list = list
         self.nfp = nfp
+        self.square_eps_series = square_eps_series
         if check_consistency:
             self.chiphifunc_list = self.check_nfp_consistency()
 
@@ -22,7 +23,8 @@ class ChiPhiEpsFunc:
     def _tree_flatten(self):
         children = (self.chiphifunc_list,)  # arrays / dynamic values
         aux_data = {
-            'nfp': self.nfp
+            'nfp': self.nfp,
+            'square_eps_series': self.square_eps_series
         }  # static values
         return (children, aux_data)
 
@@ -76,11 +78,11 @@ class ChiPhiEpsFunc:
             # Mismatched nfp. If item is special then we still append it directly
             # to preserve the error message
             if item.nfp!=self.nfp and not item.is_special():
-                return(ChiPhiEpsFunc(self.chiphifunc_list+[ChiPhiFuncSpecial(-14)], self.nfp))
+                return(ChiPhiEpsFunc(self.chiphifunc_list+[ChiPhiFuncSpecial(-14)], self.nfp, self.square_eps_series))
         elif jnp.array(item).ndim!=0:
             # Jax scalars are 0-d DeviceArrays.
-            return(ChiPhiEpsFunc(self.chiphifunc_list+[ChiPhiFuncSpecial(-14)], self.nfp))
-        return(ChiPhiEpsFunc(self.chiphifunc_list+[item], self.nfp))
+            return(ChiPhiEpsFunc(self.chiphifunc_list+[ChiPhiFuncSpecial(-14)], self.nfp, self.square_eps_series))
+        return(ChiPhiEpsFunc(self.chiphifunc_list+[item], self.nfp, self.square_eps_series))
 
     # @partial(jit, static_argnums=(1,))
     def zero_append(self, n=1):
@@ -97,7 +99,7 @@ class ChiPhiEpsFunc:
         return(self)
         # zeros = [ChiPhiFuncSpecial(0)]*n
         # # we know the new element has consistent nfp.
-        # return(ChiPhiEpsFunc(self.chiphifunc_list+zeros, self.nfp))
+        # return(ChiPhiEpsFunc(self.chiphifunc_list+zeros, self.nfp, self.square_eps_series))
 
     # @partial(jit, static_argnums=(1,))
     def mask(self, n):
@@ -116,9 +118,9 @@ class ChiPhiEpsFunc:
                  #self.chiphifunc_list[:n+1]+[ChiPhiFuncSpecial(-1)]*n_diff,
                  self.chiphifunc_list[:n+1]+[ChiPhiFuncSpecial(0)]*n_diff,
                  self.nfp,
-                 False
+                 self.square_eps_series
              ))
-        return(ChiPhiEpsFunc(self.chiphifunc_list[:n+1], self.nfp))
+        return(ChiPhiEpsFunc(self.chiphifunc_list[:n+1], self.nfp, self.square_eps_series))
 
     # Cannot be jitted. The formula involvng len(traced) need to be
     # substituted into other jitted functions 'symbolically'.
@@ -142,15 +144,29 @@ class ChiPhiEpsFunc:
         Make a ChiPhiFunc with zero elements with the same order
         and nfp as another.
         '''
-        return(ChiPhiEpsFunc([ChiPhiFuncSpecial(0)]*(other.get_order()+1), other.nfp))
+        return(ChiPhiEpsFunc([ChiPhiFuncSpecial(0)]*(other.get_order()+1), other.nfp, other.square_eps_series))
     
     ''' Evaluation '''
+    def dpsi(self):
+        deps_result_list = self.deps().chiphifunc_list
+        new_chiphifunc_list = [ChiPhiFuncSpecial(0)]
+        for i in range(len(deps_result_list)):
+            new_chiphifunc_list.append(2 * deps_result_list[i])
+        return(ChiPhiEpsFunc(new_chiphifunc_list, self.nfp, False))
+
     def deps(self):
+        if self.square_eps_series:
+            list_to_shift = []
+            for i in range(len(self.chiphifunc_list)):
+                list_to_shift.append(self.chiphifunc_list[i])
+                list_to_shift.append(ChiPhiFuncSpecial(0))
+        else:
+            list_to_shift = self.chiphifunc_list
         new_chiphifunc_list = []
-        for i in range(len(self.chiphifunc_list)-1):
+        for i in range(len(list_to_shift)-1):
             order_i = i+1
-            new_chiphifunc_list.append(order_i*self.chiphifunc_list[order_i])
-        return(ChiPhiEpsFunc(new_chiphifunc_list, self.nfp))
+            new_chiphifunc_list.append(order_i*list_to_shift[order_i])
+        return(ChiPhiEpsFunc(new_chiphifunc_list, self.nfp, False))
     
     def dchi_or_phi(self, chi_mode):
         new_chiphifunc_list = []
@@ -165,7 +181,7 @@ class ChiPhiEpsFunc:
                 new_chiphifunc_list.append(ChiPhiFuncSpecial(0))
             else:
                 new_chiphifunc_list.append(ChiPhiFuncSpecial(-14))
-        return(ChiPhiEpsFunc(new_chiphifunc_list, self.nfp))
+        return(ChiPhiEpsFunc(new_chiphifunc_list, self.nfp, self.square_eps_series))
 
     def dchi(self):
         return(self.dchi_or_phi(True))
@@ -173,11 +189,14 @@ class ChiPhiEpsFunc:
     def dphi(self):
         return(self.dchi_or_phi(False))
 
-    def eval(self, psi, chi, phi, sq_eps_series:bool=False, n_max=float('inf')):
-        if sq_eps_series:
-            power_arg = psi
+    def eval(self, psi, chi, phi, n_max=float('inf')):
+        return(self.eval_eps(jnp.sqrt(psi), chi, phi, n_max=n_max))
+
+    def eval_eps(self, eps, chi, phi, n_max=float('inf')):
+        if self.square_eps_series:
+            power_arg = eps**2
         else:
-            power_arg = jnp.sqrt(psi)
+            power_arg = eps
         out = 0
         for n in range(min(len(self.chiphifunc_list), n_max+1)):
             item = self.chiphifunc_list[n]
@@ -206,7 +225,7 @@ class ChiPhiEpsFunc:
             else:
                 string = string + ', '
             string += str(item)
-        string = string + '], nfp=' +str(self.nfp)
+        string = string + '], nfp=' + str(self.nfp) + ', square_eps_series=' + str(self.square_eps_series)
         return(string)
 
     ''' Saving and loading '''
@@ -241,20 +260,8 @@ class ChiPhiEpsFunc:
                     chiphifunc_list.append(item)
             else:
                 chiphifunc_list.append(ChiPhiFunc(item, nfp))
-        out_chiphiepsfunc = ChiPhiEpsFunc(chiphifunc_list, nfp)
+        out_chiphiepsfunc = ChiPhiEpsFunc(chiphifunc_list, nfp, False)
         return(out_chiphiepsfunc)
-    
-# Replaces all zeros with ChiPhiFunc(nfp=0). Cannot be jitted.
-def ChiPhiEpsFunc_remove_zero(list:list, nfp:int, check_consistency:bool=False):
-    for i in range(len(list)):
-        item = list[i]
-        if isinstance(item, ChiPhiFunc):
-            if jnp.all(item.content==0):
-                list[i] = ChiPhiFuncSpecial(0)
-        elif jnp.array(item).ndim==0:
-            if item==0:
-                list[i] = ChiPhiFuncSpecial(0)
-    return(ChiPhiEpsFunc(list, nfp, check_consistency))
 
 # For JAX use
 tree_util.register_pytree_node(ChiPhiEpsFunc,
