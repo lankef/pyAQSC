@@ -32,7 +32,7 @@ All grid values must be provided at $\phi=0, \frac{1}{n_\text{grid}}\frac{2\pi}{
 Parameters:
 
 - `nfp : int` (static) - The number of field period.
-- `Rc, Rs, Zc, Zs : list(float)` (traced) - $sin(i\Phi)$, $cos(i\Phi)$ coefficients of axis shape $R_0$ and $Z_0$ w.r.t. cylindrical $\Phi$. The $i$-th component is the $i$-th mode coefficient.
+- `Rc, Rs, Zc, Zs : list(float)` (traced) - $sin(i N_{fp}\Phi)$, $cos(i N_{fp}\Phi)$ coefficients of axis shape $R_0$ and $Z_0$ w.r.t. cylindrical $\Phi$. The $i$-th component is the $i$-th mode coefficient.
 - `p0 : array` (traced) - The on-axis pressure as a function of general Boozer coordinate angle $\phi$ in one field period on grids. 
 - `Delta_0_avg : float` (traced) - The average on-axis anisotropy.
 - `B_theta_20_avg : float` (traced) - The average $\chi$-independent component of $\bar{B}_{\theta 2}$.

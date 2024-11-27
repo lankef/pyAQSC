@@ -9,6 +9,8 @@ F(\psi, \chi, \phi)\\
 =\sum_{n=0}^{n_{max}}\epsilon^n\sum_{m=0|1}^n e^{im} F_{n,m}(\phi) + e^{-im} F_{n,-m}(\phi).
 $$
 
+`ChiPhiEpsFunc` supports `+, -, *` with scalars, `ChiPhiFunc`s and `ChiPhiEpsFunc`s.
+
 ## Class attributes
 ### `self.chiphifunc_list : int` (list of traced)
 The list containing all power coefficients. A power coefficient can be a scalar or a `ChiPhiFunc.`
@@ -142,6 +144,13 @@ Produces a `ChiPhiFunc(nfp=0)`-filled ChiPhiEpsFunc with the same $n$ as another
 Returns:
 
 - A `ChiPhiEpsFunc`.
+
+### `aqsc.ChiPhiEpsFunc.remove_square(self)`
+If `self` represents an even power series, converts `self` to a typical power series.
+
+Returns:
+
+- A `ChiPhiEpsFunc(square_eps_series=False)`.
 
 ### `aqsc.ChiPhiEpsFunc.__str__(self)`
 Overrides str(aqsc.ChiPhiEpsFunc). Produces a string summarizing all elements in `self.chiphifunc_list`.

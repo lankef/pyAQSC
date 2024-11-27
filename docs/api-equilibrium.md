@@ -115,7 +115,37 @@ Parameters:
 Returns: 
 - An `aqsc.Equilibrium`.
 
-## Functions for output
+## Functions for calculating physical quantities
+
+### `aqsc.Equilibrium.covariant_basis()`
+Calculates the covariant basis of the equilibrium's GBC:
+$$
+\frac{\partial\bold{r}}{\partial\epsilon}, \frac{\partial\bold{r}}{\partial\chi}, \frac{\partial\bold{r}}{\partial\phi}.
+$$
+
+Returns:
+
+- `deps_r_x` - `ChiPhiEpsFunc`, the $x$ component of `\frac{\partial\bold{r}}{\partial\epsilon}`
+- `deps_r_y` - `ChiPhiEpsFunc`, the $y$ component of `\frac{\partial\bold{r}}{\partial\epsilon}`
+- `deps_r_z` - `ChiPhiEpsFunc`, the $z$ component of `\frac{\partial\bold{r}}{\partial\epsilon}`
+- `dchi_r_x` - `ChiPhiEpsFunc`, the $x$ component of `\frac{\partial\bold{r}}{\partial\chi}`
+- `dchi_r_y` - `ChiPhiEpsFunc`, the $y$ component of `\frac{\partial\bold{r}}{\partial\chi}`
+- `dchi_r_z` - `ChiPhiEpsFunc`, the $z$ component of `\frac{\partial\bold{r}}{\partial\chi}`
+- `dphi_r_x` - `ChiPhiEpsFunc`, the $x$ component of `\frac{\partial\bold{r}}{\partial\phi}`
+- `dphi_r_y` - `ChiPhiEpsFunc`, the $y$ component of `\frac{\partial\bold{r}}{\partial\phi}`
+- `dphi_r_z` - `ChiPhiEpsFunc`, the $z$ component of `\frac{\partial\bold{r}}{\partial\phi}`
+
+### `aqsc.Equilibrium.volume_integral(y)`
+Calculates the volume integral of a scalar, `ChiPhiFunc`, or `ChiPhiEpsFunc`. Produces a `ChiPhiEpsFunc` with only $\epsilon$ dependence.
+
+Parameters:
+
+- `y` (traced) - quantity to integrate.
+
+Returns:
+
+- `ChiPhiEpsFunc` - The volume integral as a function of $\epsilon$.
+
 
 ### `aqsc.Equilibrium.get_psi_crit(n_max=float('inf'), n_grid_chi=100, n_grid_phi_skip=10, psi_cap = None, n_newton_iter = 10)`
 ### `aqsc.Equilibrium.get_eps_crit(n_max=float('inf'), n_grid_chi=100, n_grid_phi_skip=10, eps_cap = None, n_newton_iter = 10)`
@@ -142,27 +172,12 @@ Returns:
 
 - `(psi_crit, jacobian_residue)` (or `(eps_crit, jacobian_residue)`): The $\psi_{crit}$ (or $\epsilon_{crit}$) and $\min_{\chi, \phi}\frac{\partial\bold{r}}{\partial\psi}\cdot(\frac{\partial\bold{r}}{\partial\chi}\times\frac{\partial\bold{r}}{\partial\phi})$ at $\psi_{crit}$ (or $\epsilon_{crit}$).
 
-### `aqsc.Equilibrium.get_order()`
-Gets the highest known order $n$ of `self`.
-
-Returns:
-
-- An int $n$.
-
-### `aqsc.Equilibrium.get_helicity()`
-Gets the helicity of `self`, same as the number of rotation of the normal
-basis vector $\kappa$ in the Frenet basis.
-
-Returns:
-
-- An int $n$.
-
 ### `aqsc.Equilibrium.flux_to_frenet(psi, chi, phi, n_max=float('inf'))`
 ### `aqsc.Equilibrium.flux_to_xyz(psi, chi, phi, n_max=float('inf'))`
 ### `aqsc.Equilibrium.flux_to_cylinder(psi, chi, phi, n_max=float('inf'))`
 Vectorized functions that transforms points in the flux coordinte $(\psi, \chi, \phi)$ into points in the Frenet coordinate $(\hat\kappa, \hat\tau, \hat b)$, Cartesian coordinate $(\hat X, \hat Y, \hat Z)$, or cylindrical coordinate $(\hat R, \hat\Phi, \hat Z)$ using the self-consistently solved coordinate transformations $X, Y, Z(\psi, \chi, \phi)$. ($Z$ here is the inverse coordinate transform from the GBC to the Frenet frame, and is unrelated to $\hat Z$ in the cylindrical coordinate. See [background](background-solves-for.md) for more.)
 
-**We strongly advise evaluating the coordinate transformation on `phi=self.axis_info['phi_gbc']` to decrease interpolation error due to `jnp.interp`!**
+**We strongly advise evaluating the coordinate transformation on `phi=self.axis_info['phi_gbc']` to decrease interpolation error due to interpolation!**
 
 Parameters:
 
@@ -183,41 +198,52 @@ Parameters:
 Returns:
 
 - `phi : jnp.array` - The phi grid points. Returns the input $\phi$ if it is not `None`. Otherwise, retrns `self.axis_info['phi_gbc']`.
-- `axis_r0_phi_X : jnp.array`
-- `axis_r0_phi_Y : jnp.array`
-- `axis_r0_phi_Z : jnp.array`
-- `tangent_phi_X : jnp.array`
-- `tangent_phi_Y : jnp.array`
-- `tangent_phi_Z : jnp.array`
-- `normal_phi_X : jnp.array`
-- `normal_phi_Y : jnp.array`
-- `normal_phi_Z : jnp.array`
-- `binormal_phi_X : jnp.array`
-- `binormal_phi_Y : jnp.array`
-- `binormal_phi_Z : jnp.array`
+- `axis_r0_phi_x : jnp.array`
+- `axis_r0_phi_y : jnp.array`
+- `axis_r0_phi_z : jnp.array`
+- `tangent_phi_x : jnp.array`
+- `tangent_phi_y : jnp.array`
+- `tangent_phi_z : jnp.array`
+- `normal_phi_x : jnp.array`
+- `normal_phi_y : jnp.array`
+- `normal_phi_z : jnp.array`
+- `binormal_phi_x : jnp.array`
+- `binormal_phi_y : jnp.array`
+- `binormal_phi_z : jnp.array`
 
-### `aqsc.Equilibrium.get_jacobian_coord(psi, chi, phi, n_max)`
-### `aqsc.Equilibrium.get_jacobian_coord_eps(psi, chi, phi, n_max)`
-### `aqsc.Equilibrium.get_jacobian_nae(psi, chi, n_max)`
-### `aqsc.Equilibrium.get_jacobian_nae_eps(psi, chi, n_max)`
+### `aqsc.Equilibrium.jacobian_coord_e()`
+### `aqsc.Equilibrium.jacobian_nae()`
 Calculates
 $$
-J_\text{coord}(\psi, \chi, \psi) \equiv \frac{\partial\textbf{r}}{\partial\psi}\cdot\left(\frac{\partial\textbf{r}}{\partial\chi}\times\frac{\partial\textbf{r}}{\partial\phi}\right)
+J^\epsilon_\text{coord}(\epsilon, \chi, \psi) \equiv \frac{\partial\textbf{r}}{\partial\epsilon}\cdot\left(\frac{\partial\textbf{r}}{\partial\chi}\times\frac{\partial\textbf{r}}{\partial\phi}\right)
 $$
 and
 $$
 J_\text{NAE}(\psi, \chi) \equiv \frac{B_\alpha(\psi)}{|B|^2(\psi, \chi)}.
 $$
-As described in the paper, the difference between the two quantities increases at increasing $\psi$. We strongly recommend evaluating at `self.axis_info['phi_gbc']` to reduce interpolation error. The current implementation doesn't work at $\psi=0$. 
-
-Parameters:
-
-- `psi, chi, phi : array or scalar` (traced) - Points in the flux coordinate.
-- `n_max : scalar` (static) - Max order $n$ to use. If larger than the highest known order, uses all known orders. Uses all known orders by default.
+As described in the paper, the difference between $J\text{coord} = J^\epsilon_\text{coord}/2\epsilon$ and $J_\text{NAE}$ increases at increasing $\psi$. We strongly recommend evaluating at `self.axis_info['phi_gbc']` to reduce interpolation error. The current implementation doesn't work at $\psi=0$. 
   
 Returns:
 
-- `jacobian : jnp.array`
+- `jacobian : ChiPhiEpsFunc`
+
+
+## Functions for output
+
+### `aqsc.Equilibrium.get_order()`
+Gets the highest known order $n$ of `self`.
+
+Returns:
+
+- An int $n$.
+
+### `aqsc.Equilibrium.get_helicity()`
+Gets the helicity of `self`, same as the number of rotation of the normal
+basis vector $\kappa$ in the Frenet basis.
+
+Returns:
+
+- An int $n$.
 
 ### `aqsc.Equilibrium.check_order_consistency()`
 Checks whether all items in `self.unknown` and `self.constant` has consistent highest known order. If not, throws `AttributeError`'s. **Cannot be JIT compiled.**
@@ -246,13 +272,15 @@ Parameters:
 
 - `n : int` - Order to plot.
 
-### `aqsc.Equilibrium.display(psi_max=None)`
-### `aqsc.Equilibrium.display_wireframe(psi_max=None)`
+### `aqsc.Equilibrium.display(psi_max=None, n_max=float('inf'), n_fs=5)`
+### `aqsc.Equilibrium.display_wireframe(psi_max=None, n_max=float('inf'))`
 Plots a boundary with given $\psi$ and some additional features. By default, plots the $\psi = \psi_\text{crit}$ surface.
 
 Parameters:
 
 - `psi_max : float` - Max $\psi$ to plot to. 
+- `n_max : float` - Max order to plot to. 
+- `n_fs` - Number of flux surfaces to plot.
 
 Returns:
 
