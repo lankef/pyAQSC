@@ -1,4 +1,5 @@
 import jax.numpy as jnp
+from interpax import interp1d
 from .chiphifunc import *
 from .chiphiepsfunc import *
 from .math_utilities import diff
@@ -7,6 +8,7 @@ from .equilibrium import Equilibrium
 from .MHD_parsed import eval_inhomogenous_Delta_n_cp
 from .recursion_relations import iterate_p_perp_n, iterate_delta_n_0_offset, \
     iterate_dc_B_psi_nm2, iterate_Zn_cp, iterate_Xn_cp, iterate_Yn_cp_magnetic
+from .config import interp1d_method
 
 # Generate the circular axis case in Rodriguez Bhattacharjee
 def circular_axis_legacy():
@@ -124,13 +126,6 @@ def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
     # The Boozer phi on cylindrical phi grids.
     phi_gbc = l_phi/dl_p
 
-    # d_l_d_phi_wrapped = np.concatenate([d_l_d_phi, [d_l_d_phi[0]]])
-    # d_l_d_phi_spline = scipy.interpolate.CubicSpline(np.linspace(0,2*np.pi/nfp, len_phi+1), d_l_d_phi_wrapped, bc_type = 'periodic')
-    # dl_p_spline.integrate(0, 2*np.pi)/jnp.pi/2 # No more accurate than the sum version.
-
-    # dphi/dl
-    # dphidl = 1/d_l_d_phi
-
     # These are cylindrical vectors in R, phi, Z frame
     d_r_d_phi_cylindrical = jnp.concatenate([
         R0p,
@@ -183,10 +178,13 @@ def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
     # Although Phi0 will be output as the cylindrical phi,
     # it can be reused as the Boozer phi grid because both 
     # uses the same uniformly spaced endpoint grids.
-    kap_p_content = jnp.interp(Phi0, phi_gbc, curvature, period = 2*jnp.pi/nfp)[None, :]
+    # kap_p_content = jnp.interp(Phi0, phi_gbc, curvature, period = 2*jnp.pi/nfp)[None, :]
+    print('Default interpolation method:', interp1d_method)
+    kap_p_content = interp1d(Phi0, phi_gbc, curvature, period=2*jnp.pi/nfp, method=interp1d_method)[None, :]
     kap_p = ChiPhiFunc(kap_p_content, nfp)
     # Note: Rodriguez's paper uses an opposite sign for tau compared to Landreman's.
-    tau_p_content = -jnp.interp(Phi0, phi_gbc, torsion, period = 2*jnp.pi/nfp)[None, :]
+    # tau_p_content = -jnp.interp(Phi0, phi_gbc, torsion, period = 2*jnp.pi/nfp)[None, :]
+    tau_p_content = -interp1d(Phi0, phi_gbc, torsion, period=2*jnp.pi/nfp, method=interp1d_method)[None, :]
     tau_p = ChiPhiFunc(tau_p_content, nfp)
 
     # Storing axis info. All quantities are identically defined to pyQSC.
@@ -230,7 +228,7 @@ def leading_orders_legacy(
     static_max_freq,
     traced_max_freq):
 
-    axis_info = get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi)
+    axis_info = get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi, interp1d_method)
     dl_p = axis_info['dl_p'] 
     kap_p = axis_info['kap_p'] 
     tau_p = axis_info['tau_p'] 
@@ -1146,10 +1144,10 @@ def leading_orders_from_axis(
         iota_coef = ChiPhiEpsFunc([x_secant_list2[jnp.argmin(f_list2)-1]], nfp, True)
     if solve_B_theta_20_avg:
         print('Solving for average B_{\\theta20} self-consistently:')
-        print('\\bar{B}_{\\theta20} =', x_secant_list2[jnp.argmin(f_list2)-1])
+        # print('\\bar{B}_{\\theta20} =', x_secant_list2[jnp.argmin(f_list2)-1])
     else:
         print('Solving for \\bar{\\iota}_0 self-consistently:')
-        print('\\bar{\\iota}_0 =', x_secant_list2[jnp.argmin(f_list2)-1])
+        # print('\\bar{\\iota}_0 =', x_secant_list2[jnp.argmin(f_list2)-1])
 
     ''' 2nd order quantities '''
     # Starting from order 2, the general recursion relations apply.

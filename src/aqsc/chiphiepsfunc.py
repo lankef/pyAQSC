@@ -5,12 +5,14 @@ import numpy as np # Used in saving
 from jax import tree_util
 
 from .chiphifunc import *
+from .chiphifunc import ChiPhiFunc
 
 '''ChiPhiEpsFunc'''
 # A container for lists of ChiPhiFuncs. Primarily used to handle array index out of bound
 # error in Maxima-translated codes. Produces a ChiPhiFuncNull when index is out of bound.
 # Initialization:
-# ChiPhiEpsFunc([X0, X1, X2, ... Xn])
+# ChiPhiEpsFunc([X0, X1, X2, ... Xn], n, False) or
+# ChiPhiEpsFunc([X0, X2, ... Xn], n, True)
 class ChiPhiEpsFunc:
     def __init__(self, list:list, nfp:int, square_eps_series:bool, check_consistency:bool=False): # nfp-dependent!!
         self.chiphifunc_list = list
@@ -58,6 +60,79 @@ class ChiPhiEpsFunc:
             new_chiphifunc_list[i] = ChiPhiFuncSpecial(-14)
         return(new_chiphifunc_list)
 
+    ''' Operator overload '''
+
+    def __neg__(self):
+        '''
+        Overloads the - operator. 
+        '''
+        list_new = []
+        for item in self.chiphifunc_list:
+            list_new.append(-item)
+        return(ChiPhiEpsFunc(list_new, self.nfp, self.square_eps_series))
+
+    def __add__(self, other):
+        '''
+        Overloads the self + other operator. 
+        If other is a ChiPhiEpsFunc, add each elements individually. 
+        Otherwise, add to the 0th order only. 
+        ChiPhiEpsFunc produced by this may no longer satisfy regularity!
+        '''
+        if isinstance(other, ChiPhiEpsFunc):
+            if self.square_eps_series == other.square_eps_series:
+                # n is len-1
+                n_max = max(self.get_order(), other.get_order())
+                list_new = []
+                for i in range(n_max+1):
+                    list_new.append(self[i] + other[i])
+                return(ChiPhiEpsFunc(list_new, self.nfp, self.square_eps_series))
+            elif self.square_eps_series:
+                return(self.remove_square() + other)
+            elif other.square_eps_series:
+                return(self + other.remove_square())
+        else:
+            leading = self[0]
+            leading_new = leading + other
+            list_n_geq_1 = self.chiphifunc_list[1:]
+            return(ChiPhiEpsFunc([leading_new]+list_n_geq_1, self.nfp, self.square_eps_series))
+        
+    def __radd__(self, other):
+        ''' Overloads the other + self operator. See __add__() for details.'''
+        return(self+other)
+
+    def __sub__(self, other):
+        ''' Overloads the self - other operator. See __add__() for details. '''
+        return(self+(-other))
+
+    def __rsub__(self, other):
+        ''' Overloads the other - self operator. See __add__() for details. '''
+        return(-(self-other))
+
+    def __mul__(self, other):
+        '''
+        Overloads the self * other operator. Generates a new power series. May or may
+        not satisfy regularity.
+        '''
+        if isinstance(other, ChiPhiEpsFunc):
+            a = self.remove_square()
+            b = other.remove_square()
+            len_a = len(a.chiphifunc_list)
+            len_b = len(b.chiphifunc_list)
+            list_new = [ChiPhiFuncSpecial(0)] * (len_a + len_b - 1)
+            for i in range(len_a):
+                for j in range(len_b):
+                    list_new[i + j] += a[i] * b[j]
+            return(ChiPhiEpsFunc(list_new, self.nfp, False))
+        else: 
+            list_new = []
+            for item in self.chiphifunc_list:
+                list_new.append(item * other)
+            return(ChiPhiEpsFunc(list_new, self.nfp, self.square_eps_series))
+            
+    def __rmul__(self, other):
+        ''' Overloads the other * self operator. See __mul__() for details. '''
+        return(self*other)
+
     def __getitem__(self, index):
         '''
         If array index out of bound or <0, then return a special element,
@@ -69,6 +144,21 @@ class ChiPhiEpsFunc:
             # return(ChiPhiFuncSpecial(-1))
             return(ChiPhiFuncSpecial(0))
         return(self.chiphifunc_list[index])
+
+    ''' List operations '''
+    def remove_square(self):
+        ''' 
+        If self is a series containing only even orders, convert 
+        self to a ChiPhiEpsFunc(square_eps_series=False)
+        '''
+        if self.square_eps_series:
+            list_new = []
+            for item in self.chiphifunc_list:
+                list_new.append(ChiPhiFuncSpecial(0))
+                list_new.append(item)
+            return(ChiPhiEpsFunc(list_new[1:], self.nfp, False))
+        else:
+            return(self)
 
     def append(self, item):
         '''
@@ -147,13 +237,6 @@ class ChiPhiEpsFunc:
         return(ChiPhiEpsFunc([ChiPhiFuncSpecial(0)]*(other.get_order()+1), other.nfp, other.square_eps_series))
     
     ''' Evaluation '''
-    def dpsi(self):
-        deps_result_list = self.deps().chiphifunc_list
-        new_chiphifunc_list = [ChiPhiFuncSpecial(0)]
-        for i in range(len(deps_result_list)):
-            new_chiphifunc_list.append(2 * deps_result_list[i])
-        return(ChiPhiEpsFunc(new_chiphifunc_list, self.nfp, False))
-
     def deps(self):
         if self.square_eps_series:
             list_to_shift = []
@@ -193,6 +276,7 @@ class ChiPhiEpsFunc:
         return(self.eval_eps(jnp.sqrt(psi), chi, phi, n_max=n_max))
 
     def eval_eps(self, eps, chi, phi, n_max=float('inf')):
+        # Broadcasting
         if self.square_eps_series:
             power_arg = eps**2
         else:

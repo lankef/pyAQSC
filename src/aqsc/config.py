@@ -8,6 +8,9 @@
 # - read_first_three_orders(): Loading equilibria from ref [1-3]
 use_pyQSC = True
 
+''' Interpax interpolation method choice '''
+interp1d_method = 'cubic'
+
 ''' Numerical settings (chiphifunc.py) '''
 double_precision = True
 diff_mode = 1 # 1 for fft, 2 for pseudo_spectral

@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 
 # Configurations
 from .config import *
-
+from interpax import interp1d
 ''' Debug options and loading configs '''
 
 # Loading configurations
@@ -397,6 +397,8 @@ class ChiPhiFunc:
                 b_pad_row
             ])
             return(ChiPhiFunc(a_padded+b_padded, self.nfp))
+        elif isinstance(other, ChiPhiEpsFunc):
+            return(other+self)
         else:
             if not jnp.array(other).ndim==0:
                 return(ChiPhiFuncSpecial(-5))
@@ -471,6 +473,8 @@ class ChiPhiFunc:
             a = self.content+stretch_phi
             b = other.content+stretch_phi
             return(ChiPhiFunc(batch_convolve(a,b), self.nfp))
+        elif isinstance(other, ChiPhiEpsFunc):
+            return(other*self)
         else:
             if not jnp.array(other).ndim==0:
                 return(ChiPhiFuncSpecial(-5))
@@ -598,7 +602,6 @@ class ChiPhiFunc:
         ''' FFT the axis=1 of content and returns as a ChiPhiFunc '''
         return(ChiPhiFunc(jnp.fft.fft(self.content, axis=1), self.nfp))
 
-
     def ifft(self):
         ''' IFFT the axis=1 of content and returns as a ChiPhiFunc '''
         return(ChiPhiFunc(jnp.fft.ifft(self.content, axis=1), self.nfp))
@@ -699,10 +702,11 @@ class ChiPhiFunc:
             return(self)
         # number of phi grids
         len_phi = self.content.shape[1]
-        if double_precision:
-            phis = jnp.linspace(0, 2*jnp.pi*(1-1/len_phi), len_phi, dtype=jnp.complex128)
-        else:
-            phis = jnp.linspace(0, 2*jnp.pi*(1-1/len_phi), len_phi, dtype=jnp.complex64)
+        # if double_precision:
+        #     phis = jnp.linspace(0, 2*jnp.pi*(1-1/len_phi), len_phi, dtype=jnp.complex128)
+        # else:
+        #     phis = jnp.linspace(0, 2*jnp.pi*(1-1/len_phi), len_phi, dtype=jnp.complex64)
+        phis = jnp.linspace(0, 2*jnp.pi*(1-1/len_phi), len_phi)
         # fft integral
         content_fft = jnp.fft.fft(self.content, axis=1)
         fftfreq_temp = jit_fftfreq_int(len_phi)*1j
@@ -879,7 +883,7 @@ class ChiPhiFunc:
 
 
     ''' I.1.5 Output and plotting '''
-    def eval(self, chi, phi):
+    def eval_legacy(self, chi, phi):
         '''
         Getting a 2d vectorized function, f(chi, phi) for plotting a ChiPhiFunc.
 
@@ -896,12 +900,12 @@ class ChiPhiFunc:
         len_phi = self.content.shape[1]
 
         # Create 'x' for interpolation. 'x' is wrapped for periodicity.
-        phi_grid = jnp.linspace(0,2*jnp.pi/self.nfp*(1-1/len_phi), len_phi)
+        phi_grid = jnp.linspace(0, 2 * jnp.pi / self.nfp, len_phi, endpoint=False)
 
         # The outer dot product is summing along axis 0.
         out = 0
         for i in range(len_chi):
-            out+=jnp.e**(1j*(chi)*(i*2-len_chi+1))\
+            out+=jnp.e**(1j * chi * (i * 2 - len_chi + 1))\
                 *jnp.interp(
                     phi, 
                     phi_grid, 
@@ -909,6 +913,48 @@ class ChiPhiFunc:
                     period=2*jnp.pi/self.nfp
                 )
         return(out)
+    
+        ''' I.1.5 Output and plotting '''
+    def eval(self, chi, phi):
+        '''
+        Getting a 2d vectorized function, f(chi, phi) for plotting a ChiPhiFunc.
+
+        Output: -----
+
+        A vectorized callables f(chi, phi).
+        '''
+        # Broadcasting phi, chi to the same shape
+        phi += jnp.zeros_like(chi)
+        chi += jnp.zeros_like(phi)
+
+        if self.nfp == 0:
+            return(0)
+        if self.nfp < 0:
+            return(jnp.nan)
+
+        len_chi = self.content.shape[0]
+        len_phi = self.content.shape[1]
+
+        # Create 'x' for interpolation. 'x' is wrapped for periodicity.
+        phi_grid = jnp.linspace(0, 2 * jnp.pi / self.nfp, len_phi, endpoint=False)
+        # Interpolating in the phi direction
+        # Has shape: 
+        # shape, n_harmonics
+        interp = interp1d(
+            phi.flatten(),
+            phi_grid, 
+            self.content.T, 
+            method=interp1d_method,
+            period=2*jnp.pi/self.nfp
+        ).reshape(list(phi.shape)+[-1])
+
+        # Calculating the chi dependence
+        chi_harm_m = (jnp.arange(len_chi) * 2 - len_chi + 1)
+        # Has shape: shape, n_harmonics
+        phase = jnp.exp(1j * (chi.flatten()[:, None] * chi_harm_m).reshape(list(phi.shape)+[-1]))
+        # Has shape: n_harmonics, (chi and phi broadcast together).shape 
+        result = jnp.sum(interp * phase, axis=-1)
+        return(result)
 
     def display_content(self, trig_mode=False, colormap_mode=False):
         '''
@@ -1793,3 +1839,6 @@ def ChiPhiFuncSpecial(error_code:int):
 
     return(ChiPhiFuncSpecial_originals[-error_code])
     # return(ChiPhiFunc(jnp.nan, error_code)) # , is_special=True))
+
+
+from .chiphiepsfunc import ChiPhiEpsFunc

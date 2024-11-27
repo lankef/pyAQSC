@@ -7,6 +7,7 @@ import jax.numpy as jnp
 from jax import tree_util, jit, vmap
 from jax.lax import fori_loop
 from functools import partial # for JAX jit with static params
+from interpax import interp1d
 # from matplotlib import pyplot as plt
 
 # ChiPhiFunc and ChiPhiEpsFunc
@@ -15,6 +16,7 @@ from .chiphiepsfunc import *
 from .math_utilities import *
 from .recursion_relations import *
 from .looped_solver import iterate_looped
+from .config import interp1d_method
 # parsed relations
 from .MHD_parsed import validate_J, validate_Cb, validate_Ck, \
     validate_Ct, validate_I, validate_II, validate_III
@@ -24,6 +26,24 @@ import matplotlib.pyplot as plt
 from matplotlib import cm, colors
 
 ''' Equilibrium manager and Iterate '''
+
+def interp1d_shape_memory(xq, x, f, **kwarg):
+    '''
+    An utility function used to call interp1d on nd/scalar xq, 1d x, and 1d f.
+    '''
+    ndarr = jnp.ndim(xq) > 1
+    if ndarr:
+        shape_memory = xq.shape
+        xq = xq.flatten()
+    fq = interp1d(
+        xq, 
+        x, 
+        f, 
+        **kwarg
+    )
+    if ndarr:
+        fq = fq.reshape(shape_memory)
+    return(fq)
 
 # A container for all equilibrium quantities.
 # All coef inputs must be ChiPhiEpsFunc's.
@@ -107,11 +127,12 @@ class Equilibrium:
         phi_full_periods = phi - phi_incomplete_period
         phi_gbc_padded = jnp.append(self.axis_info['phi_gbc'], period)
         Phi0_padded = jnp.append(self.axis_info['Phi0'], period)
-        Phi_cylindrical_incomplete_period = jnp.interp(
+
+        Phi_cylindrical_incomplete_period = interp1d_shape_memory(
             phi_incomplete_period, 
             phi_gbc_padded, 
             Phi0_padded, 
-            period=None
+            method=interp1d_method,
         )
         return(Phi_cylindrical_incomplete_period + phi_full_periods)
 
@@ -135,78 +156,90 @@ class Equilibrium:
             phi = phi_gbc
             axis_r0_Phi = Phi0
             axis_r0_R = R0
-            axis_r0_Z = Z0
+            axis_r0_z = Z0
             tangent_R = tangent_cylindrical[:, 0]
             tangent_Phi = tangent_cylindrical[:, 1]
-            tangent_Z = tangent_cylindrical[:, 2]
+            tangent_z = tangent_cylindrical[:, 2]
             normal_R = normal_cylindrical[:, 0]
             normal_Phi = normal_cylindrical[:, 1]
-            normal_Z = normal_cylindrical[:, 2]
+            normal_z = normal_cylindrical[:, 2]
             binormal_R = binormal_cylindrical[:, 0]
             binormal_Phi = binormal_cylindrical[:, 1]
-            binormal_Z = binormal_cylindrical[:, 2]
+            binormal_z = binormal_cylindrical[:, 2]
         else:
             axis_r0_Phi = self.phi_gbc_to_Phi_cylindrical(phi)
-            axis_r0_R = jnp.interp(phi, phi_gbc, R0, period=period)
-            axis_r0_Z = jnp.interp(phi, phi_gbc, Z0, period=period)
-            tangent_R = jnp.interp(phi, phi_gbc, tangent_cylindrical[:, 0], period=period)
-            tangent_Phi = jnp.interp(phi, phi_gbc, tangent_cylindrical[:, 1], period=period)
-            tangent_Z = jnp.interp(phi, phi_gbc, tangent_cylindrical[:, 2], period=period)
-            normal_R = jnp.interp(phi, phi_gbc, normal_cylindrical[:, 0], period=period)
-            normal_Phi = jnp.interp(phi, phi_gbc, normal_cylindrical[:, 1], period=period)
-            normal_Z = jnp.interp(phi, phi_gbc, normal_cylindrical[:, 2], period=period)
-            binormal_R = jnp.interp(phi, phi_gbc, binormal_cylindrical[:, 0], period=period)
-            binormal_Phi = jnp.interp(phi, phi_gbc, binormal_cylindrical[:, 1], period=period)
-            binormal_Z = jnp.interp(phi, phi_gbc, binormal_cylindrical[:, 2], period=period)
+            # Less accurate than interpax
+            # axis_r0_R = jnp.interp(phi, phi_gbc, R0, period=period)
+            # axis_r0_Z = jnp.interp(phi, phi_gbc, Z0, period=period)
+            # tangent_R = jnp.interp(phi, phi_gbc, tangent_cylindrical[:, 0], period=period)
+            # tangent_Phi = jnp.interp(phi, phi_gbc, tangent_cylindrical[:, 1], period=period)
+            # tangent_Z = jnp.interp(phi, phi_gbc, tangent_cylindrical[:, 2], period=period)
+            # normal_R = jnp.interp(phi, phi_gbc, normal_cylindrical[:, 0], period=period)
+            # normal_Phi = jnp.interp(phi, phi_gbc, normal_cylindrical[:, 1], period=period)
+            # normal_Z = jnp.interp(phi, phi_gbc, normal_cylindrical[:, 2], period=period)
+            # binormal_R = jnp.interp(phi, phi_gbc, binormal_cylindrical[:, 0], period=period)
+            # binormal_Phi = jnp.interp(phi, phi_gbc, binormal_cylindrical[:, 1], period=period)
+            # binormal_Z = jnp.interp(phi, phi_gbc, binormal_cylindrical[:, 2], period=period)
+            axis_r0_R = interp1d_shape_memory(phi, phi_gbc, R0, period=period, method=interp1d_method)
+            axis_r0_z = interp1d_shape_memory(phi, phi_gbc, Z0, period=period, method=interp1d_method)
+            tangent_R = interp1d_shape_memory(phi, phi_gbc, tangent_cylindrical[:, 0], period=period, method=interp1d_method)
+            tangent_Phi = interp1d_shape_memory(phi, phi_gbc, tangent_cylindrical[:, 1], period=period, method=interp1d_method)
+            tangent_z = interp1d_shape_memory(phi, phi_gbc, tangent_cylindrical[:, 2], period=period, method=interp1d_method)
+            normal_R = interp1d_shape_memory(phi, phi_gbc, normal_cylindrical[:, 0], period=period, method=interp1d_method)
+            normal_Phi = interp1d_shape_memory(phi, phi_gbc, normal_cylindrical[:, 1], period=period, method=interp1d_method)
+            normal_z = interp1d_shape_memory(phi, phi_gbc, normal_cylindrical[:, 2], period=period, method=interp1d_method)
+            binormal_R = interp1d_shape_memory(phi, phi_gbc, binormal_cylindrical[:, 0], period=period, method=interp1d_method)
+            binormal_Phi = interp1d_shape_memory(phi, phi_gbc, binormal_cylindrical[:, 1], period=period, method=interp1d_method)
+            binormal_z = interp1d_shape_memory(phi, phi_gbc, binormal_cylindrical[:, 2], period=period, method=interp1d_method)
 
-        axis_r0_X = axis_r0_R * jnp.cos(axis_r0_Phi)
-        axis_r0_Y = axis_r0_R * jnp.sin(axis_r0_Phi)
+        axis_r0_x = axis_r0_R * jnp.cos(axis_r0_Phi)
+        axis_r0_y = axis_r0_R * jnp.sin(axis_r0_Phi)
 
-        R_hat_X = axis_r0_X / axis_r0_R
-        R_hat_Y = axis_r0_Y / axis_r0_R
+        R_hat_x = axis_r0_x / axis_r0_R
+        R_hat_y = axis_r0_y / axis_r0_R
 
-        Phi_hat_X = -jnp.sin(axis_r0_Phi)
-        Phi_hat_Y = jnp.cos(axis_r0_Phi)
+        Phi_hat_x = -jnp.sin(axis_r0_Phi)
+        Phi_hat_y = jnp.cos(axis_r0_Phi)
 
-        tangent_X = (
-            tangent_R * R_hat_X 
-            + tangent_Phi * Phi_hat_X 
+        tangent_x = (
+            tangent_R * R_hat_x
+            + tangent_Phi * Phi_hat_x
         )
-        tangent_Y = (
-            tangent_R * R_hat_Y
-            + tangent_Phi * Phi_hat_Y
+        tangent_y = (
+            tangent_R * R_hat_y
+            + tangent_Phi * Phi_hat_y
         )
-        normal_X = (
-            normal_R * R_hat_X 
-            + normal_Phi * Phi_hat_X 
+        normal_x = (
+            normal_R * R_hat_x
+            + normal_Phi * Phi_hat_x
         )
-        normal_Y = (
-            normal_R * R_hat_Y
-            + normal_Phi * Phi_hat_Y
+        normal_y = (
+            normal_R * R_hat_y
+            + normal_Phi * Phi_hat_y
         )
-        binormal_X = (
-            binormal_R * R_hat_X 
-            + binormal_Phi * Phi_hat_X 
+        binormal_x = (
+            binormal_R * R_hat_x
+            + binormal_Phi * Phi_hat_x
         )
-        binormal_Y = (
-            binormal_R * R_hat_Y
-            + binormal_Phi * Phi_hat_Y
+        binormal_y = (
+            binormal_R * R_hat_y
+            + binormal_Phi * Phi_hat_y
         )
 
         return(
             phi,
-            axis_r0_X,
-            axis_r0_Y,
-            axis_r0_Z,
-            tangent_X,
-            tangent_Y,
-            tangent_Z,
-            normal_X,
-            normal_Y,
-            normal_Z,
-            binormal_X,
-            binormal_Y,
-            binormal_Z
+            axis_r0_x,
+            axis_r0_y,
+            axis_r0_z,
+            tangent_x,
+            tangent_y,
+            tangent_z,
+            normal_x,
+            normal_y,
+            normal_z,
+            binormal_x,
+            binormal_y,
+            binormal_z
         )
 
     def flux_to_frenet(self, psi, chi, phi, n_max=float('inf')):
@@ -226,37 +259,37 @@ class Equilibrium:
         Cartesian (xyz) coordinate.
         '''
         phi_gbc,\
-        axis_r0_X,\
-        axis_r0_Y,\
-        axis_r0_Z,\
-        tangent_X,\
-        tangent_Y,\
-        tangent_Z,\
-        normal_X,\
-        normal_Y,\
-        normal_Z,\
-        binormal_X,\
-        binormal_Y,\
-        binormal_Z = self.frenet_basis_phi(phi)
+        axis_r0_x,\
+        axis_r0_y,\
+        axis_r0_z,\
+        tangent_x,\
+        tangent_y,\
+        tangent_z,\
+        normal_x,\
+        normal_y,\
+        normal_z,\
+        binormal_x,\
+        binormal_y,\
+        binormal_z = self.frenet_basis_phi(phi)
         curvature, binormal, tangent = self.flux_to_frenet(psi=psi, chi=chi, phi=phi, n_max=n_max)
-        components_X = axis_r0_X\
-            + tangent_X * tangent\
-            + normal_X * curvature\
-            + binormal_X * binormal
+        components_x = axis_r0_x\
+            + tangent_x * tangent\
+            + normal_x * curvature\
+            + binormal_x * binormal
         
-        components_Y = axis_r0_Y\
-            + tangent_Y * tangent\
-            + normal_Y * curvature\
-            + binormal_Y * binormal
+        components_y = axis_r0_y\
+            + tangent_y * tangent\
+            + normal_y * curvature\
+            + binormal_y * binormal
         
-        components_Z = axis_r0_Z\
-            + tangent_Z * tangent\
-            + normal_Z * curvature\
-            + binormal_Z * binormal
+        components_z = axis_r0_z\
+            + tangent_z * tangent\
+            + normal_z * curvature\
+            + binormal_z * binormal
         return(
-            components_X,
-            components_Y,
-            components_Z
+            components_x,
+            components_y,
+            components_z
         )
     
     def flux_to_cylindrical(self, psi, chi, phi, n_max=float('inf')):
@@ -269,7 +302,7 @@ class Equilibrium:
             components_Y,
             components_Z
         ) = self.flux_to_xyz(psi, chi, phi, n_max)
-        components_Phi = jnp.atan2(components_Y, components_X)
+        components_Phi = jnp.arctan2(components_Y, components_X)
         if not(jnp.isscalar(psi) and jnp.isscalar(chi) and jnp.isscalar(phi)):
             components_Phi = jnp.unwrap(components_Phi, discont=jnp.pi)
         components_R = jnp.sqrt(components_X**2 + components_Y**2)
@@ -278,7 +311,6 @@ class Equilibrium:
             components_Phi,
             components_Z
         )
-
 
     ''' Display and output'''
 
@@ -299,10 +331,9 @@ class Equilibrium:
             n_newton_iter=n_newton_iter
         )
         return(eps_crit**2, jacobian_residue)
-
     
     @partial(jit, static_argnums=(4,))
-    def get_jacobian_e_eps_scalar(self, eps:float, chi:float, phi:float, n_max=float('inf')):
+    def jacobian_e_eps_scalar_legacy(self, eps:float, chi:float, phi:float, n_max=float('inf')):
         '''
         As psi increases, the measured Jacobian of the coordinate system by
         explicitly calculating nabla psi dot nabla chi cross nabla phi starts 
@@ -395,36 +426,133 @@ class Equilibrium:
             axis=0
         )))
 
-    get_jacobian_e_eps = jnp.vectorize(get_jacobian_e_eps_scalar, excluded=(0, 4))
+    jacobian_e_eps_legacy = jnp.vectorize(jacobian_e_eps_scalar_legacy, excluded=(0, 4))
 
     @partial(jit, static_argnums=(4,))
-    def get_jacobian_coord_eps(self, eps, chi, phi, n_max=float('inf')): 
-        return(self.get_jacobian_e_eps(eps, chi, phi, n_max)/2/eps)
+    def jacobian_coord_eps_legacy(self, eps, chi, phi, n_max=float('inf')): 
+        return(self.jacobian_e_eps_legacy(eps, chi, phi, n_max)/2/eps)
 
-    @partial(jit, static_argnums=(4,))
-    def get_jacobian_e(self, psi, chi, phi, n_max=float('inf')): 
-        return(self.get_jacobian_e_eps(jnp.sqrt(psi), chi, phi, n_max))
-   
     @partial(jit, static_argnums=(4,)) 
-    def get_jacobian_coord(self, psi, chi, phi, n_max=float('inf')): 
-        return(self.get_jacobian_coord_eps(jnp.sqrt(psi), chi, phi, n_max))
+    def jacobian_coord_legacy(self, psi, chi, phi, n_max=float('inf')): 
+        return(self.jacobian_coord_eps(jnp.sqrt(psi), chi, phi, n_max))
 
-    def get_jacobian_nae_eps(self, eps, chi, n_max=float('inf')):
-        B_alpha = jnp.real(self.constant['B_alpha_coef'].eval_eps(eps, chi, 0, n_max=n_max))
-        B_denom = jnp.real(self.constant['B_denom_coef_c'].eval_eps(eps, chi, 0, n_max=n_max))
-        return(B_alpha * B_denom)
-    
-    def get_jacobian_nae(self, psi, chi, n_max=float('inf')):
-        B_alpha = jnp.real(self.constant['B_alpha_coef'].eval(psi, chi, 0, n_max=n_max))
-        B_denom = jnp.real(self.constant['B_denom_coef_c'].eval(psi, chi, 0, n_max=n_max))
-        return(B_alpha * B_denom)
+
+    def covariant_basis(self):
+        '''
+        Calculates dr/deps, dr/dchi, dr/dphi.
+        '''
+        len_phi = self.constant['kap_p'].content.shape[1]
+        phi_grid = jnp.linspace(0, 2 * jnp.pi / self.nfp, len_phi, endpoint=False)
+
+        # Calculate the coordinate basis on the same Phi grid as 
+        # the ChiPhiFunc's.
+        _,\
+        _,\
+        _,\
+        _,\
+        tangent_x_arr,\
+        tangent_y_arr,\
+        tangent_z_arr,\
+        normal_x_arr,\
+        normal_y_arr,\
+        normal_z_arr,\
+        binormal_x_arr,\
+        binormal_y_arr,\
+        binormal_z_arr = self.frenet_basis_phi(phi_grid)
+        tangent_x = ChiPhiFunc(tangent_x_arr[None, :], self.nfp)
+        tangent_y = ChiPhiFunc(tangent_y_arr[None, :], self.nfp)
+        tangent_z = ChiPhiFunc(tangent_z_arr[None, :], self.nfp)
+        normal_x = ChiPhiFunc(normal_x_arr[None, :], self.nfp)
+        normal_y = ChiPhiFunc(normal_y_arr[None, :], self.nfp)
+        normal_z = ChiPhiFunc(normal_z_arr[None, :], self.nfp)
+        binormal_x = ChiPhiFunc(binormal_x_arr[None, :], self.nfp)
+        binormal_y = ChiPhiFunc(binormal_y_arr[None, :], self.nfp)
+        binormal_z = ChiPhiFunc(binormal_z_arr[None, :], self.nfp)
+
+        kap_p = self.constant['kap_p'] # .eval(0, phi)
+        tau_p = self.constant['tau_p'] # .eval(0, phi)
+        dl_p = self.constant['dl_p']
+        tangent_dphi_x = kap_p * normal_x * dl_p
+        tangent_dphi_y = kap_p * normal_y * dl_p
+        tangent_dphi_z = kap_p * normal_z * dl_p
+        normal_dphi_x = (-kap_p * tangent_x - tau_p * binormal_x) * dl_p
+        normal_dphi_y = (-kap_p * tangent_y - tau_p * binormal_y) * dl_p
+        normal_dphi_z = (-kap_p * tangent_z - tau_p * binormal_z) * dl_p
+        binormal_dphi_x = (tau_p * normal_x) * dl_p
+        binormal_dphi_y = (tau_p * normal_y) * dl_p
+        binormal_dphi_z = (tau_p * normal_z) * dl_p
+        axis_r0_dphi_x = tangent_x * dl_p
+        axis_r0_dphi_y = tangent_y * dl_p
+        axis_r0_dphi_z = tangent_z * dl_p
+
+        # Returns (n_grid, n_grid) arrays. Axis=1 is Phi.
+        X_coef_cp = self.unknown['X_coef_cp']
+        Y_coef_cp = self.unknown['Y_coef_cp']
+        Z_coef_cp = self.unknown['Z_coef_cp']
+        deps_X_coef_cp = X_coef_cp.deps()
+        deps_Y_coef_cp = Y_coef_cp.deps()
+        deps_Z_coef_cp = Z_coef_cp.deps()
+        dchi_X_coef_cp = X_coef_cp.dchi()
+        dchi_Y_coef_cp = Y_coef_cp.dchi()
+        dchi_Z_coef_cp = Z_coef_cp.dchi()
+        dphi_X_coef_cp = X_coef_cp.dphi()
+        dphi_Y_coef_cp = Y_coef_cp.dphi()
+        dphi_Z_coef_cp = Z_coef_cp.dphi()
+
+        deps_r_x = (deps_X_coef_cp * normal_x + deps_Y_coef_cp * binormal_x + deps_Z_coef_cp * tangent_x)
+        deps_r_y = (deps_X_coef_cp * normal_y + deps_Y_coef_cp * binormal_y + deps_Z_coef_cp * tangent_y)
+        deps_r_z = (deps_X_coef_cp * normal_z + deps_Y_coef_cp * binormal_z + deps_Z_coef_cp * tangent_z)
+        dchi_r_x = (dchi_X_coef_cp * normal_x + dchi_Y_coef_cp * binormal_x + dchi_Z_coef_cp * tangent_x)
+        dchi_r_y = (dchi_X_coef_cp * normal_y + dchi_Y_coef_cp * binormal_y + dchi_Z_coef_cp * tangent_y)
+        dchi_r_z = (dchi_X_coef_cp * normal_z + dchi_Y_coef_cp * binormal_z + dchi_Z_coef_cp * tangent_z)
+        dphi_r_x = (axis_r0_dphi_x + dphi_X_coef_cp * normal_x + dphi_Y_coef_cp * binormal_x + dphi_Z_coef_cp * tangent_x + X_coef_cp * normal_dphi_x + Y_coef_cp * binormal_dphi_x + Z_coef_cp * tangent_dphi_x)
+        dphi_r_y = (axis_r0_dphi_y + dphi_X_coef_cp * normal_y + dphi_Y_coef_cp * binormal_y + dphi_Z_coef_cp * tangent_y + X_coef_cp * normal_dphi_y + Y_coef_cp * binormal_dphi_y + Z_coef_cp * tangent_dphi_y)
+        dphi_r_z = (axis_r0_dphi_z + dphi_X_coef_cp * normal_z + dphi_Y_coef_cp * binormal_z + dphi_Z_coef_cp * tangent_z + X_coef_cp * normal_dphi_z + Y_coef_cp * binormal_dphi_z + Z_coef_cp * tangent_dphi_z)
+
+        return(
+            deps_r_x,
+            deps_r_y,
+            deps_r_z,
+            dchi_r_x,
+            dchi_r_y,
+            dchi_r_z,
+            dphi_r_x,
+            dphi_r_y,
+            dphi_r_z,
+        )
+
+    def jacobian_e(self):
+        (
+            deps_r_x,
+            deps_r_y,
+            deps_r_z,
+            dchi_r_x,
+            dchi_r_y,
+            dchi_r_z,
+            dphi_r_x,
+            dphi_r_y,
+            dphi_r_z,
+        ) = self.covariant_basis()
+        triple_product = (
+            deps_r_x * (dchi_r_y * dphi_r_z - dchi_r_z * dphi_r_y) +
+            deps_r_y * (dchi_r_z * dphi_r_x - dchi_r_x * dphi_r_z) +
+            deps_r_z * (dchi_r_x * dphi_r_y - dchi_r_y * dphi_r_x)
+        )
+        return(triple_product)
+
+    def jacobian_coord_eps(self, eps, chi, phi, n_max=float('inf')): 
+        return(jnp.real(self.jacobian_e().eval_eps(eps, chi, phi, n_max)/2/eps))
+
+    def jacobian_nae(self):
+        return(self.constant['B_alpha_coef'] * self.constant['B_denom_coef_c'])
 
     def get_eps_crit(
         self, n_max=float('inf'), 
         n_grid_chi=100,
         n_grid_phi_skip=1,
         eps_cap = None,
-        n_newton_iter = 10):
+        n_newton_iter = 10,
+        jacobian_coord_eps_callable=None):
         '''
 
         Estimates the critical epsilon where flux surface self-intersects.
@@ -458,9 +586,10 @@ class Equilibrium:
         phi_gbc = self.axis_info['phi_gbc'][::n_grid_phi_skip]
         points_chi = jnp.linspace(0, 2*jnp.pi, n_grid_chi, endpoint=False)
 
-
+        if jacobian_coord_eps_callable is None:
+            jacobian_coord_eps_callable = self.jacobian_coord_eps
         # Finding jacobian_min=0 using Newton's method.
-        jacobian_grid = lambda eps: self.get_jacobian_coord_eps(eps, points_chi[:, None], phi_gbc[None, :], n_max = n_max)
+        jacobian_grid = lambda eps: jacobian_coord_eps_callable(eps, points_chi[:, None], phi_gbc[None, :], n_max = n_max)
         jacobian_min = lambda eps: jnp.min(jacobian_grid(eps))
         jacobian_min_prime = jax.grad(jacobian_min)
         def q(i, x):
@@ -491,6 +620,46 @@ class Equilibrium:
             n_iter += 1
         '''      
 
+    def volume_integral(self, y):
+        '''
+        Calculates the volume integral of a quantity as a ChiPhiEpsFunc
+        with no Chi or Phi dependence.
+        '''
+        jac = self.jacobian_e()
+        integrand = jac * y
+        # Eps, phi and chi integral
+        new_chiphifunc_list = [ChiPhiFuncSpecial(0)]
+        len_phi = self.constant['kap_p'].content.shape[1]
+        for i in range(len(integrand.chiphifunc_list)):
+            item = integrand.chiphifunc_list[i]
+            # Calculate the chi and phi integral
+            if isinstance(item, ChiPhiFunc):
+                # Handling of errors and zeros
+                if item.is_special():
+                    new_chiphifunc = item
+                else:
+                    # odd fourier series
+                    if item.content.shape[0]%2==0:
+                        new_chiphifunc = ChiPhiFuncSpecial(0)
+                    else:
+                        # The constant component in chi
+                        item_0 = item[0]
+                        len_phi = item_0.content.shape[1]
+                        content_0_fft = jnp.fft.fft(item_0.content, axis=1)
+                        # Phi integral
+                        integral_i = 2 * jnp.pi * content_0_fft[0,0] / len_phi
+                        # Chi integral
+                        integral_i *= 2 * jnp.pi 
+                        # Eps integral
+                        integral_i /= (i+1)
+                        new_chiphifunc = ChiPhiFunc(jnp.full((1, len_phi), integral_i), self.nfp)
+            else: 
+                integral_i = item * jnp.pi * 2 * jnp.pi * 2 / (i+1)
+                new_chiphifunc = ChiPhiFunc(jnp.full((1, len_phi), integral_i), self.nfp)
+            # calculate the epsilon integral
+            new_chiphifunc_list.append(new_chiphifunc)
+        return(ChiPhiEpsFunc(new_chiphifunc_list, self.nfp, False))
+
     def get_helicity(self):
         ''' 
         Returns the helicity (the normal vector, kappa's 
@@ -498,7 +667,7 @@ class Equilibrium:
         '''
         return(helicity_from_axis(self.axis_info, self.nfp))
 
-    def display(self, n_max=float('inf'), psi_max=None, n_fs=5):
+    def display(self, psi_max=None, n_max=float('inf'), n_fs=5):
         # n_fs: total number of flux surfaces plotted
         if not psi_max:
             psi_max = self.get_psi_crit()[0]
@@ -544,14 +713,14 @@ class Equilibrium:
         fig.colorbar(mapper, label=r'Field strength $|B|, (T)$', shrink=0.5, ax=ax)
         return(fig, ax)
 
-    def display_wireframe(self, n_max=float('inf'), psi_max=None, n_fs=5):
+    def display_wireframe(self, psi_max=None, n_max=float('inf')):
         # n_fs: total number of flux surfaces plotted
         if not psi_max:
             psi_max = self.get_psi_crit()[0]
             print('Plotting to critical psi:', psi_max)
             psi_max*=0.8
         fig = plt.figure()
-        fig.set_dpi(400)
+        fig.set_dpi(200)
         ax = fig.add_subplot(projection='3d')
         phis = jnp.linspace(0, jnp.pi*2*0.9, 1000)
         chis = jnp.linspace(0, jnp.pi*2, 1000)
@@ -559,8 +728,6 @@ class Equilibrium:
 
         ax.plot_wireframe(x_surf, y_surf, z_surf, zorder=1, linewidths=0.1)
         ax.axis('equal')
-
-        fig.legend()
         return(fig, ax)
 
     # not nfp-dependent
@@ -579,7 +746,6 @@ class Equilibrium:
                 self.unknown[name][n_display].display_content()
             else:
                 print(self.unknown[name][n_display])
-
 
     ''' Saving and loading '''
     def save(self, file_name):
@@ -810,7 +976,6 @@ class Equilibrium:
                 II, # Unit is p*B_alpha_coef[0]·B_denom_coef_c[0]^2
                 III # Unit is p*B_alpha_coef[0]*B_denom_coef_c[0]^2
             )
-
 
 tree_util.register_pytree_node(
 Equilibrium,
