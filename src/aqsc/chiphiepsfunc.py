@@ -273,7 +273,7 @@ class ChiPhiEpsFunc:
         return(self.dchi_or_phi(False))
 
     def eval(self, psi, chi, phi, n_max=float('inf')):
-        return(self.eval_eps(jnp.sqrt(psi), chi, phi, n_max=n_max))
+        return(self.eval_eps(jnp.sqrt(jnp.abs(psi)), chi, phi, n_max=n_max))
 
     def eval_eps(self, eps, chi, phi, n_max=float('inf')):
         # Broadcasting

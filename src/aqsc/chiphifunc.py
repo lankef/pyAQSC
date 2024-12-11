@@ -12,8 +12,8 @@ from interpax import interp1d
 
 # Loading configurations
 if double_precision:
-    import jax.config
-    jax.config.update("jax_enable_x64", True)
+    from jax import config as jax_config
+    jax_config.update("jax_enable_x64", True)
 
 # Maximum allowed asymptotic series order for y'+py=f
 # This feature is depreciated and no longer included in py.

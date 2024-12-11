@@ -4,7 +4,7 @@
 import jax.numpy as jnp
 # import numpy as np # used in save_plain and get_helicity
 # from jax import jit, vmap, tree_util
-from jax import tree_util, jit, vmap
+from jax import tree_util, jit, vmap, grad
 from jax.lax import fori_loop
 from functools import partial # for JAX jit with static params
 from interpax import interp1d
@@ -314,23 +314,23 @@ class Equilibrium:
 
     ''' Display and output'''
 
-    def get_psi_crit(
-        self, n_max=float('inf'), 
-        n_grid_chi=100, n_grid_phi_skip=1, 
-        psi_cap = None,
-        n_newton_iter = 20):
-        if psi_cap is None:
-            eps_cap = None
-        else:
-            eps_cap = jnp.sqrt(psi_cap)
-        eps_crit, jacobian_residue = self.get_eps_crit(
-            n_max=n_max, 
-            n_grid_chi=n_grid_chi, 
-            n_grid_phi_skip=n_grid_phi_skip,
-            eps_cap=eps_cap,
-            n_newton_iter=n_newton_iter
-        )
-        return(eps_crit**2, jacobian_residue)
+    # def get_psi_crit(
+    #     self, n_max=float('inf'), 
+    #     n_grid_chi=100, n_grid_phi_skip=1, 
+    #     psi_cap = None,
+    #     n_newton_iter = 20):
+    #     if psi_cap is None:
+    #         eps_cap = None
+    #     else:
+    #         eps_cap = jnp.sqrt(psi_cap)
+    #     eps_crit, jacobian_residue = self.get_eps_crit(
+    #         n_max=n_max, 
+    #         n_grid_chi=n_grid_chi, 
+    #         n_grid_phi_skip=n_grid_phi_skip,
+    #         eps_cap=eps_cap,
+    #         n_newton_iter=n_newton_iter
+    #     )
+    #     return(eps_crit**2, jacobian_residue)
     
     @partial(jit, static_argnums=(4,))
     def jacobian_e_eps_scalar_legacy(self, eps:float, chi:float, phi:float, n_max=float('inf')):
@@ -429,13 +429,12 @@ class Equilibrium:
     jacobian_e_eps_legacy = jnp.vectorize(jacobian_e_eps_scalar_legacy, excluded=(0, 4))
 
     @partial(jit, static_argnums=(4,))
-    def jacobian_coord_eps_legacy(self, eps, chi, phi, n_max=float('inf')): 
+    def jacobian_eps_legacy(self, eps, chi, phi, n_max=float('inf')): 
         return(self.jacobian_e_eps_legacy(eps, chi, phi, n_max)/2/eps)
 
     @partial(jit, static_argnums=(4,)) 
-    def jacobian_coord_legacy(self, psi, chi, phi, n_max=float('inf')): 
-        return(self.jacobian_coord_eps(jnp.sqrt(psi), chi, phi, n_max))
-
+    def jacobian_legacy(self, psi, chi, phi, n_max=float('inf')): 
+        return(self.jacobian_eps(jnp.sqrt(psi), chi, phi, n_max))
 
     def covariant_basis(self):
         '''
@@ -521,7 +520,7 @@ class Equilibrium:
             dphi_r_z,
         )
 
-    def jacobian_e(self):
+    def jacobian_eps(self):
         (
             deps_r_x,
             deps_r_y,
@@ -539,20 +538,37 @@ class Equilibrium:
             deps_r_z * (dchi_r_x * dphi_r_y - dchi_r_y * dphi_r_x)
         )
         return(triple_product)
+    
+    def jacobian(self):
+        '''
+        Calculates the Jacobian.
+          dr/dpsi x (dr/dchi . dr/dphi)
+        = dr/d(eps^2)) x (dr/dchi . dr/dphi)
+        = (1/2eps) dr/deps x (dr/dchi . dr/dphi)
+        We know that J_e = dr/deps x (dr/dchi . dr/dphi) = 0 at eps=0.
+        So J can be simply calculated by dropping the first element in 
+        the power series, and then dividing by 2.
+        '''
+        jacobian_e = self.jacobian_eps()
+        new_list = []
+        for i in range(len(jacobian_e.chiphifunc_list)-1):
+            new_list.append(jacobian_e.chiphifunc_list[i+1]/2)
+        jacobian = ChiPhiEpsFunc(new_list, jacobian_e.nfp, False)
+        return(jacobian)
 
-    def jacobian_coord_eps(self, eps, chi, phi, n_max=float('inf')): 
-        return(jnp.real(self.jacobian_e().eval_eps(eps, chi, phi, n_max)/2/eps))
+    # def jacobian_eps(self, eps, chi, phi, n_max=float('inf')): 
+    #     return(jnp.real(self.jacobian_e().eval_eps(eps, chi, phi, n_max)/2/eps))
 
     def jacobian_nae(self):
         return(self.constant['B_alpha_coef'] * self.constant['B_denom_coef_c'])
 
-    def get_eps_crit(
+    def get_psi_crit(
         self, n_max=float('inf'), 
         n_grid_chi=100,
         n_grid_phi_skip=1,
-        eps_cap = None,
+        psi_cap = None,
         n_newton_iter = 10,
-        jacobian_coord_eps_callable=None):
+        jacobian_eps_callable=None):
         '''
 
         Estimates the critical epsilon where flux surface self-intersects.
@@ -579,23 +595,23 @@ class Equilibrium:
         
         - (eps_crit, jacobian_residue): eps_crit and the flux surface min of the Jacobian at eps_crit.
         '''
-        if eps_cap is None:
+        if psi_cap is None:
             effective_major_radius = self.axis_info['axis_length']/jnp.pi/2
             B0 = self.constant['B_denom_coef_c'][0]
-            eps_cap = jnp.sqrt(effective_major_radius**2 * B0)
+            psi_cap = jnp.sqrt(effective_major_radius**2 * B0)
         phi_gbc = self.axis_info['phi_gbc'][::n_grid_phi_skip]
         points_chi = jnp.linspace(0, 2*jnp.pi, n_grid_chi, endpoint=False)
 
-        if jacobian_coord_eps_callable is None:
-            jacobian_coord_eps_callable = self.jacobian_coord_eps
+        if jacobian_eps_callable is None:
+            jacobian_eps_callable = self.jacobian_eps().eval
         # Finding jacobian_min=0 using Newton's method.
-        jacobian_grid = lambda eps: jacobian_coord_eps_callable(eps, points_chi[:, None], phi_gbc[None, :], n_max = n_max)
-        jacobian_min = lambda eps: jnp.min(jacobian_grid(eps))
-        jacobian_min_prime = jax.grad(jacobian_min)
+        jacobian_grid = lambda psi: jnp.real(jacobian_eps_callable(psi, points_chi[:, None], phi_gbc[None, :], n_max = n_max))
+        jacobian_min = lambda psi: jnp.min(jacobian_grid(psi))
+        jacobian_min_prime = grad(jacobian_min)
         def q(i, x):
             return(x - jacobian_min(x) / jacobian_min_prime(x))
-        eps_sln = fori_loop(0, n_newton_iter, q, eps_cap)
-        return(eps_sln, jacobian_min(eps_sln))
+        psi_sln = fori_loop(0, n_newton_iter, q, psi_cap)
+        return(psi_sln, jacobian_min(psi_sln))
         '''
         # Zero-finding with binary search is faster but cannot be jitted.
         # Binary search for jacobian_min=0,
@@ -625,7 +641,7 @@ class Equilibrium:
         Calculates the volume integral of a quantity as a ChiPhiEpsFunc
         with no Chi or Phi dependence.
         '''
-        jac = self.jacobian_e()
+        jac = self.jacobian_eps()
         integrand = jac * y
         # Eps, phi and chi integral
         new_chiphifunc_list = [ChiPhiFuncSpecial(0)]
