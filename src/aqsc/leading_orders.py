@@ -1,4 +1,5 @@
 import jax.numpy as jnp
+from jax.lax import scan
 from interpax import interp1d
 from .chiphifunc import *
 from .chiphiepsfunc import *
@@ -946,7 +947,7 @@ def leading_orders_from_axis(
             return((y_np1, ind+2), y_np1)
 
         ind_list = jnp.arange(0,len_phi+2,2)
-        (_, _), y_arr = jax.lax.scan(f=iterate_y, init=(y0, 0), xs=ind_list)
+        (_, _), y_arr = scan(f=iterate_y, init=(y0, 0), xs=ind_list)
         # This is an objective function that enforces
         # the boundary condition.
         # For some iota and y(0) the solution is exponentially growing
@@ -1095,7 +1096,7 @@ def leading_orders_from_axis(
     # Performing the first iteration
     # to find iota_0/B_theta_20_avg with finite (instead
     # of exponentially growing) and near periodic solutions.
-    _, (x_secant_list1, _, f_list1) = jax.lax.scan(
+    _, (x_secant_list1, _, f_list1) = scan(
         f=secant_scan_callable1, 
         init=(
             x_secant_init2, 
@@ -1111,7 +1112,7 @@ def leading_orders_from_axis(
     # correct iota_0/B_theta_20_avg
     f2_init, _, _, _ = secant_step(
         x_secant_sln1, 0, Y11c_spectral)
-    _, (x_secant_list2, _, f_list2) = jax.lax.scan(
+    _, (x_secant_list2, _, f_list2) = scan(
         f=secant_scan_callable2, 
         init=(
             x_secant_sln1, 
