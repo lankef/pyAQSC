@@ -1,4 +1,5 @@
 import jax.numpy as jnp
+from jax.tree_util import tree_map
 # from jax import jit, vmap, tree_util
 # from functools import partial # for JAX jit with static params
 
@@ -31,7 +32,7 @@ def py_sum(expr, lower:int, upper:int):
     # out = fori_loop(lower_ceil, upper_floor+1, body_fun, 0)
     # return(out)
     indices = list(range(lower_ceil,upper_floor+1))
-    out_list = jax.tree_util.tree_map(expr, indices)
+    out_list = tree_map(expr, indices)
     for item in out_list:
         out = out+item
     return(out)
