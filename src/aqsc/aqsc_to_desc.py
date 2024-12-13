@@ -1,19 +1,20 @@
 import jax.numpy as jnp
-from desc.equilibrium import Equilibrium
-from desc.grid import Grid
-from desc.basis import FourierZernikeBasis
-from desc.transform import Transform
-from desc.profiles import FourierZernikeProfile, PowerSeriesProfile
-from desc.objectives import ForceBalanceAnisotropic, ObjectiveFunction
-from qsc import Qsc # currently get_NAE_constraints needs a qsc equilibria so we just create a dummy one
 from scipy.constants import mu_0
 from scipy import special
 
 def aqsc_to_desc_near_axis(na_eq, psi_max, n_max=float('inf'), M=6, N=8, stellsym=True, solve_force_balance=True, maxiter=100):
-    '''
-    M is 
-    N is 
-    '''
+    try:
+        from desc.equilibrium import Equilibrium
+        from desc.grid import Grid
+        from desc.basis import FourierZernikeBasis
+        from desc.transform import Transform
+        from desc.profiles import FourierZernikeProfile, PowerSeriesProfile
+        from desc.objectives import ForceBalanceAnisotropic, ObjectiveFunction
+        from qsc import Qsc # currently get_NAE_constraints needs a qsc equilibria so we just create a dummy one
+        print("DESC is installed.")
+        # Code leveraging desc-opt
+    except ImportError:
+        raise ImportError("This feature requires DESC. Install it with `pip install desc-opt`.")
 
     r=float(psi_max) # Psi_aqsc = Psi/2pi
     L=None # leave this alone
@@ -150,6 +151,18 @@ def aqsc_to_desc_boundary(na_eq, psi_max, n_max=float('inf'), M=6, N=8, solve_fo
     desc_eq : desc.equilibrium.Equilibrium
         near axis equilibrium fit to desc basis.
     """
+    try:
+        from desc.equilibrium import Equilibrium
+        from desc.grid import Grid
+        from desc.basis import FourierZernikeBasis
+        from desc.transform import Transform
+        from desc.profiles import FourierZernikeProfile, PowerSeriesProfile
+        from desc.objectives import ForceBalanceAnisotropic, ObjectiveFunction
+        from qsc import Qsc # currently get_NAE_constraints needs a qsc equilibria so we just create a dummy one
+        print("DESC is installed.")
+        # Code leveraging desc-opt
+    except ImportError:
+        raise ImportError("This feature requires DESC. Install it with `pip install desc-opt`.")
 
     r=float(psi_max) # Psi_aqsc = Psi/2pi
     L=M
