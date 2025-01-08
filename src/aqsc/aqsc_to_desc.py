@@ -2,19 +2,21 @@ import jax.numpy as jnp
 from scipy.constants import mu_0
 from scipy import special
 
-def aqsc_to_desc_near_axis(na_eq, psi_max, n_max=float('inf'), M=6, N=8, stellsym=True, solve_force_balance=True, maxiter=100):
+def aqsc_to_desc_near_axis(
+        na_eq, psi_max, n_max=float('inf'), 
+        M=6, N=8, stellsym=True, solve_force_balance=True, maxiter=25):
     try:
         from desc.equilibrium import Equilibrium
         from desc.grid import Grid
         from desc.basis import FourierZernikeBasis
         from desc.transform import Transform
         from desc.profiles import FourierZernikeProfile, PowerSeriesProfile
-        from desc.objectives import ForceBalanceAnisotropic, ObjectiveFunction
+        from desc.objectives import ForceBalanceAnisotropic, ObjectiveFunction, get_NAE_constraints
         from qsc import Qsc # currently get_NAE_constraints needs a qsc equilibria so we just create a dummy one
-        print("DESC is installed.")
+        print("DESC and pyQSC is installed.")
         # Code leveraging desc-opt
     except ImportError:
-        raise ImportError("This feature requires DESC. Install it with `pip install desc-opt`.")
+        raise ImportError("This feature requires DESC and pyQSC.")
 
     r=float(psi_max) # Psi_aqsc = Psi/2pi
     L=None # leave this alone
@@ -123,18 +125,16 @@ def aqsc_to_desc_near_axis(na_eq, psi_max, n_max=float('inf'), M=6, N=8, stellsy
         'chis': chis
     }
     if solve_force_balance:
-        cons = get_NAE_constraints(eq, Qsc.from_paper("precise QA"), profiles=True)
-        for con in cons:
-            if hasattr(con, "_target_from_user"):
-                # override the old target to target the current equilibrium
-                con._target_from_user = None
-            con.build()
+        cons = get_NAE_constraints(eq, qsc_eq=None, profiles=True, fix_lambda=True)
         eq2, _ = eq.solve(objective=ObjectiveFunction(ForceBalanceAnisotropic(eq)), constraints=cons, verbose=1, maxiter=maxiter, copy=True)
+        return(eq, eq2, aux_dict)
     return(eq, aux_dict)
 
 
 
-def aqsc_to_desc_boundary(na_eq, psi_max, n_max=float('inf'), M=6, N=8, solve_force_balance=True, maxiter=25):
+def aqsc_to_desc_boundary(
+        na_eq, psi_max, n_max=float('inf'), 
+        M=6, N=8, solve_force_balance=True, maxiter=25):
     """Convert an equilibrium from AQSC to DESC.
     Parameters
     ----------

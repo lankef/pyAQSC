@@ -7,7 +7,7 @@ name = "aqsc"
 description = "Constructs QS stellarator equilibrium to all orders."
 readme = "README.MD"
 version = "0.1.5"
-dependencies = ["numpy", "matplotlib", "jax"]
+dependencies = ["numpy", "matplotlib", "jax", "interpax", "scipy"]
 authors = [
   { name="Lanke Fu", email="ffu@pppl.edu" },
 ]

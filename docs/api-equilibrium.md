@@ -117,23 +117,62 @@ Returns:
 
 ## Functions for calculating physical quantities
 
-### `aqsc.Equilibrium.covariant_basis()`
-Calculates the covariant basis of the equilibrium's GBC:
+### `aqsc.Equilibrium.contravariant_basis_eps()`
+Calculates the contravariant basis of the equilibrium's GBC:
+
 $$
 \frac{\partial\bold{r}}{\partial\epsilon}, \frac{\partial\bold{r}}{\partial\chi}, \frac{\partial\bold{r}}{\partial\phi}.
 $$
 
 Returns:
 
-- `deps_r_x` - `ChiPhiEpsFunc`, the $x$ component of `\frac{\partial\bold{r}}{\partial\epsilon}`
-- `deps_r_y` - `ChiPhiEpsFunc`, the $y$ component of `\frac{\partial\bold{r}}{\partial\epsilon}`
-- `deps_r_z` - `ChiPhiEpsFunc`, the $z$ component of `\frac{\partial\bold{r}}{\partial\epsilon}`
-- `dchi_r_x` - `ChiPhiEpsFunc`, the $x$ component of `\frac{\partial\bold{r}}{\partial\chi}`
-- `dchi_r_y` - `ChiPhiEpsFunc`, the $y$ component of `\frac{\partial\bold{r}}{\partial\chi}`
-- `dchi_r_z` - `ChiPhiEpsFunc`, the $z$ component of `\frac{\partial\bold{r}}{\partial\chi}`
-- `dphi_r_x` - `ChiPhiEpsFunc`, the $x$ component of `\frac{\partial\bold{r}}{\partial\phi}`
-- `dphi_r_y` - `ChiPhiEpsFunc`, the $y$ component of `\frac{\partial\bold{r}}{\partial\phi}`
-- `dphi_r_z` - `ChiPhiEpsFunc`, the $z$ component of `\frac{\partial\bold{r}}{\partial\phi}`
+- `deps_r_x` - `ChiPhiEpsFunc`, the $x$ component of $\frac{\partial\bold{r}}{\partial\epsilon}$
+- `deps_r_y` - `ChiPhiEpsFunc`, the $y$ ...
+- `deps_r_z` - `ChiPhiEpsFunc`, the $z$ ...
+- `dchi_r_x` - `ChiPhiEpsFunc`, the $x$ component of $\frac{\partial\bold{r}}{\partial\chi}$
+- `dchi_r_y` - `ChiPhiEpsFunc`, the $y$ ...
+- `dchi_r_z` - `ChiPhiEpsFunc`, the $z$ ...
+- `dphi_r_x` - `ChiPhiEpsFunc`, the $x$ component of $\frac{\partial\bold{r}}{\partial\phi}$
+- `dphi_r_y` - `ChiPhiEpsFunc`, the $y$ ...
+- `dphi_r_z` - `ChiPhiEpsFunc`, the $z$ ...
+
+
+### `aqsc.Equilibrium.jacobian()`
+### `aqsc.Equilibrium.jacobian_eps()`
+### `aqsc.Equilibrium.jacobian_nae()`
+Calculates
+- $J_\text{coord}(\epsilon, \chi, \psi) \equiv \frac{\partial\textbf{r}}{\partial\psi}\cdot\left(\frac{\partial\textbf{r}}{\partial\chi}\times\frac{\partial\textbf{r}}{\partial\phi}\right) 
+ = \frac{1}{2\epsilon} J^\epsilon_\text{coord}$,
+- $J^\epsilon_\text{coord}(\epsilon, \chi, \psi) \equiv \frac{\partial\textbf{r}}{\partial\epsilon}\cdot\left(\frac{\partial\textbf{r}}{\partial\chi}\times\frac{\partial\textbf{r}}{\partial\phi}\right) = 2\epsilon J_\text{coord}$,
+- $J_\text{NAE}(\psi, \chi) \equiv \frac{B_\alpha(\psi)}{|B|^2(\psi, \chi)}$.
+
+
+The difference between $J\text{coord} = J^\epsilon_\text{coord}/2\epsilon$ and $J_\text{NAE}$ increases at increasing $\psi$. We strongly recommend evaluating at `self.axis_info['phi_gbc']` to reduce interpolation error.
+  
+Returns:
+
+- `jacobian : ChiPhiEpsFunc`
+
+### `aqsc.Equilibrium.covariant_basis_eps_j_eps()`
+### `aqsc.Equilibrium.covariant_basis_j_eps()`
+Calculates the covariant basis of the equilibrium's GBC, multiplied with $J^\epsilon$:
+- $J^\epsilon_\text{coord}\nabla\epsilon, J^\epsilon_\text{coord}\nabla\chi, J^\epsilon_\text{coord}\nabla\phi$
+- $J^\epsilon_\text{coord}\nabla\psi, J^\epsilon_\text{coord}\nabla\chi, J^\epsilon_\text{coord}\nabla\phi$
+
+We implemented this rather than the covariant basis because this can be represented by a power-Fourier series (or equivalently, a `ChiPhiEpsFunc`), but the covariant basis cannot.
+
+$J^\epsilon_\text{coord}\nabla\epsilon = \frac{\partial\textbf{r}}{\partial\chi}\times\frac{\partial\textbf{r}}{\partial\phi}$ is special because it is also the flux surface integral Jacobian.
+
+Returns:
+- `j_eps_grad_eps_x` or `j_eps_grad_psi_x` - `ChiPhiEpsFunc`, the $x$ component of $J^\epsilon_\text{coord}\nabla\epsilon$ or $J^\epsilon_\text{coord}\nabla\psi$
+- `j_eps_grad_eps_y` or `j_eps_grad_psi_y` - `ChiPhiEpsFunc`, the $y$ ...
+- `j_eps_grad_eps_z` or `j_eps_grad_psi_z` - `ChiPhiEpsFunc`, the $z$ ...
+- `j_eps_grad_chi_x` - `ChiPhiEpsFunc`, the $x$ component of $J^\epsilon_\text{coord}\nabla\chi$
+- `j_eps_grad_chi_y` - `ChiPhiEpsFunc`, the $y$ ...
+- `j_eps_grad_chi_z` - `ChiPhiEpsFunc`, the $z$ ...
+- `j_eps_grad_phi_x` - `ChiPhiEpsFunc`, the $x$ component of $J^\epsilon_\text{coord}\nabla\phi$
+- `j_eps_grad_phi_y` - `ChiPhiEpsFunc`, the $y$ ...
+- `j_eps_grad_phi_z` - `ChiPhiEpsFunc`, the $z$ ...
 
 ### `aqsc.Equilibrium.volume_integral(y)`
 Calculates the volume integral of a scalar, `ChiPhiFunc`, or `ChiPhiEpsFunc`. Produces a `ChiPhiEpsFunc` with only $\epsilon$ dependence.
@@ -147,8 +186,7 @@ Returns:
 - `ChiPhiEpsFunc` - The volume integral as a function of $\epsilon$.
 
 
-### `aqsc.Equilibrium.get_psi_crit(n_max=float('inf'), n_grid_chi=100, n_grid_phi_skip=10, psi_cap = None, n_newton_iter = 10)`
-### `aqsc.Equilibrium.get_eps_crit(n_max=float('inf'), n_grid_chi=100, n_grid_phi_skip=10, eps_cap = None, n_newton_iter = 10)`
+### `aqsc.Equilibrium.get_psi_crit(n_max=float('inf'), n_grid_chi=100, n_grid_phi_skip=10, psi_init=None, fix_maxiter=False, max_iter=20, tol=1e-4)`
 Estimates the critical $\epsilon=\sqrt{\psi}$ or $\psi$ where flux surface self-intersects
 by numerically the smallest $\epsilon$ or $\psi$ with $\min_{\chi, \phi}\frac{\partial\bold{r}}{\partial\psi}\cdot(\frac{\partial\bold{r}}{\partial\chi}\times\frac{\partial\bold{r}}{\partial\phi})\leq0$. Uses Newton's method. This function evaluates the Jacobian on a grid of $\chi$ and $\phi$ to find the minimum. The $\chi$ grid has `n_grid_chi` uniformly spaced points, and the `\phi` grid takes every `n_grid_phi_skip` element from `self.axis_info['phi_gbc']` to reduce interpolation error.
 
@@ -163,14 +201,30 @@ Parameters:
 - `n_grid_chi, n_grid_phi : int` (static) - Grid size to evaluate Jacobian $\sqrt{g}$ on. 
 The critical point occurs when $min(\sqrt{g}\leq0)$.
 
-- `psi_cap = None` (static) - Initial guess for $\psi_{crit}$. By default, uses $B_{axis}R^2_0$.
+- `psi_init = None` (static) - Initial guess for $\psi_{crit}$. By default, uses $B_{axis}R^2_0$.
 
-- `n_newton_iter : int` (static) - Maximum number of steps in Newton's method.
-higher number gives better acuracy but is slower to jit.
+- `max_iter = 20 : int` (static) - Maximum number of steps in Newton's method.
+
+- `fix_maxiter = False : bool` (static) - When `False`, iterate till $J \leq tol$ using `jax.while_loop`. In this mode, the method supports only forward-mode auto-differentiation. When `True`, uses `jax.fori_loop`, ignores `tol`, and supports reverse-mode auto-differentiation. 
+
+- `tol = 1e-4 : float` (traced) - Tolerance for solving $J=0$.
 
 Returns: 
 
-- `(psi_crit, jacobian_residue)` (or `(eps_crit, jacobian_residue)`): The $\psi_{crit}$ (or $\epsilon_{crit}$) and $\min_{\chi, \phi}\frac{\partial\bold{r}}{\partial\psi}\cdot(\frac{\partial\bold{r}}{\partial\chi}\times\frac{\partial\bold{r}}{\partial\phi})$ at $\psi_{crit}$ (or $\epsilon_{crit}$).
+- `(psi_crit, jacobian_residue, n_iter)`. The $\psi_{crit}$, the $\min_{\chi, \phi}\frac{\partial\bold{r}}{\partial\psi}\cdot(\frac{\partial\bold{r}}{\partial\chi}\times\frac{\partial\bold{r}}{\partial\phi})$ at $\psi_{crit}$, and the number of iterations performed.
+
+### `aqsc.Equilibrium.B_vec_j_eps(self)`
+Calculates the components of $(j^\epsilon_\text{coord}\mathbf{B})$ using:
+
+$$\mathbf{B}=B_\theta \nabla \chi+\left(B_\alpha-\bar{\imath} B_\theta\right) \nabla \phi+B_\psi \nabla \psi$$
+
+and `aqsc.Equilibrium.covariant_basis_j_eps()`.
+
+We implemented this rather than $\mathbf{B}$ because this can be represented by a power-Fourier series (or equivalently, a `ChiPhiEpsFunc`), but $\mathbf{B}$ cannot.
+
+Returns:
+
+- `j_eps_B_x, j_eps_B_y, j_eps_B_z` as `ChiPhiEpsFunc`s.
 
 ### `aqsc.Equilibrium.flux_to_frenet(psi, chi, phi, n_max=float('inf'))`
 ### `aqsc.Equilibrium.flux_to_xyz(psi, chi, phi, n_max=float('inf'))`
@@ -211,23 +265,6 @@ Returns:
 - `binormal_phi_y : jnp.array`
 - `binormal_phi_z : jnp.array`
 
-### `aqsc.Equilibrium.jacobian_coord_e()`
-### `aqsc.Equilibrium.jacobian_nae()`
-Calculates
-$$
-J^\epsilon_\text{coord}(\epsilon, \chi, \psi) \equiv \frac{\partial\textbf{r}}{\partial\epsilon}\cdot\left(\frac{\partial\textbf{r}}{\partial\chi}\times\frac{\partial\textbf{r}}{\partial\phi}\right)
-$$
-and
-$$
-J_\text{NAE}(\psi, \chi) \equiv \frac{B_\alpha(\psi)}{|B|^2(\psi, \chi)}.
-$$
-As described in the paper, the difference between $J\text{coord} = J^\epsilon_\text{coord}/2\epsilon$ and $J_\text{NAE}$ increases at increasing $\psi$. We strongly recommend evaluating at `self.axis_info['phi_gbc']` to reduce interpolation error. The current implementation doesn't work at $\psi=0$. 
-  
-Returns:
-
-- `jacobian : ChiPhiEpsFunc`
-
-
 ## Functions for output
 
 ### `aqsc.Equilibrium.get_order()`
@@ -248,22 +285,38 @@ Returns:
 ### `aqsc.Equilibrium.check_order_consistency()`
 Checks whether all items in `self.unknown` and `self.constant` has consistent highest known order. If not, throws `AttributeError`'s. **Cannot be JIT compiled.**
 
-### `aqsc.Equilibrium.check_governing_equations(n_unknown:int, magnetic:bool=False)`
+### `aqsc.Equilibrium.check_governing_equations(n_unknown:int, normalize:bool=True)`
 Evaluates the residual (LHS-RHS) of all governing equations at a given order. The results should be as close to 0 as possible.
 
 Parameters:
 
 - `n_unknown : int` (static) - Order to evaluate residuals at.
+- `normalize : bool` (static) - Whether to normalize the maximum magnitude.
 
 Returns:
 
-- `J : ChiPhiFunc` (traced) - The residual of the Jacobian equation
-- `Cb : ChiPhiFunc` (traced) - The residual of the co/contravariant equation's tangent component.
-- `Ck : ChiPhiFunc` (traced) - The residual of the co/contravariant equation's normal component. 
-- `Ct : ChiPhiFunc` (traced) - The residual of the co/contravariant equation's binormal component
-- `I : ChiPhiFunc` (traced) - The residual of the force balance equation I. (See [Ref.2](https://doi.org/10.1063/5.0027574))
-- `II : ChiPhiFunc` (traced) - The residual of the force balance equation II.
-- `II : ChiPhiFunc` (traced) - The residual of the force balance equation III.
+- `J : ChiPhiFunc` (traced) - The residual of the Jacobian equation. Normalized by:
+$$\max\left|2\left(\frac{dl}{d\phi}\right)^2\kappa X_n\right|$$
+- `Cb : ChiPhiFunc` (traced) - The residual of the co/contravariant equation's tangent component. Normalized by:
+$$\max\left|-\frac{n}{2} B_{\alpha 0}\frac{\partial X_1}{\partial\chi} Y_n
+                +\frac{1}{2} B_{\alpha 0} X_1 \frac{\partial Y_n}{\partial\chi}
+            \right|$$
+- `Ck : ChiPhiFunc` (traced) - The residual of the co/contravariant equation's normal component.  Normalized by:
+$$\max\left| -(n+1) Z_n B_{\alpha 0} \frac{\partial Y_1}{\partial\chi}
+                + \frac{1}{2} \frac{\partial Z_n}{\partial\chi} (B_{\alpha 0} Y_1) \right|$$
+- `Ct : ChiPhiFunc` (traced) - The residual of the co/contravariant equation's binormal component Normalized by:
+$$\max\left| (n+1) Z_n B_{\alpha 0}\frac{\partial X_1}{\partial\chi}  
+                - \frac{1}{2}\frac{\partial Z_n}{\partial\chi} B_{\alpha 0}X_1 \right|$$
+- `I : ChiPhiFunc` (traced) - The residual of the force balance equation I. (See [Ref.2](https://doi.org/10.1063/5.0027574)) Normalized by:
+$$\max\left| \left(
+                    \frac{\partial \Delta_n}{\partial\phi}
+                    + \bar\iota_0  \frac{\partial \Delta_n}{\partial\chi}
+                \right)B^-_0 \right|$$
+- `II : ChiPhiFunc` (traced) - The residual of the force balance equation II. Normalized by:
+$$\max\left| - (B^-_0)^2  \frac{\partial p_{\perp 0}}{\partial\phi}  B_{\theta n}
+                + B^-_0(\Delta_0 - 1) \left( \bar\iota_0  \frac{\partial B_{\theta n}}{\partial\chi} + \frac{\partial B_{\theta n}}{\partial\phi}\right) \right|$$
+- `III : ChiPhiFunc` (traced) - The residual of the force balance equation III. Normalized by:
+$$\max\left|  \frac{n}{2}(B^-_0)^2B_{\alpha 0} p_{\perp n} \right|$$
 
 ### `aqsc.Equilibrium.display_order(n:int)`
 Plots all quantities at order $n$. By default, display flux surfaces up to $\psi=\psi_{crit}$.

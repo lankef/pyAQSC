@@ -12,7 +12,7 @@ For an intriduction on near-axis expansion and the formulation behind pyAQSC, se
 For a quick example, see [quick start](quick-start.md).
 
 ## Installation and dependencies
-pyAQSC requires only Numpy, Matplotlib, and JAX. To install a JAX version matching your hardware, see the official [JAX installation guide](https://jax.readthedocs.io/en/latest/installation.html).
+pyAQSC requires Numpy, Matplotlib, Scipy, JAX, and interpax. To install a JAX version matching your hardware, see the official [JAX installation guide](https://jax.readthedocs.io/en/latest/installation.html).
 
 After installing JAX, install pyAQSC by:
 
@@ -32,9 +32,6 @@ To use pyAQSC, simply run
 
 ## Contact
 Please contact [Lanke Fu](mailto:ffu@pppl.gov) at PPPL for questions and bug reports.
-
-## Caution
-The accuracy bottleneck of the code is in the `jnp.interp` calls and axis length calculations in `aqsc.get_axis_info`, as well as the coordinate transforms in `aqsc.Equilibrium`.
 
 ## References
 1. [Weakly Quasisymmetric Near-Axis Solutions to all Orders](https://doi.org/10.1063/5.0076583)

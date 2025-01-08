@@ -905,10 +905,10 @@ def leading_orders_from_axis(
     else:
         iota_coef = ChiPhiEpsFunc([x_secant_list2[jnp.argmin(f_list2)-1]], nfp, True)
     if solve_B_theta_20_avg:
-        print('Solving for average B_{\\theta20} self-consistently:')
+        print('Solving for average B_{\\theta20} self-consistently.')
         # print('\\bar{B}_{\\theta20} =', x_secant_list2[jnp.argmin(f_list2)-1])
     else:
-        print('Solving for \\bar{\\iota}_0 self-consistently:')
+        print('Solving for \\bar{\\iota}_0 self-consistently.')
         # print('\\bar{\\iota}_0 =', x_secant_list2[jnp.argmin(f_list2)-1])
 
     ''' 2nd order quantities '''

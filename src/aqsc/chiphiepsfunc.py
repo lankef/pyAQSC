@@ -2,7 +2,8 @@ import jax.numpy as jnp
 import numpy as np # Used in saving
 # from functools import partial
 # from jax import jit, tree_util
-from jax import tree_util
+from jax import tree_util, jit
+from functools import partial # for JAX jit with static params
 
 from .chiphifunc import *
 from .chiphifunc import ChiPhiFunc
