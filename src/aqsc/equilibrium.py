@@ -525,7 +525,7 @@ class Equilibrium:
         n_grid_phi_skip=1,
         psi_init=None,
         fix_maxiter=False,
-        max_iter=20,
+        maxiter=20,
         tol=1e-8,
         jacobian_eps_callable=None):
         '''
@@ -570,8 +570,8 @@ class Equilibrium:
         if fix_maxiter:
             def q(i, x):
                 return(x - jacobian_min(x) / jacobian_min_prime(x))
-            psi_sln = fori_loop(0, max_iter, q, psi_init)
-            n_iter = max_iter
+            psi_sln = fori_loop(0, maxiter, q, psi_init)
+            n_iter = maxiter
         else:
             def conv(dict_in):
                 # conv = dict_in['conv']
@@ -579,7 +579,7 @@ class Equilibrium:
                 return(
                     # This is the convergence condition (True when not converged yet)
                     jnp.logical_and(
-                        dict_in['i'] <= max_iter,
+                        dict_in['i'] <= maxiter,
                         jacobian_min(x)**2 >= tol**2,
                     )
                 )

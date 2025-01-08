@@ -78,9 +78,9 @@ def aqsc_to_desc_near_axis(
     Asin = transform_sin.matrices['direct1'][0][0][0]
 
     psi = rho**2*r
-    p_perp = na_eq.unknown['p_perp_coef_cp'].eval(psi, chis, phiBs, n_max=n_max).real / mu_0
-    delta = na_eq.unknown['Delta_coef_cp'].eval(psi, chis, phiBs, n_max=n_max).real
-    iota = na_eq.constant['iota_coef'].eval(rho[:,0,0,]**2*r, 0, 0, n_max=n_max) + na_eq.get_helicity()
+    p_perp = jnp.real(na_eq.unknown['p_perp_coef_cp'].eval(psi, chis, phiBs, n_max=n_max).real / mu_0)
+    delta = jnp.real(na_eq.unknown['Delta_coef_cp'].eval(psi, chis, phiBs, n_max=n_max).real)
+    iota = jnp.real(na_eq.constant['iota_coef'].eval(rho[:,0,0,]**2*r, 0, 0, n_max=n_max) + na_eq.get_helicity())
 
     nu_B = phiBs - phiC
     lmbda = nu_B * iota[:,None,None]
@@ -209,9 +209,9 @@ def aqsc_to_desc_boundary(
     transform_sin = Transform(grid, basis_sin, method="direct1")
     Acos = transform_cos.matrices['direct1'][0][0][0]
     Asin = transform_sin.matrices['direct1'][0][0][0]
-    p_perp = na_eq.unknown['p_perp_coef_cp'].eval(rho**2*r, chis, phiBs, n_max=n_max).real / mu_0
-    delta = na_eq.unknown['Delta_coef_cp'].eval(rho**2*r, chis, phiBs, n_max=n_max).real
-    iota = na_eq.constant['iota_coef'].eval(rho[:,0,0,]**2*r, 0, 0, n_max=n_max) + na_eq.get_helicity()
+    p_perp = jnp.real(na_eq.unknown['p_perp_coef_cp'].eval(rho**2*r, chis, phiBs, n_max=n_max).real / mu_0)
+    delta = jnp.real(na_eq.unknown['Delta_coef_cp'].eval(rho**2*r, chis, phiBs, n_max=n_max).real)
+    iota = jnp.real(na_eq.constant['iota_coef'].eval(rho[:,0,0,]**2*r, 0, 0, n_max=n_max) + na_eq.get_helicity())
     
     nu_B = phiBs - phiC
     lmbda = nu_B * iota[:,None,None]

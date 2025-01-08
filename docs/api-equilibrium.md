@@ -186,7 +186,7 @@ Returns:
 - `ChiPhiEpsFunc` - The volume integral as a function of $\epsilon$.
 
 
-### `aqsc.Equilibrium.get_psi_crit(n_max=float('inf'), n_grid_chi=100, n_grid_phi_skip=10, psi_init=None, fix_maxiter=False, max_iter=20, tol=1e-4)`
+### `aqsc.Equilibrium.get_psi_crit(n_max=float('inf'), n_grid_chi=100, n_grid_phi_skip=10, psi_init=None, fix_maxiter=False, maxiter=20, tol=1e-8)`
 Estimates the critical $\epsilon=\sqrt{\psi}$ or $\psi$ where flux surface self-intersects
 by numerically the smallest $\epsilon$ or $\psi$ with $\min_{\chi, \phi}\frac{\partial\bold{r}}{\partial\psi}\cdot(\frac{\partial\bold{r}}{\partial\chi}\times\frac{\partial\bold{r}}{\partial\phi})\leq0$. Uses Newton's method. This function evaluates the Jacobian on a grid of $\chi$ and $\phi$ to find the minimum. The $\chi$ grid has `n_grid_chi` uniformly spaced points, and the `\phi` grid takes every `n_grid_phi_skip` element from `self.axis_info['phi_gbc']` to reduce interpolation error.
 
@@ -203,11 +203,11 @@ The critical point occurs when $min(\sqrt{g}\leq0)$.
 
 - `psi_init = None` (static) - Initial guess for $\psi_{crit}$. By default, uses $B_{axis}R^2_0$.
 
-- `max_iter = 20 : int` (static) - Maximum number of steps in Newton's method.
+- `maxiter = 20 : int` (static) - Maximum number of steps in Newton's method.
 
 - `fix_maxiter = False : bool` (static) - When `False`, iterate till $J \leq tol$ using `jax.while_loop`. In this mode, the method supports only forward-mode auto-differentiation. When `True`, uses `jax.fori_loop`, ignores `tol`, and supports reverse-mode auto-differentiation. 
 
-- `tol = 1e-4 : float` (traced) - Tolerance for solving $J=0$.
+- `tol = 1e-8 : float` (traced) - Tolerance for solving $J=0$.
 
 Returns: 
 
