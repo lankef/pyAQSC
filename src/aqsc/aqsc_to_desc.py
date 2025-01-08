@@ -158,7 +158,6 @@ def aqsc_to_desc_boundary(
         from desc.transform import Transform
         from desc.profiles import FourierZernikeProfile, PowerSeriesProfile
         from desc.objectives import ForceBalanceAnisotropic, ObjectiveFunction
-        from qsc import Qsc # currently get_NAE_constraints needs a qsc equilibria so we just create a dummy one
         print("DESC is installed.")
         # Code leveraging desc-opt
     except ImportError:

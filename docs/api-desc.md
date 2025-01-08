@@ -16,7 +16,7 @@ Parameters:
 - `solve_force_balance : bool = True` (static) - Whether to solve for force balance, or only fit the equilibrium.
 - `maxiter : int = 100` (static) - The number of iteration when solving for force balance.
 
-Outputs:
+Returns:
 
 - `eq : desc.Equilibrium` - The fitted DESC equilibrium.
 - `eq_force_balanced : desc.Equilibrium` - (only when `solve_force_balance == True`) The fitted DESC equilibrium after optimizing for force balance
@@ -45,7 +45,7 @@ Parameters:
 - `solve_force_balance : bool = True` (static) - Whether to solve for force balance, or only fit the equilibrium.
 - `maxiter : int = 100` (static) - The number of iteration when solving for force balance.
 
-Outputs:
+Returns:
 
 - `eq : desc.Equilibrium` - The fitted DESC equilibrium.
 - `eq_force_balanced : desc.Equilibrium` - (only when `solve_force_balance == True`) The fitted DESC equilibrium after optimizing for force balance
