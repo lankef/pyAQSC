@@ -524,36 +524,18 @@ class Equilibrium:
         n_grid_chi=100,
         n_grid_phi_skip=1,
         psi_init=None,
-        fix_maxiter=False,
-        maxiter=20,
-        tol=1e-8,
-        jacobian_eps_callable=None):
+        maxiter=100,
+        tol=1e-8):
         '''
-
         Estimates the critical epsilon where flux surface self-intersects.
         by finding the zero of $min_{\chi, \phi}[\sqrt{J}(\epsilon, \chi, \phi)]=0$
         using binary search. \sqrt{J}(\epsilon, \chi, \phi) At each search step 
         is evaluated on a grid of given size.
         Can be diffed but is slow to compile, because it relies on newton iteration
         for root finding. Reducing `n_newton_iter` substantially speeds up jit.
-
-        Parameters;
-
-        - `n_max` - maximum order to evaluate coordinate transformation to.
-
-        - `n_grid_chi, n_grid_phi : int`- Grid size to evaluate Jacobian $\sqrt{g}$ on. 
-        The critical point occurs when $min(\sqrt{g}\leq0)$.
-
-        - `bad_eps_init` - An initial guess of an epsilon>epsilon_crit used in Newton's 
-        method. Need to be beyond t
-
-        - `n_newton_iter:int` (static) - Maximum number of steps in Newton's method.
-        higher number gives better acuracy but is slower to jit.
-
-        Returns: 
-        
-        - (eps_crit, jacobian_residue): eps_crit and the flux surface min of the Jacobian at eps_crit.
         '''
+        if n_max<=1:
+            raise ValueError('psi_crit is only valid for n>1.')
         if psi_init is None:
             effective_major_radius = self.axis_info['axis_length']/jnp.pi/2
             B0 = self.constant['B_denom_coef_c'][0]
@@ -561,42 +543,44 @@ class Equilibrium:
         phi_gbc = self.axis_info['phi_gbc'][::n_grid_phi_skip]
         points_chi = jnp.linspace(0, 2*jnp.pi, n_grid_chi, endpoint=False)
 
-        if jacobian_eps_callable is None:
-            jacobian_eps_callable = self.jacobian_eps().eval
+        jacobian_eps_callable = self.jacobian_eps().eval
         # Finding jacobian_min=0 using Newton's method.
         jacobian_grid = lambda psi: jnp.real(jacobian_eps_callable(psi, points_chi[:, None], phi_gbc[None, :], n_max = n_max))
         jacobian_min = lambda psi: jnp.min(jacobian_grid(psi))
-        jacobian_min_prime = grad(jacobian_min)
-        if fix_maxiter:
-            def q(i, x):
-                return(x - jacobian_min(x) / jacobian_min_prime(x))
-            psi_sln = fori_loop(0, maxiter, q, psi_init)
-            n_iter = maxiter
-        else:
-            def conv(dict_in):
-                # conv = dict_in['conv']
-                x = dict_in['x']
-                return(
-                    # This is the convergence condition (True when not converged yet)
-                    jnp.logical_and(
-                        dict_in['i'] <= maxiter,
-                        jacobian_min(x)**2 >= tol**2,
-                    )
+        def conv(dict_in):
+            # conv = dict_in['conv']
+            x = (dict_in['x1'] + dict_in['x2'])/2
+            return(
+                # This is the convergence condition (True when not converged yet)
+                jnp.logical_and(
+                    dict_in['i'] <= maxiter,
+                    jacobian_min(x)**2 >= tol**2,
                 )
-            def q_while(dict_in):
-                i = dict_in['i']
-                x = dict_in['x']
-                return({
-                    'i': i + 1,
-                    'x': x - jacobian_min(x) / jacobian_min_prime(x)
-                })
-            dict_out = while_loop(
-                cond_fun=conv,
-                body_fun=q_while,
-                init_val={'i': 0, 'x': psi_init},
             )
-            psi_sln = dict_out['x']
-            n_iter = dict_out['i']
+        def q_while(dict_in):
+            i = dict_in['i']
+            x1 = dict_in['x1']
+            x2 = dict_in['x2']
+            x = (x1 + x2) / 2
+            y2 = jacobian_min(x2)
+            y = jacobian_min(x)
+            # If y2 and y have different signs, then x1_new is x, x2_new is x2
+            # jac_min(0)=0, so we can't use y1 and y as the condition to use 0 as 
+            # y1.
+            x1_new = jnp.where(y2 * y <= 0, x, x1)
+            x2_new = jnp.where(y2 * y <= 0, x2, x)
+            return({ 
+                'i': i + 1,
+                'x1': x1_new,
+                'x2': x2_new,
+            })
+        dict_out = while_loop(
+            cond_fun=conv,
+            body_fun=q_while,
+            init_val={'i': 0, 'x1': 0, 'x2': psi_init},
+        )
+        psi_sln = (dict_out['x1'] + dict_out['x2'])/2
+        n_iter = dict_out['i']
         return(psi_sln, jacobian_min(psi_sln), n_iter)
         '''
         # Zero-finding with binary search is faster but cannot be jitted.
