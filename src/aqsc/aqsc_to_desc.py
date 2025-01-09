@@ -13,7 +13,6 @@ def aqsc_to_desc_near_axis(
         from desc.profiles import FourierZernikeProfile, PowerSeriesProfile
         from desc.objectives import ForceBalanceAnisotropic, ObjectiveFunction, get_NAE_constraints
         from qsc import Qsc # currently get_NAE_constraints needs a qsc equilibria so we just create a dummy one
-        print("DESC and pyQSC is installed.")
         # Code leveraging desc-opt
     except ImportError:
         raise ImportError("This feature requires DESC and pyQSC.")
@@ -158,7 +157,6 @@ def aqsc_to_desc_boundary(
         from desc.transform import Transform
         from desc.profiles import FourierZernikeProfile, PowerSeriesProfile
         from desc.objectives import ForceBalanceAnisotropic, ObjectiveFunction
-        print("DESC is installed.")
         # Code leveraging desc-opt
     except ImportError:
         raise ImportError("This feature requires DESC. Install it with `pip install desc-opt`.")
