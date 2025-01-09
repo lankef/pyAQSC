@@ -314,7 +314,7 @@ class Equilibrium:
 
     ''' Display and output'''
 
-    def contravariant_basis_eps(self):
+    def contravariant_basis_eps(self, n_max=float('inf')):
         '''
         Calculates dr/deps, dr/dchi, dr/dphi.
         '''
@@ -363,9 +363,9 @@ class Equilibrium:
         axis_r0_dphi_z = tangent_z * dl_p
 
         # Returns (n_grid, n_grid) arrays. Axis=1 is Phi.
-        X_coef_cp = self.unknown['X_coef_cp']
-        Y_coef_cp = self.unknown['Y_coef_cp']
-        Z_coef_cp = self.unknown['Z_coef_cp']
+        X_coef_cp = self.unknown['X_coef_cp'].mask(n_max)
+        Y_coef_cp = self.unknown['Y_coef_cp'].mask(n_max)
+        Z_coef_cp = self.unknown['Z_coef_cp'].mask(n_max)
         deps_X_coef_cp = X_coef_cp.deps()
         deps_Y_coef_cp = Y_coef_cp.deps()
         deps_Z_coef_cp = Z_coef_cp.deps()
@@ -397,7 +397,7 @@ class Equilibrium:
             dphi_r_z,
         )
 
-    def covariant_basis_eps_j_eps(self):
+    def covariant_basis_eps_j_eps(self, n_max=float('inf')):
         '''
         Calculates J^eps_coord grad eps, J^eps_coord grad chi, J^eps_coord grad phi.
         '''
@@ -411,7 +411,7 @@ class Equilibrium:
             dphi_r_x,
             dphi_r_y,
             dphi_r_z,
-        ) = self.contravariant_basis_eps()
+        ) = self.contravariant_basis_eps(n_max=n_max)
         # Here, again, the cross product has to be done explicitly because all arguments
         # are ChiPhiEpsFunc's.
         # Compute the components of j_grad_psi = dchi_r cross dphi_r
@@ -439,7 +439,7 @@ class Equilibrium:
             j_eps_grad_phi_z,
         )
 
-    def covariant_basis_j_eps(self):
+    def covariant_basis_j_eps(self, n_max=float('inf')):
         (
             j_grad_psi_x, # J_eps * grad eps = J * grad psi
             j_grad_psi_y,
@@ -450,7 +450,7 @@ class Equilibrium:
             j_eps_grad_phi_x,
             j_eps_grad_phi_y,
             j_eps_grad_phi_z,
-        ) = self.covariant_basis_eps_j_eps()
+        ) = self.covariant_basis_eps_j_eps(n_max=n_max)
 
         # J_eps = 2 eps * J
         j_eps_grad_psi_x = 2 * ChiPhiEpsFunc(
@@ -480,7 +480,7 @@ class Equilibrium:
             j_eps_grad_phi_z,
         )
 
-    def jacobian_eps(self):
+    def jacobian_eps(self, n_max=float('inf')):
         (
             deps_r_x,
             deps_r_y,
@@ -491,7 +491,7 @@ class Equilibrium:
             dphi_r_x,
             dphi_r_y,
             dphi_r_z,
-        ) = self.contravariant_basis_eps()
+        ) = self.contravariant_basis_eps(n_max=n_max)
         triple_product = (
             deps_r_x * (dchi_r_y * dphi_r_z - dchi_r_z * dphi_r_y) +
             deps_r_y * (dchi_r_z * dphi_r_x - dchi_r_x * dphi_r_z) +
@@ -499,7 +499,7 @@ class Equilibrium:
         )
         return(triple_product)
     
-    def jacobian(self):
+    def jacobian(self, n_max=float('inf')):
         '''
         Calculates the Jacobian.
           dr/dpsi x (dr/dchi . dr/dphi)
@@ -509,7 +509,7 @@ class Equilibrium:
         So J can be simply calculated by dropping the first element in 
         the power series, and then dividing by 2.
         '''
-        jacobian_e = self.jacobian_eps()
+        jacobian_e = self.jacobian_eps(n_max=n_max)
         new_list = []
         for i in range(len(jacobian_e.chiphifunc_list)-1):
             new_list.append(jacobian_e.chiphifunc_list[i+1]/2)
@@ -543,9 +543,9 @@ class Equilibrium:
         phi_gbc = self.axis_info['phi_gbc'][::n_grid_phi_skip]
         points_chi = jnp.linspace(0, 2*jnp.pi, n_grid_chi, endpoint=False)
 
-        jacobian_eps_callable = self.jacobian_eps().eval
         # Finding jacobian_min=0 using Newton's method.
-        jacobian_grid = lambda psi: jnp.real(jacobian_eps_callable(psi, points_chi[:, None], phi_gbc[None, :], n_max = n_max))
+        # Here, using jacobian or jacobian_eps makes no difference
+        jacobian_grid = lambda psi: jnp.real(self.jacobian_eps(n_max=n_max).eval(psi, points_chi[:, None], phi_gbc[None, :]))
         jacobian_min = lambda psi: jnp.min(jacobian_grid(psi))
         def conv(dict_in):
             # conv = dict_in['conv']
@@ -650,13 +650,13 @@ class Equilibrium:
             j_eps_B_z
         )
 
-    def volume_integral(self, y):
+    def volume_integral(self, y, n_max=float('inf')):
         '''
         Calculates the volume integral of a quantity as a ChiPhiEpsFunc
         with no Chi or Phi dependence.
         '''
-        jac = self.jacobian_eps()
-        integrand = jac * y
+        jac = self.jacobian_eps(n_max=n_max)
+        integrand = jac * y.mask(n_max)
         # Eps, phi and chi integral
         new_chiphifunc_list = [ChiPhiFuncSpecial(0)]
         len_phi = self.constant['kap_p'].content.shape[1]
@@ -720,9 +720,7 @@ class Equilibrium:
         facecolors = mapper.to_rgba(B_magnitude)
 
         ax.plot_surface(x_surf, y_surf, z_surf, zorder=1, facecolors=facecolors)
-        ax.axis('equal')
 
-        # Plotting flux surfaces.
         # Plot the first separately 
         x_cross, y_cross, z_cross = self.flux_to_xyz(psi=0, chi=chis, phi=0, n_max=n_max)
         ax.plot(x_cross, y_cross, z_cross, zorder=2.5, linewidth=0.5, color='lightgrey', label=r'$(\epsilon=\sqrt{\psi}, \chi)$')
@@ -741,6 +739,7 @@ class Equilibrium:
         ax.plot(x_axis, y_axis, z_axis, zorder=3.5, linewidth=0.5, linestyle='dashed', color='lightgrey', label='Magnetic axis')
         fig.legend()
         fig.colorbar(mapper, label=r'Field strength $|B|, (T)$', shrink=0.5, ax=ax)
+        ax.axis('equal')
         return(fig, ax)
 
     def display_wireframe(self, psi_max=None, n_max=float('inf')):

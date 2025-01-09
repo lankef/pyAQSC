@@ -195,7 +195,7 @@ class ChiPhiEpsFunc:
     # @partial(jit, static_argnums=(1,))
     def mask(self, n):
         '''
-        Produces a sub-list up to the nth element (order).
+        Produces a new ChiPhiEpsFunc containing up to (including) order n
         When n exceeds the maximum order known, fill with ChiPhiFuncSpecial(0)
         for tracing incorrect logic or formulae.
         Originally the fill is with special ChiPhiFunc, but since JAX cannot
