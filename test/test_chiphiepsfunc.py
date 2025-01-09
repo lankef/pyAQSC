@@ -60,6 +60,39 @@ class TestChiPhiEpsFunc(unittest.TestCase):
         # Masking order larger than available order
         self.assertTrue(b_final[10].is_special() and b_final[10].nfp==0)
         self.assertTrue(b_final.nfp==2)
-        
+    
+    def test_eval(self):
+        coeff_list = np.random.random(4)
+        psi, chi, phi = np.random.random(3)
+        series1 = ChiPhiEpsFunc(coeff_list, 2, square_eps_series=False) 
+        series2 = ChiPhiEpsFunc(coeff_list, 2, square_eps_series=True) 
+        self.assertTrue(jnp.isclose(series1.eval(psi, chi, phi, n_max=0), coeff_list[0]))
+        self.assertTrue(jnp.isclose(series2.eval(psi, chi, phi, n_max=0), coeff_list[0]))
+        self.assertTrue(jnp.isclose(series1.eval(psi, chi, phi, n_max=1), coeff_list[0] + jnp.sqrt(psi) * coeff_list[1]))
+        self.assertTrue(jnp.isclose(
+            series1.eval(psi, chi, phi, n_max=2),
+            coeff_list[0] + psi**0.5 * coeff_list[1] + psi * coeff_list[2]
+        ))
+        self.assertTrue(jnp.isclose(
+            series1.eval(psi, chi, phi, n_max=3), 
+            coeff_list[0] + psi**0.5  * coeff_list[1] + psi * coeff_list[2] + psi**1.5 * coeff_list[3]
+        ))
+        self.assertTrue(jnp.isclose(
+            series1.eval(psi, chi, phi, n_max=jnp.inf), 
+            coeff_list[0] + psi**0.5  * coeff_list[1] + psi * coeff_list[2] + psi**1.5 * coeff_list[3]
+        ))
+        self.assertTrue(jnp.isclose(series2.eval(psi, chi, phi, n_max=1), coeff_list[0] + psi * coeff_list[1]))
+        self.assertTrue(jnp.isclose(
+            series2.eval(psi, chi, phi, n_max=2), 
+            coeff_list[0] + psi * coeff_list[1] + psi**2 * coeff_list[2]
+        ))
+        self.assertTrue(jnp.isclose(
+            series2.eval(psi, chi, phi, n_max=3), 
+            coeff_list[0] + psi * coeff_list[1] + psi**2 * coeff_list[2] + psi**3 * coeff_list[3]
+        ))
+        self.assertTrue(jnp.isclose(
+            series2.eval(psi, chi, phi, n_max=jnp.inf), 
+            coeff_list[0] + psi * coeff_list[1] + psi**2 * coeff_list[2] + psi**3 * coeff_list[3]
+        ))
 if __name__ == '__main__':
     unittest.main()
