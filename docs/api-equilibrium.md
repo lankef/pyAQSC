@@ -117,12 +117,16 @@ Returns:
 
 ## Functions for calculating physical quantities
 
-### `aqsc.Equilibrium.contravariant_basis_eps()`
+### `aqsc.Equilibrium.contravariant_basis_eps(n_max=float('inf'))`
 Calculates the contravariant basis of the equilibrium's GBC:
 
 $$
 \frac{\partial\bold{r}}{\partial\epsilon}, \frac{\partial\bold{r}}{\partial\chi}, \frac{\partial\bold{r}}{\partial\phi}.
 $$
+
+Parameters:
+
+- `n_max` (static) - Maximum order to evaluate to.
 
 Returns:
 
@@ -137,9 +141,9 @@ Returns:
 - `dphi_r_z` - `ChiPhiEpsFunc`, the $z$ ...
 
 
-### `aqsc.Equilibrium.jacobian()`
-### `aqsc.Equilibrium.jacobian_eps()`
-### `aqsc.Equilibrium.jacobian_nae()`
+### `aqsc.Equilibrium.jacobian(n_max=float('inf'))`
+### `aqsc.Equilibrium.jacobian_eps(n_max=float('inf'))`
+### `aqsc.Equilibrium.jacobian_nae(n_max=float('inf'))`
 Calculates
 - $J_\text{coord}(\epsilon, \chi, \psi) \equiv \frac{\partial\textbf{r}}{\partial\psi}\cdot\left(\frac{\partial\textbf{r}}{\partial\chi}\times\frac{\partial\textbf{r}}{\partial\phi}\right) 
  = \frac{1}{2\epsilon} J^\epsilon_\text{coord}$,
@@ -148,13 +152,17 @@ Calculates
 
 
 The difference between $J\text{coord} = J^\epsilon_\text{coord}/2\epsilon$ and $J_\text{NAE}$ increases at increasing $\psi$. We strongly recommend evaluating at `self.axis_info['phi_gbc']` to reduce interpolation error.
-  
+
+Parameters:
+
+- `n_max` (static) - Maximum order to evaluate to.
+
 Returns:
 
 - `jacobian : ChiPhiEpsFunc`
 
-### `aqsc.Equilibrium.covariant_basis_eps_j_eps()`
-### `aqsc.Equilibrium.covariant_basis_j_eps()`
+### `aqsc.Equilibrium.covariant_basis_eps_j_eps(n_max=float('inf'))`
+### `aqsc.Equilibrium.covariant_basis_j_eps(n_max=float('inf'))`
 Calculates the covariant basis of the equilibrium's GBC, multiplied with $J^\epsilon$:
 - $J^\epsilon_\text{coord}\nabla\epsilon, J^\epsilon_\text{coord}\nabla\chi, J^\epsilon_\text{coord}\nabla\phi$
 - $J^\epsilon_\text{coord}\nabla\psi, J^\epsilon_\text{coord}\nabla\chi, J^\epsilon_\text{coord}\nabla\phi$
@@ -162,6 +170,10 @@ Calculates the covariant basis of the equilibrium's GBC, multiplied with $J^\eps
 We implemented this rather than the covariant basis because this can be represented by a power-Fourier series (or equivalently, a `ChiPhiEpsFunc`), but the covariant basis cannot.
 
 $J^\epsilon_\text{coord}\nabla\epsilon = \frac{\partial\textbf{r}}{\partial\chi}\times\frac{\partial\textbf{r}}{\partial\phi}$ is special because it is also the flux surface integral Jacobian.
+
+Parameters:
+
+- `n_max` (static) - Maximum order to evaluate to.
 
 Returns:
 - `j_eps_grad_eps_x` or `j_eps_grad_psi_x` - `ChiPhiEpsFunc`, the $x$ component of $J^\epsilon_\text{coord}\nabla\epsilon$ or $J^\epsilon_\text{coord}\nabla\psi$
@@ -174,12 +186,13 @@ Returns:
 - `j_eps_grad_phi_y` - `ChiPhiEpsFunc`, the $y$ ...
 - `j_eps_grad_phi_z` - `ChiPhiEpsFunc`, the $z$ ...
 
-### `aqsc.Equilibrium.volume_integral(y)`
+### `aqsc.Equilibrium.volume_integral(y, n_max=float('inf'))`
 Calculates the volume integral of a scalar, `ChiPhiFunc`, or `ChiPhiEpsFunc`. Produces a `ChiPhiEpsFunc` with only $\epsilon$ dependence.
 
 Parameters:
 
 - `y` (traced) - quantity to integrate.
+- `n_max` (static) - Maximum order to evaluate to.
 
 Returns:
 
