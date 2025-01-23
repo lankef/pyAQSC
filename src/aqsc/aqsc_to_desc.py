@@ -4,7 +4,8 @@ from scipy import special
 
 def aqsc_to_desc_near_axis(
         na_eq, psi_max, n_max=float('inf'), 
-        M=6, N=8, stellsym=True, solve_force_balance=True, maxiter=25):
+        M=6, N=8, stellsym=True, solve_force_balance=True,
+        **kwargs):
     try:
         from desc.equilibrium import Equilibrium
         from desc.grid import Grid
@@ -125,7 +126,7 @@ def aqsc_to_desc_near_axis(
     }
     if solve_force_balance:
         cons = get_NAE_constraints(eq, qsc_eq=None, profiles=True, fix_lambda=True)
-        eq2, _ = eq.solve(objective=ObjectiveFunction(ForceBalanceAnisotropic(eq)), constraints=cons, verbose=0, maxiter=maxiter, copy=True)
+        eq2, _ = eq.solve(objective=ObjectiveFunction(ForceBalanceAnisotropic(eq)), constraints=cons, copy=True, **kwargs)
         return(eq, eq2, aux_dict)
     return(eq, aux_dict)
 
@@ -133,7 +134,8 @@ def aqsc_to_desc_near_axis(
 
 def aqsc_to_desc_boundary(
         na_eq, psi_max, n_max=float('inf'), 
-        M=6, N=8, solve_force_balance=True, maxiter=25):
+        M=6, N=8, solve_force_balance=True,
+        **kwargs):
     """Convert an equilibrium from AQSC to DESC.
     Parameters
     ----------
@@ -248,7 +250,7 @@ def aqsc_to_desc_boundary(
         'chis': chis
     }
     if solve_force_balance:
-        eq_force_balance, _ = eq_fit.solve(objective=ObjectiveFunction(ForceBalanceAnisotropic(eq_fit)), verbose=0, maxiter=maxiter, copy=True)
+        eq_force_balance, _ = eq_fit.solve(objective=ObjectiveFunction(ForceBalanceAnisotropic(eq_fit)), copy=True, **kwargs)
         return(eq_fit, eq_force_balance, aux_dict)
     print('Force balance is disabled. Please solve with a call similar to this:')
     print('eq_force_balance, _ = eq_fit.solve(objective=ObjectiveFunction(ForceBalanceAnisotropic(eq_fit)), verbose=3, maxiter=25, copy=True)')
