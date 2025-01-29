@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 from jax.lax import scan
-from interpax import interp1d
+from interpax import interp1d, Interpolator1D
 from .chiphifunc import *
 from .chiphiepsfunc import *
 from .math_utilities import diff
@@ -92,7 +92,7 @@ def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
     # where phi is the cartesian toroidal angle. Contains 2pi/nfp,
     # TODO: need to made static.
     mode_num = jnp.arange(RZ_max_len)*nfp
-    Phi0 = jnp.linspace(0,2*jnp.pi/nfp*(len_phi-1)/len_phi, len_phi)
+    Phi0 = jnp.linspace(0,2*jnp.pi/nfp, len_phi, endpoint=False)
     d_phi = Phi0[1]-Phi0[0]
     phi_times_mode = mode_num[:, None]*Phi0[None, :]
 
@@ -117,12 +117,16 @@ def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
     # dl/dphi in Boozer coordinate
     axis_length = jnp.sum(d_l_d_phi) * d_phi * nfp
     dl_p = axis_length/jnp.pi/2
+    
 
     # l on cylindrical phi grid
+    # Integrating arclength with FFT.
+    l_phi = jnp.real(ChiPhiFunc(d_l_d_phi.T, nfp).integrate_phi_fft(zero_avg=False).content[0])
     # Setting the first element to 0. Removing the last element.
-    l_phi = jnp.cumsum(d_l_d_phi)/len_phi*jnp.pi*2/nfp
-    l_phi = jnp.roll(l_phi, 1)
-    l_phi = l_phi.at[0].set(0)
+    # l_phi = jnp.cumsum(d_l_d_phi)/len_phi*jnp.pi*2/nfp
+    # l_phi = jnp.roll(l_phi, 1)
+    # l_phi = l_phi.at[0].set(0)
+
 
     # The Boozer phi on cylindrical phi grids.
     phi_gbc = l_phi/dl_p

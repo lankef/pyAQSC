@@ -203,6 +203,8 @@ class ChiPhiEpsFunc:
         (n-n)*(out of bound) = out of bound. Since all parsed formulae are checked
         correct, in the JAX implementation we make out-of-bound terms 0 instead.
         '''
+        if n == float('inf'):
+            return(self)
         n_diff = n-(len(self.chiphifunc_list)-1)
         if n_diff>0:
              return(ChiPhiEpsFunc(
