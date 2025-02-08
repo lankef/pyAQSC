@@ -688,7 +688,7 @@ def leading_orders_from_axis(
         q1 = kap_p.dphi()/kap_p
         q2 = -iota_0*eta/(2*jnp.sqrt(B0)*kap_p)
         return(q0, q1, q2)
-    # Sttempting to solve the problem with RK4
+    # Attempting to solve the problem with RK4
     # First, y' = f(i, y) = q0 + q1y + q2y^2.
     # For improved speed, we use phi = (0, 2dphi, 4dphi, ...)
     # as RK4 grids, and phi = (dphi, 3dphi, ...) as half-grids.
