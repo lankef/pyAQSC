@@ -6,10 +6,10 @@ build-backend = "setuptools.build_meta"
 name = "aqsc"
 description = "Constructs QS stellarator equilibrium to all orders."
 readme = "README.MD"
-version = "0.1.5"
-dependencies = ["numpy", "matplotlib", "jax"]
+version = "0.1.10"
+dependencies = ["numpy", "matplotlib", "jax", "scipy", "interpax"]
 authors = [
-  { name="Lanke Fu", email="ffu@pppl.edu" },
+  { name="Lanke Fu", email="ffu@pppl.gov" },
 ]
 
 [tool.setuptools.dynamic]
