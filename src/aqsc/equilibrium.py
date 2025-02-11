@@ -5,7 +5,7 @@ import jax.numpy as jnp
 # import numpy as np # used in save_plain and get_helicity
 # from jax import jit, vmap, tree_util
 from jax import tree_util, jit, vmap, grad
-from jax.lax import fori_loop
+from jax.lax import fori_loop, while_loop
 from functools import partial # for JAX jit with static params
 from interpax import interp1d
 # from matplotlib import pyplot as plt
@@ -314,129 +314,7 @@ class Equilibrium:
 
     ''' Display and output'''
 
-    # def get_psi_crit(
-    #     self, n_max=float('inf'), 
-    #     n_grid_chi=100, n_grid_phi_skip=1, 
-    #     psi_cap = None,
-    #     n_newton_iter = 20):
-    #     if psi_cap is None:
-    #         eps_cap = None
-    #     else:
-    #         eps_cap = jnp.sqrt(psi_cap)
-    #     eps_crit, jacobian_residue = self.get_eps_crit(
-    #         n_max=n_max, 
-    #         n_grid_chi=n_grid_chi, 
-    #         n_grid_phi_skip=n_grid_phi_skip,
-    #         eps_cap=eps_cap,
-    #         n_newton_iter=n_newton_iter
-    #     )
-    #     return(eps_crit**2, jacobian_residue)
-    
-    @partial(jit, static_argnums=(4,))
-    def jacobian_e_eps_scalar_legacy(self, eps:float, chi:float, phi:float, n_max=float('inf')):
-        '''
-        As psi increases, the measured Jacobian of the coordinate system by
-        explicitly calculating nabla psi dot nabla chi cross nabla phi starts 
-        to diverge from B_alpha / B^2. This function calculates its measured value
-        for estimating psi_crit.
-        '''
-        _,\
-        _,\
-        _,\
-        _,\
-        tangent_phi_X,\
-        tangent_phi_Y,\
-        tangent_phi_Z,\
-        normal_phi_X,\
-        normal_phi_Y,\
-        normal_phi_Z,\
-        binormal_phi_X,\
-        binormal_phi_Y,\
-        binormal_phi_Z = self.frenet_basis_phi(phi)
-        tangent = jnp.real(jnp.array([
-            tangent_phi_X,
-            tangent_phi_Y,
-            tangent_phi_Z
-        ]))
-        normal = jnp.real(jnp.array([
-            normal_phi_X,
-            normal_phi_Y,
-            normal_phi_Z
-        ]))
-        binormal = jnp.real(jnp.array([
-            binormal_phi_X,
-            binormal_phi_Y,
-            binormal_phi_Z
-        ]))
-
-        # These quantities are periodic, and we apply
-        # spectral derivatives, taking advantage of implementation
-        # in aqsc.
-
-        kap_p = self.constant['kap_p'].eval(0, phi)
-        tau_p = self.constant['tau_p'].eval(0, phi)
-        dl_p = self.constant['dl_p']
-        tangent_dphi = kap_p * normal * dl_p
-        normal_dphi = (-kap_p * tangent - tau_p * binormal) * dl_p
-        binormal_dphi = (tau_p * normal) * dl_p
-        axis_r0_dphi = tangent * dl_p
-        X_coef_cp = self.unknown['X_coef_cp']
-        Y_coef_cp = self.unknown['Y_coef_cp']
-        Z_coef_cp = self.unknown['Z_coef_cp']
-
-        # Returns (n_grid, n_grid) arrays. Axis=1 is Phi.
-        X = jnp.real(X_coef_cp.eval_eps(eps, chi, phi, n_max=n_max))
-        Y = jnp.real(Y_coef_cp.eval_eps(eps, chi, phi, n_max=n_max))
-        Z = jnp.real(Z_coef_cp.eval_eps(eps, chi, phi, n_max=n_max))
-        deps_X = jnp.real(X_coef_cp.deps().eval_eps(eps, chi, phi, n_max=n_max))
-        deps_Y = jnp.real(Y_coef_cp.deps().eval_eps(eps, chi, phi, n_max=n_max))
-        deps_Z = jnp.real(Z_coef_cp.deps().eval_eps(eps, chi, phi, n_max=n_max))
-        dchi_X = jnp.real(X_coef_cp.dchi().eval_eps(eps, chi, phi, n_max=n_max))
-        dchi_Y = jnp.real(Y_coef_cp.dchi().eval_eps(eps, chi, phi, n_max=n_max))
-        dchi_Z = jnp.real(Z_coef_cp.dchi().eval_eps(eps, chi, phi, n_max=n_max))
-        dphi_X = jnp.real(X_coef_cp.dphi().eval_eps(eps, chi, phi, n_max=n_max))
-        dphi_Y = jnp.real(Y_coef_cp.dphi().eval_eps(eps, chi, phi, n_max=n_max))
-        dphi_Z = jnp.real(Z_coef_cp.dphi().eval_eps(eps, chi, phi, n_max=n_max))
-        deps_r = (
-            deps_X * normal
-            + deps_Y * binormal
-            + deps_Z * tangent
-        )
-        dchi_r = (
-            dchi_X * normal
-            + dchi_Y * binormal
-            + dchi_Z * tangent
-        )
-        dphi_r = (
-            axis_r0_dphi
-            + dphi_X * normal
-            + dphi_Y * binormal
-            + dphi_Z * tangent
-            + X * normal_dphi
-            + Y * binormal_dphi
-            + Z * tangent_dphi
-        )
-
-        return(jnp.real(jnp.sum(
-            jnp.cross(
-                deps_r, 
-                dchi_r, 
-                axisa=0, axisb=0, axisc=0
-            )*dphi_r, 
-            axis=0
-        )))
-
-    jacobian_e_eps_legacy = jnp.vectorize(jacobian_e_eps_scalar_legacy, excluded=(0, 4))
-
-    @partial(jit, static_argnums=(4,))
-    def jacobian_eps_legacy(self, eps, chi, phi, n_max=float('inf')): 
-        return(self.jacobian_e_eps_legacy(eps, chi, phi, n_max)/2/eps)
-
-    @partial(jit, static_argnums=(4,)) 
-    def jacobian_legacy(self, psi, chi, phi, n_max=float('inf')): 
-        return(self.jacobian_eps(jnp.sqrt(psi), chi, phi, n_max))
-
-    def covariant_basis(self):
+    def contravariant_basis_eps(self, n_max=float('inf')):
         '''
         Calculates dr/deps, dr/dchi, dr/dphi.
         '''
@@ -485,9 +363,9 @@ class Equilibrium:
         axis_r0_dphi_z = tangent_z * dl_p
 
         # Returns (n_grid, n_grid) arrays. Axis=1 is Phi.
-        X_coef_cp = self.unknown['X_coef_cp']
-        Y_coef_cp = self.unknown['Y_coef_cp']
-        Z_coef_cp = self.unknown['Z_coef_cp']
+        X_coef_cp = self.unknown['X_coef_cp'].mask(n_max)
+        Y_coef_cp = self.unknown['Y_coef_cp'].mask(n_max)
+        Z_coef_cp = self.unknown['Z_coef_cp'].mask(n_max)
         deps_X_coef_cp = X_coef_cp.deps()
         deps_Y_coef_cp = Y_coef_cp.deps()
         deps_Z_coef_cp = Z_coef_cp.deps()
@@ -507,7 +385,6 @@ class Equilibrium:
         dphi_r_x = (axis_r0_dphi_x + dphi_X_coef_cp * normal_x + dphi_Y_coef_cp * binormal_x + dphi_Z_coef_cp * tangent_x + X_coef_cp * normal_dphi_x + Y_coef_cp * binormal_dphi_x + Z_coef_cp * tangent_dphi_x)
         dphi_r_y = (axis_r0_dphi_y + dphi_X_coef_cp * normal_y + dphi_Y_coef_cp * binormal_y + dphi_Z_coef_cp * tangent_y + X_coef_cp * normal_dphi_y + Y_coef_cp * binormal_dphi_y + Z_coef_cp * tangent_dphi_y)
         dphi_r_z = (axis_r0_dphi_z + dphi_X_coef_cp * normal_z + dphi_Y_coef_cp * binormal_z + dphi_Z_coef_cp * tangent_z + X_coef_cp * normal_dphi_z + Y_coef_cp * binormal_dphi_z + Z_coef_cp * tangent_dphi_z)
-
         return(
             deps_r_x,
             deps_r_y,
@@ -520,7 +397,10 @@ class Equilibrium:
             dphi_r_z,
         )
 
-    def jacobian_eps(self):
+    def covariant_basis_eps_j_eps(self, n_max=float('inf')):
+        '''
+        Calculates J^eps_coord grad eps, J^eps_coord grad chi, J^eps_coord grad phi.
+        '''
         (
             deps_r_x,
             deps_r_y,
@@ -531,7 +411,87 @@ class Equilibrium:
             dphi_r_x,
             dphi_r_y,
             dphi_r_z,
-        ) = self.covariant_basis()
+        ) = self.contravariant_basis_eps(n_max=n_max)
+        # Here, again, the cross product has to be done explicitly because all arguments
+        # are ChiPhiEpsFunc's.
+        # Compute the components of j_grad_psi = dchi_r cross dphi_r
+        # Compute the components of j_grad_chi = dphi_r cross deps_r
+        # Compute the components of j_grad_phi = deps_r cross dchi_r
+        j_eps_grad_eps_x = dchi_r_y * dphi_r_z - dchi_r_z * dphi_r_y
+        j_eps_grad_eps_y = dchi_r_z * dphi_r_x - dchi_r_x * dphi_r_z
+        j_eps_grad_eps_z = dchi_r_x * dphi_r_y - dchi_r_y * dphi_r_x
+        j_eps_grad_chi_x = dphi_r_y * deps_r_z - dphi_r_z * deps_r_y
+        j_eps_grad_chi_y = dphi_r_z * deps_r_x - dphi_r_x * deps_r_z
+        j_eps_grad_chi_z = dphi_r_x * deps_r_y - dphi_r_y * deps_r_x
+        j_eps_grad_phi_x = deps_r_y * dchi_r_z - deps_r_z * dchi_r_y
+        j_eps_grad_phi_y = deps_r_z * dchi_r_x - deps_r_x * dchi_r_z
+        j_eps_grad_phi_z = deps_r_x * dchi_r_y - deps_r_y * dchi_r_x
+
+        return(
+            j_eps_grad_eps_x,
+            j_eps_grad_eps_y,
+            j_eps_grad_eps_z,
+            j_eps_grad_chi_x,
+            j_eps_grad_chi_y,
+            j_eps_grad_chi_z,
+            j_eps_grad_phi_x,
+            j_eps_grad_phi_y,
+            j_eps_grad_phi_z,
+        )
+
+    def covariant_basis_j_eps(self, n_max=float('inf')):
+        (
+            j_grad_psi_x, # J_eps * grad eps = J * grad psi
+            j_grad_psi_y,
+            j_grad_psi_z,
+            j_eps_grad_chi_x,
+            j_eps_grad_chi_y,
+            j_eps_grad_chi_z,
+            j_eps_grad_phi_x,
+            j_eps_grad_phi_y,
+            j_eps_grad_phi_z,
+        ) = self.covariant_basis_eps_j_eps(n_max=n_max)
+
+        # J_eps = 2 eps * J
+        j_eps_grad_psi_x = 2 * ChiPhiEpsFunc(
+            list=[ChiPhiFuncSpecial(0)] + j_grad_psi_x.chiphifunc_list,
+            nfp=j_grad_psi_x.nfp,
+            square_eps_series=False
+        )
+        j_eps_grad_psi_y = 2 * ChiPhiEpsFunc(
+            list=[ChiPhiFuncSpecial(0)] + j_grad_psi_y.chiphifunc_list,
+            nfp=j_grad_psi_y.nfp,
+            square_eps_series=False
+        )
+        j_eps_grad_psi_z = 2 * ChiPhiEpsFunc(
+            list=[ChiPhiFuncSpecial(0)] + j_grad_psi_z.chiphifunc_list,
+            nfp=j_grad_psi_z.nfp,
+            square_eps_series=False
+        )
+        return(
+            j_eps_grad_psi_x,
+            j_eps_grad_psi_y,
+            j_eps_grad_psi_z,
+            j_eps_grad_chi_x,
+            j_eps_grad_chi_y,
+            j_eps_grad_chi_z,
+            j_eps_grad_phi_x,
+            j_eps_grad_phi_y,
+            j_eps_grad_phi_z,
+        )
+
+    def jacobian_eps(self, n_max=float('inf')):
+        (
+            deps_r_x,
+            deps_r_y,
+            deps_r_z,
+            dchi_r_x,
+            dchi_r_y,
+            dchi_r_z,
+            dphi_r_x,
+            dphi_r_y,
+            dphi_r_z,
+        ) = self.contravariant_basis_eps(n_max=n_max)
         triple_product = (
             deps_r_x * (dchi_r_y * dphi_r_z - dchi_r_z * dphi_r_y) +
             deps_r_y * (dchi_r_z * dphi_r_x - dchi_r_x * dphi_r_z) +
@@ -539,7 +499,7 @@ class Equilibrium:
         )
         return(triple_product)
     
-    def jacobian(self):
+    def jacobian(self, n_max=float('inf')):
         '''
         Calculates the Jacobian.
           dr/dpsi x (dr/dchi . dr/dphi)
@@ -549,15 +509,12 @@ class Equilibrium:
         So J can be simply calculated by dropping the first element in 
         the power series, and then dividing by 2.
         '''
-        jacobian_e = self.jacobian_eps()
+        jacobian_e = self.jacobian_eps(n_max=n_max)
         new_list = []
         for i in range(len(jacobian_e.chiphifunc_list)-1):
             new_list.append(jacobian_e.chiphifunc_list[i+1]/2)
         jacobian = ChiPhiEpsFunc(new_list, jacobian_e.nfp, False)
         return(jacobian)
-
-    # def jacobian_eps(self, eps, chi, phi, n_max=float('inf')): 
-    #     return(jnp.real(self.jacobian_e().eval_eps(eps, chi, phi, n_max)/2/eps))
 
     def jacobian_nae(self):
         return(self.constant['B_alpha_coef'] * self.constant['B_denom_coef_c'])
@@ -566,52 +523,65 @@ class Equilibrium:
         self, n_max=float('inf'), 
         n_grid_chi=100,
         n_grid_phi_skip=1,
-        psi_cap = None,
-        n_newton_iter = 10,
-        jacobian_eps_callable=None):
+        psi_init=None,
+        maxiter=100,
+        tol=1e-8):
         '''
-
         Estimates the critical epsilon where flux surface self-intersects.
         by finding the zero of $min_{\chi, \phi}[\sqrt{J}(\epsilon, \chi, \phi)]=0$
         using binary search. \sqrt{J}(\epsilon, \chi, \phi) At each search step 
         is evaluated on a grid of given size.
         Can be diffed but is slow to compile, because it relies on newton iteration
         for root finding. Reducing `n_newton_iter` substantially speeds up jit.
-
-        Parameters;
-
-        - `n_max` - maximum order to evaluate coordinate transformation to.
-
-        - `n_grid_chi, n_grid_phi : int`- Grid size to evaluate Jacobian $\sqrt{g}$ on. 
-        The critical point occurs when $min(\sqrt{g}\leq0)$.
-
-        - `bad_eps_init` - An initial guess of an epsilon>epsilon_crit used in Newton's 
-        method. Need to be beyond t
-
-        - `n_newton_iter:int` (static) - Maximum number of steps in Newton's method.
-        higher number gives better acuracy but is slower to jit.
-
-        Returns: 
-        
-        - (eps_crit, jacobian_residue): eps_crit and the flux surface min of the Jacobian at eps_crit.
         '''
-        if psi_cap is None:
+        if n_max<=1:
+            raise ValueError('psi_crit is only valid for n>1.')
+        if psi_init is None:
             effective_major_radius = self.axis_info['axis_length']/jnp.pi/2
             B0 = self.constant['B_denom_coef_c'][0]
-            psi_cap = jnp.sqrt(effective_major_radius**2 * B0)
+            psi_init = jnp.sqrt(effective_major_radius**2 * B0)
         phi_gbc = self.axis_info['phi_gbc'][::n_grid_phi_skip]
         points_chi = jnp.linspace(0, 2*jnp.pi, n_grid_chi, endpoint=False)
 
-        if jacobian_eps_callable is None:
-            jacobian_eps_callable = self.jacobian_eps().eval
         # Finding jacobian_min=0 using Newton's method.
-        jacobian_grid = lambda psi: jnp.real(jacobian_eps_callable(psi, points_chi[:, None], phi_gbc[None, :], n_max = n_max))
+        # Here, using jacobian or jacobian_eps makes no difference
+        jacobian_grid = lambda psi: jnp.real(self.jacobian_eps(n_max=n_max).eval(psi, points_chi[:, None], phi_gbc[None, :]))
         jacobian_min = lambda psi: jnp.min(jacobian_grid(psi))
-        jacobian_min_prime = grad(jacobian_min)
-        def q(i, x):
-            return(x - jacobian_min(x) / jacobian_min_prime(x))
-        psi_sln = fori_loop(0, n_newton_iter, q, psi_cap)
-        return(psi_sln, jacobian_min(psi_sln))
+        def conv(dict_in):
+            # conv = dict_in['conv']
+            x = (dict_in['x1'] + dict_in['x2'])/2
+            return(
+                # This is the convergence condition (True when not converged yet)
+                jnp.logical_and(
+                    dict_in['i'] <= maxiter,
+                    jacobian_min(x)**2 >= tol**2,
+                )
+            )
+        def q_while(dict_in):
+            i = dict_in['i']
+            x1 = dict_in['x1']
+            x2 = dict_in['x2']
+            x = (x1 + x2) / 2
+            y2 = jacobian_min(x2)
+            y = jacobian_min(x)
+            # If y2 and y have different signs, then x1_new is x, x2_new is x2
+            # jac_min(0)=0, so we can't use y1 and y as the condition to use 0 as 
+            # y1.
+            x1_new = jnp.where(y2 * y <= 0, x, x1)
+            x2_new = jnp.where(y2 * y <= 0, x2, x)
+            return({ 
+                'i': i + 1,
+                'x1': x1_new,
+                'x2': x2_new,
+            })
+        dict_out = while_loop(
+            cond_fun=conv,
+            body_fun=q_while,
+            init_val={'i': 0, 'x1': 0, 'x2': psi_init},
+        )
+        psi_sln = (dict_out['x1'] + dict_out['x2'])/2
+        n_iter = dict_out['i']
+        return(psi_sln, jacobian_min(psi_sln), n_iter)
         '''
         # Zero-finding with binary search is faster but cannot be jitted.
         # Binary search for jacobian_min=0,
@@ -636,13 +606,57 @@ class Equilibrium:
             n_iter += 1
         '''      
 
-    def volume_integral(self, y):
+    def B_vec_j_eps(self):
+        '''
+        Calculates vector B components.
+        '''
+        # The covariant bases, multiplied with J^eps_coord
+        (
+            j_eps_grad_psi_x,
+            j_eps_grad_psi_y,
+            j_eps_grad_psi_z,
+            j_eps_grad_chi_x,
+            j_eps_grad_chi_y,
+            j_eps_grad_chi_z,
+            j_eps_grad_phi_x,
+            j_eps_grad_phi_y,
+            j_eps_grad_phi_z,
+        ) = self.covariant_basis_j_eps()
+        B_theta = self.unknown['B_theta_coef_cp']
+        B_alpha = self.constant['B_alpha_coef']
+        B_psi = self.unknown['B_psi_coef_cp']
+        iota_bar = self.constant['iota_coef']
+
+        # Equation 6 in 
+        # Solving the problem of ... I. Generalized force balance
+        j_eps_B_x = (
+            B_theta * j_eps_grad_chi_x
+            + (B_alpha - iota_bar * B_theta) * j_eps_grad_phi_x
+            + B_psi * j_eps_grad_psi_x
+        )
+        j_eps_B_y = (
+            B_theta * j_eps_grad_chi_y
+            + (B_alpha - iota_bar * B_theta) * j_eps_grad_phi_y
+            + B_psi * j_eps_grad_psi_y
+        )
+        j_eps_B_z = (
+            B_theta * j_eps_grad_chi_z
+            + (B_alpha - iota_bar * B_theta) * j_eps_grad_phi_z
+            + B_psi * j_eps_grad_psi_z
+        )
+        return(
+            j_eps_B_x,
+            j_eps_B_y,
+            j_eps_B_z
+        )
+
+    def volume_integral(self, y, n_max=float('inf')):
         '''
         Calculates the volume integral of a quantity as a ChiPhiEpsFunc
         with no Chi or Phi dependence.
         '''
-        jac = self.jacobian_eps()
-        integrand = jac * y
+        jac = self.jacobian_eps(n_max=n_max)
+        integrand = jac * y.mask(n_max)
         # Eps, phi and chi integral
         new_chiphifunc_list = [ChiPhiFuncSpecial(0)]
         len_phi = self.constant['kap_p'].content.shape[1]
@@ -706,9 +720,7 @@ class Equilibrium:
         facecolors = mapper.to_rgba(B_magnitude)
 
         ax.plot_surface(x_surf, y_surf, z_surf, zorder=1, facecolors=facecolors)
-        ax.axis('equal')
 
-        # Plotting flux surfaces.
         # Plot the first separately 
         x_cross, y_cross, z_cross = self.flux_to_xyz(psi=0, chi=chis, phi=0, n_max=n_max)
         ax.plot(x_cross, y_cross, z_cross, zorder=2.5, linewidth=0.5, color='lightgrey', label=r'$(\epsilon=\sqrt{\psi}, \chi)$')
@@ -727,6 +739,7 @@ class Equilibrium:
         ax.plot(x_axis, y_axis, z_axis, zorder=3.5, linewidth=0.5, linestyle='dashed', color='lightgrey', label='Magnetic axis')
         fig.legend()
         fig.colorbar(mapper, label=r'Field strength $|B|, (T)$', shrink=0.5, ax=ax)
+        ax.axis('equal')
         return(fig, ax)
 
     def display_wireframe(self, psi_max=None, n_max=float('inf')):

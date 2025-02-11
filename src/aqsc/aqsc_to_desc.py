@@ -2,19 +2,21 @@ import jax.numpy as jnp
 from scipy.constants import mu_0
 from scipy import special
 
-def aqsc_to_desc_near_axis(na_eq, psi_max, n_max=float('inf'), M=6, N=8, stellsym=True, solve_force_balance=True, maxiter=100):
+def aqsc_to_desc_near_axis(
+        na_eq, psi_max, n_max=float('inf'), 
+        M=6, N=8, stellsym=True, solve_force_balance=True,
+        **kwargs):
     try:
         from desc.equilibrium import Equilibrium
         from desc.grid import Grid
         from desc.basis import FourierZernikeBasis
         from desc.transform import Transform
         from desc.profiles import FourierZernikeProfile, PowerSeriesProfile
-        from desc.objectives import ForceBalanceAnisotropic, ObjectiveFunction
+        from desc.objectives import ForceBalanceAnisotropic, ObjectiveFunction, get_NAE_constraints
         from qsc import Qsc # currently get_NAE_constraints needs a qsc equilibria so we just create a dummy one
-        print("DESC is installed.")
         # Code leveraging desc-opt
     except ImportError:
-        raise ImportError("This feature requires DESC. Install it with `pip install desc-opt`.")
+        raise ImportError("This feature requires DESC and pyQSC.")
 
     r=float(psi_max) # Psi_aqsc = Psi/2pi
     L=None # leave this alone
@@ -76,9 +78,9 @@ def aqsc_to_desc_near_axis(na_eq, psi_max, n_max=float('inf'), M=6, N=8, stellsy
     Asin = transform_sin.matrices['direct1'][0][0][0]
 
     psi = rho**2*r
-    p_perp = na_eq.unknown['p_perp_coef_cp'].eval(psi, chis, phiBs, n_max=n_max).real / mu_0
-    delta = na_eq.unknown['Delta_coef_cp'].eval(psi, chis, phiBs, n_max=n_max).real
-    iota = na_eq.constant['iota_coef'].eval(rho[:,0,0,]**2*r, 0, 0, n_max=n_max) + na_eq.get_helicity()
+    p_perp = jnp.real(na_eq.unknown['p_perp_coef_cp'].eval(psi, chis, phiBs, n_max=n_max).real / mu_0)
+    delta = jnp.real(na_eq.unknown['Delta_coef_cp'].eval(psi, chis, phiBs, n_max=n_max).real)
+    iota = jnp.real(na_eq.constant['iota_coef'].eval(rho[:,0,0,]**2*r, 0, 0, n_max=n_max) + na_eq.get_helicity())
 
     nu_B = phiBs - phiC
     lmbda = nu_B * iota[:,None,None]
@@ -123,18 +125,17 @@ def aqsc_to_desc_near_axis(na_eq, psi_max, n_max=float('inf'), M=6, N=8, stellsy
         'chis': chis
     }
     if solve_force_balance:
-        cons = get_NAE_constraints(eq, Qsc.from_paper("precise QA"), profiles=True)
-        for con in cons:
-            if hasattr(con, "_target_from_user"):
-                # override the old target to target the current equilibrium
-                con._target_from_user = None
-            con.build()
-        eq2, _ = eq.solve(objective=ObjectiveFunction(ForceBalanceAnisotropic(eq)), constraints=cons, verbose=1, maxiter=maxiter, copy=True)
+        cons = get_NAE_constraints(eq, qsc_eq=None, profiles=True, fix_lambda=True)
+        eq2, _ = eq.solve(objective=ObjectiveFunction(ForceBalanceAnisotropic(eq)), constraints=cons, copy=True, **kwargs)
+        return(eq, eq2, aux_dict)
     return(eq, aux_dict)
 
 
 
-def aqsc_to_desc_boundary(na_eq, psi_max, n_max=float('inf'), M=6, N=8, solve_force_balance=True, maxiter=25):
+def aqsc_to_desc_boundary(
+        na_eq, psi_max, n_max=float('inf'), 
+        M=6, N=8, solve_force_balance=True,
+        **kwargs):
     """Convert an equilibrium from AQSC to DESC.
     Parameters
     ----------
@@ -158,8 +159,6 @@ def aqsc_to_desc_boundary(na_eq, psi_max, n_max=float('inf'), M=6, N=8, solve_fo
         from desc.transform import Transform
         from desc.profiles import FourierZernikeProfile, PowerSeriesProfile
         from desc.objectives import ForceBalanceAnisotropic, ObjectiveFunction
-        from qsc import Qsc # currently get_NAE_constraints needs a qsc equilibria so we just create a dummy one
-        print("DESC is installed.")
         # Code leveraging desc-opt
     except ImportError:
         raise ImportError("This feature requires DESC. Install it with `pip install desc-opt`.")
@@ -210,9 +209,9 @@ def aqsc_to_desc_boundary(na_eq, psi_max, n_max=float('inf'), M=6, N=8, solve_fo
     transform_sin = Transform(grid, basis_sin, method="direct1")
     Acos = transform_cos.matrices['direct1'][0][0][0]
     Asin = transform_sin.matrices['direct1'][0][0][0]
-    p_perp = na_eq.unknown['p_perp_coef_cp'].eval(rho**2*r, chis, phiBs, n_max=n_max).real / mu_0
-    delta = na_eq.unknown['Delta_coef_cp'].eval(rho**2*r, chis, phiBs, n_max=n_max).real
-    iota = na_eq.constant['iota_coef'].eval(rho[:,0,0,]**2*r, 0, 0, n_max=n_max) + na_eq.get_helicity()
+    p_perp = jnp.real(na_eq.unknown['p_perp_coef_cp'].eval(rho**2*r, chis, phiBs, n_max=n_max).real / mu_0)
+    delta = jnp.real(na_eq.unknown['Delta_coef_cp'].eval(rho**2*r, chis, phiBs, n_max=n_max).real)
+    iota = jnp.real(na_eq.constant['iota_coef'].eval(rho[:,0,0,]**2*r, 0, 0, n_max=n_max) + na_eq.get_helicity())
     
     nu_B = phiBs - phiC
     lmbda = nu_B * iota[:,None,None]
@@ -251,7 +250,7 @@ def aqsc_to_desc_boundary(na_eq, psi_max, n_max=float('inf'), M=6, N=8, solve_fo
         'chis': chis
     }
     if solve_force_balance:
-        eq_force_balance, _ = eq_fit.solve(objective=ObjectiveFunction(ForceBalanceAnisotropic(eq_fit)), verbose=3, maxiter=maxiter, copy=True)
+        eq_force_balance, _ = eq_fit.solve(objective=ObjectiveFunction(ForceBalanceAnisotropic(eq_fit)), copy=True, **kwargs)
         return(eq_fit, eq_force_balance, aux_dict)
     print('Force balance is disabled. Please solve with a call similar to this:')
     print('eq_force_balance, _ = eq_fit.solve(objective=ObjectiveFunction(ForceBalanceAnisotropic(eq_fit)), verbose=3, maxiter=25, copy=True)')

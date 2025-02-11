@@ -20,8 +20,9 @@ nav:
     - 'Equilibrium': 'api-equilibrium.md'
     - 'ChiPhiFunc': 'api-chiphifunc.md'
     - 'ChiPhiEpsFunc': 'api-chiphiepsfunc.md'
-    - 'Math utilities and solvers': 'api-utils.md'
     - 'Iteration': 'api-iteration.md'
+    - 'DESC output': 'api-desc.md'
+    - 'Math utilities and solvers': 'api-utils.md'
 plugins:
   - search
   - mkdocstrings:

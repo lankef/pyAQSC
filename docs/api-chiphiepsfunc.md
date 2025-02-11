@@ -109,7 +109,7 @@ Returns:
 
 
 ### `aqsc.ChiPhiEpsFunc.mask(n)`
-Produces a `ChiPhiEpsFunc` from self containing power coefficients up to order $n$. When $n$ is lower than the highest currently known order, returns a `ChiPhiEpsFunc` containing a sublist of `self.chiphifunc_list`. When $n$ is higher than the highest currently known order, fill in the unknown elements with `ChiPhiFunc(nfp=0)`. 
+Produces a `ChiPhiEpsFunc` from self containing power coefficients up to (and including) order $n$. When $n$ is lower than the highest currently known order, returns a `ChiPhiEpsFunc` containing a sublist of `self.chiphifunc_list`. When $n$ is higher than the highest currently known order, fill in the unknown elements with `ChiPhiFunc(nfp=0)`. 
 
 Does not modify `self`. Returns a new `ChiPhiEpsFunc`.
 

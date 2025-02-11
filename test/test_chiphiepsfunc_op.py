@@ -3,7 +3,7 @@ import unittest
 import pathlib
 import numpy as np
 import jax.numpy as jnp
-import jax.config
+import jax
 jax.config.update("jax_enable_x64", True)
 
 

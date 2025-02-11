@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 from jax.lax import scan
-from interpax import interp1d
+from interpax import interp1d, Interpolator1D
 from .chiphifunc import *
 from .chiphiepsfunc import *
 from .math_utilities import diff
@@ -92,7 +92,7 @@ def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
     # where phi is the cartesian toroidal angle. Contains 2pi/nfp,
     # TODO: need to made static.
     mode_num = jnp.arange(RZ_max_len)*nfp
-    Phi0 = jnp.linspace(0,2*jnp.pi/nfp*(len_phi-1)/len_phi, len_phi)
+    Phi0 = jnp.linspace(0,2*jnp.pi/nfp, len_phi, endpoint=False)
     d_phi = Phi0[1]-Phi0[0]
     phi_times_mode = mode_num[:, None]*Phi0[None, :]
 
@@ -117,12 +117,16 @@ def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
     # dl/dphi in Boozer coordinate
     axis_length = jnp.sum(d_l_d_phi) * d_phi * nfp
     dl_p = axis_length/jnp.pi/2
+    
 
     # l on cylindrical phi grid
+    # Integrating arclength with FFT.
+    l_phi = jnp.real(ChiPhiFunc(d_l_d_phi.T, nfp).integrate_phi_fft(zero_avg=False).content[0])
     # Setting the first element to 0. Removing the last element.
-    l_phi = jnp.cumsum(d_l_d_phi)/len_phi*jnp.pi*2/nfp
-    l_phi = jnp.roll(l_phi, 1)
-    l_phi = l_phi.at[0].set(0)
+    # l_phi = jnp.cumsum(d_l_d_phi)/len_phi*jnp.pi*2/nfp
+    # l_phi = jnp.roll(l_phi, 1)
+    # l_phi = l_phi.at[0].set(0)
+
 
     # The Boozer phi on cylindrical phi grids.
     phi_gbc = l_phi/dl_p
@@ -214,245 +218,6 @@ def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
                 # 'd_phi': d_phi, # Grid spacing. Checked.
     }
     return(axis_info)
-
-def leading_orders_legacy(
-    nfp, # Field period
-    Rc, Rs, Zc, Zs, # Axis shape
-    p0, # On-axis pressure
-    Delta_0_avg, # Average anisotropy on axis
-    iota_0, # On-axis rotational transform
-    B_theta_20_avg, # Average B_theta[2,0]
-    B_alpha_1,  # B_alpha
-    B0, B11c, 
-    B22c, B20, B22s, # Magnetic field strength
-    len_phi,
-    static_max_freq,
-    traced_max_freq):
-
-    axis_info = get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi, interp1d_method)
-    dl_p = axis_info['dl_p'] 
-    kap_p = axis_info['kap_p'] 
-    tau_p = axis_info['tau_p'] 
-    # The following variables will not be included in a pyAQSC equilibrium.
-    # self.G0 = G0 # NA. GBC is different from Boozer Coordinate.
-    # self.Bbar = self.spsi * self.B0 # NA
-    # self.abs_G0_over_B0 = abs_G0_over_B0 # NA
-    # self.X11s = np.zeros(nphi) # will be provided in other formats
-    # self.X11c = self.etabar / curvature # will be provided in other formats
-    # self.min_R0 = fourier_minimum(self.R0)
-    ''' 0th order quantities '''
-    B_alpha0 = dl_p/jnp.sqrt(B0) # (Rodriguez 2021, J0)
-    B1 = ChiPhiFunc(
-        jnp.array([
-            [0], # Choice of angular coordinate. See eq II.
-            [B11c]
-        ]), nfp, trig_mode=True
-    )
-    B2 = ChiPhiFunc(
-        jnp.array([
-            [B22s],
-            [B20],
-            [B22c]
-        ]), nfp, trig_mode=True
-    )
-    p0 = p0*np.ones(len_phi)
-    p0 = ChiPhiFunc(p0[None, :], nfp=nfp)
-    Delta0 = (-B0*p0) - phi_avg(-B0*p0) + Delta_0_avg # (Rodriguez 2021, eq. 41)
-    eta = -B11c/(2*B0) # Defined for simple notation. (Rodriguez 2021, eq. 14)
-
-    ''' 1st order quantities '''
-    iota_coef = ChiPhiEpsFunc([iota_0], nfp, True)
-    B_denom_coef_c = ChiPhiEpsFunc([B0, B1, B2], nfp, False)
-    B_alpha_coef = ChiPhiEpsFunc([B_alpha0, B_alpha_1], nfp, True)
-    B_theta_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), ChiPhiFuncSpecial(0)], nfp, False)
-    B_psi_coef_cp = ChiPhiEpsFunc([], nfp, False)
-    Delta_coef_cp = ChiPhiEpsFunc([Delta0], nfp, False)
-    p_perp_coef_cp = ChiPhiEpsFunc([p0], nfp, False)
-    Y_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0)], nfp, False)
-    Z_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), ChiPhiFuncSpecial(0)], nfp, False)
-    # X1 (Rodriguez 2021, eq. 14)
-    X11c = eta/kap_p
-    X1 = ChiPhiFunc(jnp.array([
-        jnp.zeros_like(X11c.content[0]), # sin coeff is zero
-        X11c.content[0],
-    ]), nfp, trig_mode = True).filter(traced_max_freq[0])
-    X_coef_cp = ChiPhiEpsFunc([ChiPhiFuncSpecial(0), X1], nfp, False)
-    # p_1 and Delta1 has the same formula as higher orders.
-    p_1 = iterate_p_perp_n(1,
-        B_theta_coef_cp,
-        B_psi_coef_cp,
-        B_alpha_coef,
-        B_denom_coef_c,
-        p_perp_coef_cp,
-        Delta_coef_cp,
-        iota_coef).filter(traced_max_freq[0])
-    p_perp_coef_cp = p_perp_coef_cp.append(p_1)
-    Delta_1 = iterate_delta_n_0_offset(1,
-        B_denom_coef_c,
-        p_perp_coef_cp,
-        Delta_coef_cp,
-        iota_coef,
-        static_max_freq=None).filter(traced_max_freq[0])
-    Delta_coef_cp = Delta_coef_cp.append(Delta_1)
-
-    '''
-    Leading order 'looped' equations.
-    The looped equations at higher even orders is composed of
-    (Rodriguez 2021, eq. tilde II)'s m!=0 components,
-    (Rodriguez 2021, eq. II)'s m=0 component,
-    (Rodriguez 2021, eq. D3)'s m=0 component,
-    At the leading order, (Rodriguez 2021, eq. tilde II, m!=0)
-    vanish, (Rodriguez 2021, eq. II, m=0) is a 1st order, inhomogeneous linear
-    ODE containing only B_theta[2,0] with no unique sln.
-    (Rodriguez 2021, eq. D3, m=0) is a Riccati equation (Rodriguez 2021, eq. 26)
-    of Yc[1,1] and contains B_theta[2,0] in the inhomogeneity. The following
-    section solves II, m=0 with spectral method given average B_theta[2,0], and
-    then solves the linear 2nd order homogenous form of D3 for Yc[1,1].
-    '''
-    ''' II m = 0 '''
-    short_length = static_max_freq[0]*2
-    # RHS of II[1][0]
-    II_2_inhomog = -B_alpha_coef[0]/2*(
-        4*B0*B1*p_perp_coef_cp[1].dchi()
-        -Delta_coef_cp[1]*B1.dchi()
-    )[0]
-    # Coefficients of B_theta
-    coef_B_theta_20 = -B0**2*diff(p_perp_coef_cp[0],False,1)
-    coef_dp_B_theta_20 = B0*(Delta_coef_cp[0]-1)
-    # Solving y'+py=f for B_theta[2,0]. This equation has no unique solution,
-    # and an initial condition is provided.
-    p_eff = (coef_B_theta_20.content/coef_dp_B_theta_20.content)[0]
-    f_eff = (II_2_inhomog.content/coef_dp_B_theta_20.content)[0]
-    p_fft = fft_filter(jnp.fft.fft(p_eff), short_length, axis=0)
-    f_fft = fft_filter(jnp.fft.fft(f_eff), short_length, axis=0)
-    # Creating differential operator and convolution operator
-    # as in solve_ODE
-    diff_matrix = fft_dphi_op(short_length)*nfp
-    conv_matrix = fft_conv_op(p_fft)
-    tot_matrix = diff_matrix + conv_matrix
-
-    # # Add a row to the matrix for avg initial condition
-    # # and solve as overdetermined system with SVD. Doesn't
-    # # work well in practice.
-    # svd_norm = jnp.average(jnp.abs(f_fft))
-    # tot_matrix_svd = jnp.zeros((short_length+1, short_length))
-    # tot_matrix_svd = tot_matrix_svd.at[:-1, :].set(tot_matrix)
-    # tot_matrix_svd = tot_matrix_svd.at[-1, 0].set(svd_norm)
-
-    # f_fft_svd = jnp.zeros(short_length+1)
-    # f_fft_svd = f_fft_svd.at[:-1].set(f_fft)
-    # f_fft_svd = f_fft_svd.at[-1].set(B_theta_20_avg*short_length*svd_norm)
-    # sln_svd = linear_least_sq_2d_svd(tot_matrix_svd, f_fft_svd)
-
-    # Original: The average of B_theta[2,0] is its zeroth 
-    # element in FFT representation.
-    # The zeroth column of B_theta[2,0] acts on this element.
-    # By adding 1 to all elements in this column will result in
-    # adding B_theta_20_average to all elements in the RHS.
-    tot_matrix_normalization = jnp.max(jnp.abs(tot_matrix))
-    tot_matrix = tot_matrix.at[:, 0].set(
-        tot_matrix[:, 0]+tot_matrix_normalization # was +1
-    )
-    f_fft = f_fft+B_theta_20_avg*short_length*tot_matrix_normalization
-    sln_fft = jnp.linalg.solve(tot_matrix, f_fft)
-
-    B_theta_20 = ChiPhiFunc(jnp.fft.ifft(fft_pad(sln_fft, len_phi, axis=0), axis=0)[None, :], nfp)
-    B_theta_coef_cp = B_theta_coef_cp.append(B_theta_20)
-
-    ''' D3 m = 0 '''
-    Y11s = 2*jnp.sqrt(B0)/eta*kap_p
-    # D3 can be written as y' = q0 + q1y + q2y^2
-    q0 = -iota_0*(
-        2*jnp.sqrt(B0)/eta*kap_p
-        +eta**3/(2*jnp.sqrt(B0)*kap_p**3)
-    )+dl_p*(2*tau_p+B_theta_20)*eta/kap_p
-    q1 = kap_p.dphi()/kap_p
-    q2 = -iota_0*eta/(2*jnp.sqrt(B0)*kap_p)
-    # This equation is equivalent to the 2nd order linear ODE:
-    # u''-R(x)u'+S(x)u=0, where y =
-    S_lin = q0*q2
-    R_lin = q1+q2.dphi()/q2
-    u_avg = 1 # Doesn't actually impact Y!
-    # The differential operator is:
-    R_fft = fft_filter(jnp.fft.fft(R_lin.content[0]), short_length, axis=0)
-    S_fft = fft_filter(jnp.fft.fft(S_lin.content[0]), short_length, axis=0)
-    R_conv_matrix = fft_conv_op(R_fft)
-    S_conv_matrix = fft_conv_op(S_fft)
-    riccati_matrix = diff_matrix**2 - R_conv_matrix@diff_matrix + S_conv_matrix
-    # old BC
-    riccati_normalization = jnp.max(jnp.abs(riccati_matrix))
-    riccati_matrix = riccati_matrix.at[:, 0].set(
-        riccati_matrix[:, 0]+riccati_normalization # was +1
-    )
-    riccati_RHS = jnp.ones(short_length)*u_avg*short_length*riccati_normalization
-    riccati_sln_fft = jnp.linalg.solve(riccati_matrix, riccati_RHS)
-    # # Add a row to the matrix for avg initial condition
-    # # and solve as overdetermined system with SVD. Doessn't
-    # # work well in practice.
-    # riccati_matrix_svd = jnp.zeros((riccati_matrix.shape[0]+1, riccati_matrix.shape[1]))
-    # riccati_matrix_svd = riccati_matrix_svd.at[:-1, :].set(riccati_matrix)
-    # riccati_matrix_svd = riccati_matrix_svd.at[-1, 0].set(1)
-    # riccati_RHS_svd = jnp.zeros(short_length+1)
-    # riccati_RHS_svd = riccati_RHS_svd.at[-1].set(u_avg*short_length)
-    # Solution
-    # riccati_sln_svd = linear_least_sq_2d_svd(riccati_matrix_svd, riccati_RHS_svd)
-    riccati_u = ChiPhiFunc(jnp.fft.ifft(fft_pad(riccati_sln_fft, len_phi, axis=0), axis=0)[None, :], nfp)
-    Y11c = (-riccati_u.dphi()/(q2*riccati_u))
-    Y1 = ChiPhiFunc(jnp.array([
-        Y11s.content[0], # sin coeff is zero
-        Y11c.content[0],
-    ]), nfp, trig_mode = True).filter(traced_max_freq[0])
-    Y_coef_cp = Y_coef_cp.append(Y1)
-
-    ''' 2nd order quantities '''
-    # Starting from order 2, the general recursion relations apply.
-    solution2 = iterate_looped(
-        n_unknown=2, 
-        static_max_freq=static_max_freq[1], 
-        traced_max_freq=traced_max_freq[1], 
-        target_len_phi=len_phi,
-        X_coef_cp=X_coef_cp,
-        Y_coef_cp=Y_coef_cp,
-        Z_coef_cp=Z_coef_cp,
-        p_perp_coef_cp=p_perp_coef_cp,
-        Delta_coef_cp=Delta_coef_cp,
-        B_psi_coef_cp=B_psi_coef_cp,
-        B_theta_coef_cp=B_theta_coef_cp,
-        B_alpha_coef=B_alpha_coef,
-        B_denom_coef_c=B_denom_coef_c,
-        kap_p=kap_p,
-        tau_p=tau_p,
-        dl_p=dl_p,
-        iota_coef=iota_coef,
-        nfp=nfp,
-    )
-    B_psi_coef_cp = B_psi_coef_cp.append(solution2['B_psi_nm2'])
-    X_coef_cp = X_coef_cp.append(solution2['Xn'])
-    Y_coef_cp = Y_coef_cp.append(solution2['Yn'])
-    Z_coef_cp = Z_coef_cp.append(solution2['Zn'])
-    p_perp_coef_cp = p_perp_coef_cp.append(solution2['pn'])
-    Delta_coef_cp = Delta_coef_cp.append(solution2['Deltan'])
-
-    ''' Constructing equilibrium '''
-    equilibrium_out = Equilibrium.from_known(
-        X_coef_cp=X_coef_cp.mask(2),
-        Y_coef_cp=Y_coef_cp.mask(2),
-        Z_coef_cp=Z_coef_cp.mask(2),
-        B_psi_coef_cp=B_psi_coef_cp.mask(0),
-        B_theta_coef_cp=B_theta_coef_cp.mask(2),
-        B_denom_coef_c=B_denom_coef_c.mask(2),
-        B_alpha_coef=B_alpha_coef.mask(1),
-        iota_coef=iota_coef.mask(0),
-        kap_p=kap_p,
-        dl_p=dl_p,
-        tau_p=tau_p,
-        p_perp_coef_cp=p_perp_coef_cp.mask(2), # no pressure or delta
-        Delta_coef_cp=Delta_coef_cp.mask(2),
-        axis_info=axis_info,
-        magnetic_only=False
-    )
-
-    return(equilibrium_out)
 
 def leading_orders_magnetic(
     nfp, # Field period
@@ -757,7 +522,7 @@ def leading_orders_from_axis(
             [B22c]
         ]), nfp, trig_mode=True
     )
-    p0 = p0*np.ones(len_phi)
+    p0 = p0 * jnp.ones(len_phi)
     p0 = ChiPhiFunc(p0[None, :], nfp=nfp)
     Delta0 = (-B0*p0) - phi_avg(-B0*p0) + Delta_0_avg # (Rodriguez 2021, eq. 41)
     eta = -B11c/(2*B0) # Defined for simple notation. (Rodriguez 2021, eq. 14)
@@ -923,7 +688,7 @@ def leading_orders_from_axis(
         q1 = kap_p.dphi()/kap_p
         q2 = -iota_0*eta/(2*jnp.sqrt(B0)*kap_p)
         return(q0, q1, q2)
-    # Sttempting to solve the problem with RK4
+    # Attempting to solve the problem with RK4
     # First, y' = f(i, y) = q0 + q1y + q2y^2.
     # For improved speed, we use phi = (0, 2dphi, 4dphi, ...)
     # as RK4 grids, and phi = (dphi, 3dphi, ...) as half-grids.
@@ -1144,10 +909,10 @@ def leading_orders_from_axis(
     else:
         iota_coef = ChiPhiEpsFunc([x_secant_list2[jnp.argmin(f_list2)-1]], nfp, True)
     if solve_B_theta_20_avg:
-        print('Solving for average B_{\\theta20} self-consistently:')
+        print('Solving for average B_{\\theta20} self-consistently.')
         # print('\\bar{B}_{\\theta20} =', x_secant_list2[jnp.argmin(f_list2)-1])
     else:
-        print('Solving for \\bar{\\iota}_0 self-consistently:')
+        print('Solving for \\bar{\\iota}_0 self-consistently.')
         # print('\\bar{\\iota}_0 =', x_secant_list2[jnp.argmin(f_list2)-1])
 
     ''' 2nd order quantities '''

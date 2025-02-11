@@ -7,6 +7,7 @@ from matplotlib import pyplot as plt
 
 # Configurations
 from .config import *
+# from .math_utilities import fourier_interpolation
 from interpax import interp1d
 ''' Debug options and loading configs '''
 
@@ -883,38 +884,6 @@ class ChiPhiFunc:
 
 
     ''' I.1.5 Output and plotting '''
-    def eval_legacy(self, chi, phi):
-        '''
-        Getting a 2d vectorized function, f(chi, phi) for plotting a ChiPhiFunc.
-
-        Output: -----
-
-        A vectorized callables f(chi, phi).
-        '''
-        if self.nfp == 0:
-            return(0)
-        if self.nfp < 0:
-            return(jnp.nan)
-        
-        len_chi = self.content.shape[0]
-        len_phi = self.content.shape[1]
-
-        # Create 'x' for interpolation. 'x' is wrapped for periodicity.
-        phi_grid = jnp.linspace(0, 2 * jnp.pi / self.nfp, len_phi, endpoint=False)
-
-        # The outer dot product is summing along axis 0.
-        out = 0
-        for i in range(len_chi):
-            out+=jnp.e**(1j * chi * (i * 2 - len_chi + 1))\
-                *jnp.interp(
-                    phi, 
-                    phi_grid, 
-                    self.content[i], 
-                    period=2*jnp.pi/self.nfp
-                )
-        return(out)
-    
-        ''' I.1.5 Output and plotting '''
     def eval(self, chi, phi):
         '''
         Getting a 2d vectorized function, f(chi, phi) for plotting a ChiPhiFunc.
@@ -940,6 +909,11 @@ class ChiPhiFunc:
         # Interpolating in the phi direction
         # Has shape: 
         # shape, n_harmonics
+        # interp = fourier_interpolation(
+        #     y_data=self.content,
+        #     x_interp=phi.flatten(),
+        #     nfp=self.nfp
+        # ).T
         interp = interp1d(
             phi.flatten(),
             phi_grid, 

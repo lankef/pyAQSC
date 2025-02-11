@@ -1,7 +1,11 @@
 import jax.numpy as jnp
+from jax import jit
 from jax.tree_util import tree_map
-# from jax import jit, vmap, tree_util
-# from functools import partial # for JAX jit with static params
+from jax.lax import while_loop
+from jax import jit # vmap, tree_util
+from functools import partial # for JAX jit with static params
+import optax
+import optax.tree_utils as otu
 
 from math import floor, ceil
 from .chiphifunc import *
@@ -105,3 +109,100 @@ def einsum_ijkl_jmln_to_imkn(array_A, array_B):
     # ikmn
     array_out = jnp.tensordot(A_transposed, B_transposed)
     return(jnp.transpose(array_out, (0,2,1,3)))
+
+def newton_solver(f, f_prime, x0, tol=1e-6, maxiter=100):
+    """
+    Newton iteration function using jax.while_loop to solve f(x) = 0.
+
+    Parameters:
+    f: Callable - Function whose root is to be found.
+    f_prime: Callable - Derivative of the function.
+    x0: float - Initial guess for the root.
+    tol: float - Tolerance for convergence.
+    maxiter: int - Maximum number of iterations.
+
+    Returns:
+    x: float - Approximation to the root.
+    """
+    def condition(state):
+        _, fx, fpx, iter_count = state
+        return (fx**2 > tol**2) & (iter_count < maxiter)
+
+    def body(state):
+        x, fx, fpx, iter_count = state
+        # Update x using Newton's method: x_{n+1} = x_n - f(x) / f'(x)
+        x_new = x - fx / fpx
+        fpx_new = f_prime(x_new)
+        fx_new = f(x_new)
+        return x_new, fx_new, fpx_new, iter_count + 1
+
+    # Initialize state: (x, f(x), f'(x), iteration counter)
+    initial_state = (x0, f(x0), f_prime(x0), 0)
+
+    x_final, _, _, _ = while_loop(condition, body, initial_state)
+    return x_final
+
+
+@partial(jit, static_argnums=(2))
+def fourier_interpolation(y_data, x_interp, nfp):
+    """
+    Perform Fourier interpolation of a periodic vector function.
+    Very memory intensive compared to FFT interpolation in interpax! Use carefully.
+
+    Parameters:
+    y_data (jnp.ndarray): 2D array where axis 0 represents vector components, and axis 1 represents sampled points.
+    x_interp (jnp.ndarray): Points where interpolation is desired.
+    nfp (int): Number of field periods in the function.
+
+    Returns:
+    jnp.ndarray: Interpolated values with the same number of components as y_data along axis 0.
+    """
+    n_components, n_samples = y_data.shape
+    period = 2 * jnp.pi / nfp
+
+    # Compute Fourier coefficients for each component via FFT
+    fft_coeffs = jnp.fft.fft(y_data, axis=1) / n_samples
+
+    # Frequency indices
+    k_values = jnp.fft.fftfreq(n_samples) * n_samples
+
+    # Wrap interpolation points to [0, period)
+    x_interp_mod = x_interp % period
+
+    # Compute Fourier series interpolation
+    print('k_values', k_values.shape)
+    print('x_interp_mod', x_interp_mod.shape)
+    print('x_interp_mod', x_interp.shape)
+    exponentials = jnp.exp(1j * jnp.outer(k_values, x_interp_mod) * (2 * jnp.pi / period))
+    
+    print('exponentials', exponentials.shape)
+    result = jnp.sum(fft_coeffs[:, :, None] * exponentials, axis=1).real
+
+    return result
+
+
+
+def run_opt(init_params, fun, opt, max_iter, tol):
+    value_and_grad_fun = optax.value_and_grad_from_state(fun)
+  
+    def step(carry):
+        params, state = carry
+        value, grad = value_and_grad_fun(params, state=state)
+        updates, state = opt.update(
+            grad, state, params, value=value, grad=grad, value_fn=fun
+        )
+        params = optax.apply_updates(params, updates)
+        return params, state
+  
+    def continuing_criterion(carry):
+        _, state = carry
+        iter_num = otu.tree_get(state, 'count')
+        grad = otu.tree_get(state, 'grad')
+        err = otu.tree_l2_norm(grad)
+        return (iter_num == 0) | ((iter_num < max_iter) & (err >= tol))
+  
+    init_carry = (init_params, opt.init(init_params))
+    final_params, final_state = while_loop(
+        continuing_criterion, step, init_carry
+    )
+    return final_params, final_state

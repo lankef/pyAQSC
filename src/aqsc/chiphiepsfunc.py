@@ -2,7 +2,8 @@ import jax.numpy as jnp
 import numpy as np # Used in saving
 # from functools import partial
 # from jax import jit, tree_util
-from jax import tree_util
+from jax import tree_util, jit
+from functools import partial # for JAX jit with static params
 
 from .chiphifunc import *
 from .chiphifunc import ChiPhiFunc
@@ -194,7 +195,7 @@ class ChiPhiEpsFunc:
     # @partial(jit, static_argnums=(1,))
     def mask(self, n):
         '''
-        Produces a sub-list up to the nth element (order).
+        Produces a new ChiPhiEpsFunc containing up to (including) order n
         When n exceeds the maximum order known, fill with ChiPhiFuncSpecial(0)
         for tracing incorrect logic or formulae.
         Originally the fill is with special ChiPhiFunc, but since JAX cannot
@@ -202,6 +203,8 @@ class ChiPhiEpsFunc:
         (n-n)*(out of bound) = out of bound. Since all parsed formulae are checked
         correct, in the JAX implementation we make out-of-bound terms 0 instead.
         '''
+        if n == float('inf'):
+            return(self)
         n_diff = n-(len(self.chiphifunc_list)-1)
         if n_diff>0:
              return(ChiPhiEpsFunc(

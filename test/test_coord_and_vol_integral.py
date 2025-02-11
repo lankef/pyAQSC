@@ -9,7 +9,7 @@ import unittest
 import pathlib
 import numpy as np
 import jax.numpy as jnp
-import jax.config
+import jax
 jax.config.update("jax_enable_x64", True)
 
 # Create a torus with elliptical cross section
@@ -69,7 +69,7 @@ class TestCoords(unittest.TestCase):
         self.assertTrue(jnp.all(jnp.isclose(Y, Y_test)))
         self.assertTrue(jnp.all(jnp.isclose(Z, Z_test2)))
 
-    def test_covariant_basis(self):
+    def test_contravariant_basis_eps(self):
         '''
         Testing the covariant basis calculation for the GBC
         '''
@@ -84,7 +84,7 @@ class TestCoords(unittest.TestCase):
             dphi_r_x,
             dphi_r_y,
             dphi_r_z,
-        ) = equil_test.covariant_basis()
+        ) = equil_test.contravariant_basis_eps()
         self.assertTrue(jnp.all(jnp.isclose(deps_r_x.eval_eps(eps, chi, phi), -a * jnp.cos(chi) * jnp.cos(phi))))
         self.assertTrue(jnp.all(jnp.isclose(deps_r_y.eval_eps(eps, chi, phi), -a * jnp.cos(chi) * jnp.sin(phi))))
         self.assertTrue(jnp.all(jnp.isclose(deps_r_z.eval_eps(eps, chi, phi), b * jnp.sin(chi))))
