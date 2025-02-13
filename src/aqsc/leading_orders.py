@@ -30,10 +30,14 @@ def circular_axis():
         B0=1,
         B11c=-1.8,
         B22c=0.01, B20=0.01, B22s=0.01,
+        sigma_0=0,
         len_phi=1000,
+        len_phi_axis=1000,
         static_max_freq=(30, 30),
         traced_max_freq=(30, 30),
-        riccati_secant_n_iter=(30, 30)
+        tol_riccati=1e-8,
+        max_iter_riccati=50,
+        n_shooting_riccati=5000
     ))
 
 def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
@@ -58,7 +62,6 @@ def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
     Rs_arr = Rs_arr.at[:len(Rs)].set(Rs)
     Zc_arr = Zc_arr.at[:len(Zc)].set(Zc)
     Zs_arr = Zs_arr.at[:len(Zs)].set(Zs)
-
     # make an array like:
     # [
     #     [0],
@@ -67,15 +70,13 @@ def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
     #     ...
     # ]
     # where phi is the cartesian toroidal angle. Contains 2pi/nfp,
-    # TODO: need to made static.
+    # TODO: need to be made static.
     mode_num = jnp.arange(RZ_max_len)*nfp
     Phi0 = jnp.linspace(0,2*jnp.pi/nfp, len_phi, endpoint=False)
     d_phi = Phi0[1]-Phi0[0]
     phi_times_mode = mode_num[:, None]*Phi0[None, :]
-
     cos_arr = jnp.cos(phi_times_mode)
     sin_arr = jnp.sin(phi_times_mode)
-
     # Calculate r and z on Cartesian phi grid
     # each row of Rc_arr is a trigonometry component with a different mode number.
     R0 = jnp.sum(Rc_arr[:, None]*cos_arr+Rs_arr[:, None]*sin_arr, axis=0)[:, None]
@@ -86,28 +87,17 @@ def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
     Z0pp = jnp.sum(mode_num[:,None]**2*(-Zc_arr[:, None]*cos_arr-Zs_arr[:, None]*sin_arr), axis=0)[:, None]
     R0ppp = jnp.sum(mode_num[:,None]**3*(Rc_arr[:, None]*sin_arr-Rs_arr[:, None]*cos_arr), axis=0)[:, None]
     Z0ppp = jnp.sum(mode_num[:,None]**3*(Zc_arr[:, None]*sin_arr-Zs_arr[:, None]*cos_arr), axis=0)[:, None]
-
     # dl/dphi in cylindrical phi
     d_l_d_phi = jnp.sqrt(R0**2 + R0p**2 + Z0p**2)
     d2_l_d_phi2 = (R0*R0p + R0p*R0pp + Z0p*Z0pp)/d_l_d_phi
-
     # dl/dphi in Boozer coordinate
     axis_length = jnp.sum(d_l_d_phi) * d_phi * nfp
     dl_p = axis_length/jnp.pi/2
-    
-
     # l on cylindrical phi grid
     # Integrating arclength with FFT.
     l_phi = jnp.real(ChiPhiFunc(d_l_d_phi.T, nfp).integrate_phi_fft(zero_avg=False).content[0])
-    # Setting the first element to 0. Removing the last element.
-    # l_phi = jnp.cumsum(d_l_d_phi)/len_phi*jnp.pi*2/nfp
-    # l_phi = jnp.roll(l_phi, 1)
-    # l_phi = l_phi.at[0].set(0)
-
-
     # The Boozer phi on cylindrical phi grids.
     phi_gbc = l_phi/dl_p
-
     # These are cylindrical vectors in R, phi, Z frame
     d_r_d_phi_cylindrical = jnp.concatenate([
         R0p,
@@ -124,13 +114,6 @@ def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
         3 * R0pp - R0,
         Z0ppp
     ], axis=1)
-    # d2r0dphi2 = jnp.array([
-    #     R0pp,
-    #     jnp.zeros_like(R0pp),
-    #     Z0pp
-    # ])
-
-
     # (db0/dl on cylindrical phi grid)
     d_tangent_d_l_cylindrical = (
         -d_r_d_phi_cylindrical * d2_l_d_phi2 / d_l_d_phi \
@@ -168,7 +151,6 @@ def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
     # tau_p_content = -jnp.interp(Phi0, phi_gbc, torsion, period = 2*jnp.pi/nfp)[None, :]
     tau_p_content = -interp1d(Phi0, phi_gbc, torsion, period=2*jnp.pi/nfp, method=interp1d_method)[None, :]
     tau_p = ChiPhiFunc(tau_p_content, nfp)
-
     # Storing axis info. All quantities are identically defined to pyQSC.
     axis_info = {
         'dl_p': dl_p, # Checked
@@ -430,12 +412,13 @@ def leading_orders(
     iota_0=None,
     B_theta_20_avg=None,
     len_phi=1000,
+    len_phi_axis=1000,
     static_max_freq=(50, 50),
     traced_max_freq=(50, 50),
     tol_riccati=1e-8,
     max_iter_riccati=50,
     n_shooting_riccati=5000):
-    axis_info = get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi)
+    axis_info = get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi_axis)
     return(
         leading_orders_from_axis(
             nfp=nfp, # Field period
@@ -740,8 +723,7 @@ def leading_orders_from_axis(
     f_newton, Y11c_RK4, Delta1, B_theta_20 = newton_step(x_RK4, Y11c_RK4)
     if len(Y11c_RK4) != len_phi:
         Y11c_RK4 = fft_interp1d(Y11c_RK4, len_phi)
-
-
+    # So far, the Riccati equation is successfully solved
     Y1 = ChiPhiFunc(jnp.array([
         Y11s.content[0], # sin coeff is zero
         Y11c_RK4,
@@ -749,8 +731,6 @@ def leading_orders_from_axis(
     Y_coef_cp = Y_coef_cp.append(Y1)
     Delta_coef_cp = Delta_coef_cp.append(Delta1)
     B_theta_coef_cp = B_theta_coef_cp.append(B_theta_20)
-
-
     # Giving value to iota
     if solve_B_theta_20_avg:
         iota_coef = ChiPhiEpsFunc([iota_0], nfp, True)

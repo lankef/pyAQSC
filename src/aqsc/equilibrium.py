@@ -136,6 +136,34 @@ class Equilibrium:
         )
         return(Phi_cylindrical_incomplete_period + phi_full_periods)
 
+    ''' Properties (for improved usability) '''
+    @property
+    def B_psi(self): return(self.unknown['B_psi_coef_cp'])
+    @property
+    def B_theta(self): return(self.unknown['B_theta_coef_cp'])
+    @property
+    def Delta(self): return(self.unknown['Delta_coef_cp'])
+    @property
+    def X(self): return(self.unknown['X_coef_cp'])
+    @property
+    def Y(self): return(self.unknown['Y_coef_cp'])
+    @property
+    def Z(self): return(self.unknown['Z_coef_cp'])
+    @property
+    def p_perp(self): return(self.unknown['p_perp_coef_cp'])
+    @property
+    def B_alpha(self): return(self.constant['B_alpha_coef'])
+    @property
+    def B_denom(self): return(self.constant['B_denom_coef_c'])
+    @property
+    def dl_p(self): return(self.constant['dl_p'])
+    @property
+    def iota(self): return(self.constant['iota_coef'])
+    @property
+    def kap(self): return(self.constant['kap_p'])
+    @property
+    def tau(self): return(self.constant['tau_p'])
+
     ''' Coordinate transformations '''
     def frenet_basis_phi(self, phi=None):
         ''' 
@@ -655,7 +683,10 @@ class Equilibrium:
         with no Chi or Phi dependence.
         '''
         jac = self.jacobian_eps(n_max=n_max)
-        integrand = jac * y.mask(n_max)
+        if isinstance(y, ChiPhiEpsFunc):
+            integrand = jac * y.mask(n_max)
+        else:
+            integrand = jac * y
         # Eps, phi and chi integral
         new_chiphifunc_list = [ChiPhiFuncSpecial(0)]
         len_phi = self.constant['kap_p'].content.shape[1]
@@ -944,9 +975,19 @@ class Equilibrium:
             II = ChiPhiFuncSpecial(0)
             III = ChiPhiFuncSpecial(0)
         else:
-            I = validate_I(n_unknown, B_denom_coef_c,
-                p_perp_coef_cp, Delta_coef_cp,
-                iota_coef)
+            if n_unknown%2==0:
+                I = validate_I(n_unknown, B_denom_coef_c,
+                    p_perp_coef_cp, Delta_coef_cp,
+                    iota_coef)
+            else:
+                if n_unknown==1:
+                    I = validate_I(n_unknown, B_denom_coef_c,
+                        p_perp_coef_cp, Delta_coef_cp,
+                        iota_coef)
+                else:
+                    I = validate_I(n_unknown, B_denom_coef_c,
+                        p_perp_coef_cp, Delta_coef_cp,
+                        iota_coef.mask((n_unknown-3)//2))
             II = validate_II(n_unknown,
                 B_theta_coef_cp, B_alpha_coef, B_denom_coef_c,
                 p_perp_coef_cp, Delta_coef_cp, iota_coef)

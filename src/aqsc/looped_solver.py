@@ -393,7 +393,7 @@ def generate_tensor_operator(
     # len_tensor is the number of phi modes kept in a tensor.
     if static_max_freq is None or static_max_freq<=0:
         static_max_freq = X_coef_cp[n_unknown-1].content.shape[1]//2
-    len_tensor = static_max_freq*2
+    len_tensor = min(X_coef_cp[n_unknown-1].content.shape[1], static_max_freq*2)
     # dphi_array
     # Multiply a dphi matrix to the end of source.
     # Here it's done by pointwise multiplying
