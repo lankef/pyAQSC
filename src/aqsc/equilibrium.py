@@ -318,6 +318,9 @@ class Equilibrium:
         '''
         Calculates dr/deps, dr/dchi, dr/dphi.
         '''
+        kap_p = self.constant['kap_p'] # .eval(0, phi)
+        tau_p = self.constant['tau_p'] # .eval(0, phi)
+        dl_p = self.constant['dl_p']
         len_phi = self.constant['kap_p'].content.shape[1]
         phi_grid = jnp.linspace(0, 2 * jnp.pi / self.nfp, len_phi, endpoint=False)
 
@@ -345,10 +348,6 @@ class Equilibrium:
         binormal_x = ChiPhiFunc(binormal_x_arr[None, :], self.nfp)
         binormal_y = ChiPhiFunc(binormal_y_arr[None, :], self.nfp)
         binormal_z = ChiPhiFunc(binormal_z_arr[None, :], self.nfp)
-
-        kap_p = self.constant['kap_p'] # .eval(0, phi)
-        tau_p = self.constant['tau_p'] # .eval(0, phi)
-        dl_p = self.constant['dl_p']
         tangent_dphi_x = kap_p * normal_x * dl_p
         tangent_dphi_y = kap_p * normal_y * dl_p
         tangent_dphi_z = kap_p * normal_z * dl_p

@@ -1,5 +1,5 @@
 import jax.numpy as jnp
-from jax import jit
+from jax import jit, jacfwd
 from jax.tree_util import tree_map
 from jax.lax import while_loop
 from jax import jit # vmap, tree_util
@@ -110,7 +110,7 @@ def einsum_ijkl_jmln_to_imkn(array_A, array_B):
     array_out = jnp.tensordot(A_transposed, B_transposed)
     return(jnp.transpose(array_out, (0,2,1,3)))
 
-def newton_solver(f, f_prime, x0, tol=1e-6, maxiter=100):
+def newton_solver_scalar(f, f_prime, x0, tol=1e-6, max_iter=100):
     """
     Newton iteration function using jax.while_loop to solve f(x) = 0.
 
@@ -119,14 +119,14 @@ def newton_solver(f, f_prime, x0, tol=1e-6, maxiter=100):
     f_prime: Callable - Derivative of the function.
     x0: float - Initial guess for the root.
     tol: float - Tolerance for convergence.
-    maxiter: int - Maximum number of iterations.
+    max_iter: int - Maximum number of iterations.
 
     Returns:
     x: float - Approximation to the root.
     """
     def condition(state):
         _, fx, fpx, iter_count = state
-        return (fx**2 > tol**2) & (iter_count < maxiter)
+        return (fx**2 > tol**2) & (iter_count < max_iter)
 
     def body(state):
         x, fx, fpx, iter_count = state
@@ -141,6 +141,40 @@ def newton_solver(f, f_prime, x0, tol=1e-6, maxiter=100):
 
     x_final, _, _, _ = while_loop(condition, body, initial_state)
     return x_final
+
+
+def newton_solver(f, x0, tol=1e-6, max_iter=100):
+    """
+    Newton's method for solving f(x) = 0.
+    
+    Args:
+        f: Callable function that takes in a 1D array x and returns a 1D array of the same length.
+        x0: Initial guess as a 1D JAX array.
+        tol: Convergence tolerance.
+        max_iter: Maximum number of iterations.
+    
+    Returns:
+        x: The solution as a 1D JAX array.
+        converged: Boolean indicating whether convergence was achieved.
+        num_iter: Number of iterations performed.
+    """
+    def body(state):
+        x, i = state
+        J = jacfwd(f)(x)          # Jacobian matrix
+        fx = f(x)
+        delta_x = jnp.linalg.lstsq(J, -fx)[0]
+        x_next = x + delta_x
+        return x_next, i + 1
+    
+    def cond(state):
+        x, i = state
+        return (jnp.linalg.norm(f(x)) > tol) & (i < max_iter)
+    
+    x_final, num_iter = while_loop(cond, body, (x0, 0))
+    converged = jnp.linalg.norm(f(x_final)) <= tol
+    
+    return x_final, converged, num_iter
+
 
 
 @partial(jit, static_argnums=(2))
