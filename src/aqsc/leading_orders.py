@@ -153,28 +153,29 @@ def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi):
     tau_p = ChiPhiFunc(tau_p_content, nfp)
     # Storing axis info. All quantities are identically defined to pyQSC.
     axis_info = {
-        'dl_p': dl_p, # Checked
-        'kap_p': kap_p, # Done
-        'tau_p': tau_p, # Done
-        'phi_gbc': phi_gbc, # Boozer phi
-        'Phi0': Phi0, # Cylindrical Phi
-        'R0': R0[:, 0], # Checked
-        'Z0': Z0[:, 0], # Checked
+        'dl_p': dl_p, # Checked, used in iteration
+        'kap_p': kap_p, # Done, used in iteration
+        'tau_p': tau_p, # Done, used in iteration
+        'phi_gbc': phi_gbc, # Boozer phi, used in phi_gbc_to_Phi_cylindrical
+        'Phi0': Phi0, # Cylindrical Phi, used in phi_gbc_to_Phi_cylindrical
+        'R0': R0[:, 0], # Checked, used in frenet_basis_phi
+        'Z0': Z0[:, 0], # Checked, used in frenet_basis_phi
+        'axis_length': axis_length, # Checked, used in psi_crit
+        'tangent_cylindrical': tangent_cylindrical, # axis=1 is R, phi, Z, Checked, used in frenet_basis_phi
+        'normal_cylindrical': normal_cylindrical, # axis=1 is R, phi, Z, Checked, used in frenet_basis_phi
+        'binormal_cylindrical': binormal_cylindrical, # axis=1 is R, phi, Z, Checked, used in frenet_basis_phi
+        # Unused quantities. Removed to save space.
+        # 'd_phi': d_phi, # Grid spacing. Checked.
         # Derivatives of R and Z in term of Phi
-        'R0p': R0p[:, 0], # Checked
-        'Z0p': Z0p[:, 0], # Checked
-        'R0pp': R0pp[:, 0], # Checked
-        'Z0pp': Z0pp[:, 0], # Checked
-        'R0ppp': R0ppp[:, 0], # Checked
-        'Z0ppp': Z0ppp[:, 0], # Checked
-        'd_l_d_Phi_cylindrical': d_l_d_phi[:, 0], # Checked
-        'axis_length': axis_length, # Checked
-        'curvature': curvature, # Checked
-        'torsion': torsion, # Checked
-        'tangent_cylindrical': tangent_cylindrical, # axis=1 is R, phi, Z, Checked
-        'normal_cylindrical': normal_cylindrical, # axis=1 is R, phi, Z, Checked
-        'binormal_cylindrical': binormal_cylindrical, # axis=1 is R, phi, Z, Checked
-                # 'd_phi': d_phi, # Grid spacing. Checked.
+        # 'R0p': R0p[:, 0], # Checked
+        # 'Z0p': Z0p[:, 0], # Checked
+        # 'R0pp': R0pp[:, 0], # Checked
+        # 'Z0pp': Z0pp[:, 0], # Checked
+        # 'R0ppp': R0ppp[:, 0], # Checked
+        # 'Z0ppp': Z0ppp[:, 0], # Checked
+        # 'd_l_d_Phi_cylindrical': d_l_d_phi[:, 0], # Checked
+        # 'curvature': curvature, # Checked
+        # 'torsion': torsion, # Checked
     }
     return(axis_info)
 
@@ -630,7 +631,6 @@ def leading_orders_from_axis(
         q2_real = jnp.pad(q2_real, [0, 2], mode='wrap')
         def f_RK4(ind:int, y):
             return(q0_real[ind] + q1_real[ind]*y + q2_real[ind]*y**2)
-        # the 
         h = 2 * jnp.pi / nfp / n_shooting_riccati * 2
         def iterate_y(carry, t):
             y_n, ind = carry
@@ -641,7 +641,6 @@ def leading_orders_from_axis(
             k4 = f_RK4(ind+2, y_n+h*k3)
             y_np1 = y_n + h/6*(k1+2*k2+2*k3+k4)
             return((y_np1, ind+2), y_np1)
-
         ind_list = jnp.arange(0, n_shooting_riccati + 2,2)
         (_, _), y_arr = scan(f=iterate_y, init=(Y11c0, 0), xs=ind_list)
         # y_arr contains 
@@ -649,28 +648,17 @@ def leading_orders_from_axis(
         # The correct output must contain
         # y0, ..., yn.
         out = jnp.concatenate((jnp.array([Y11c0]), y_arr[:-2]))
-        
         # This is an objective function that enforces
         # the boundary condition.
         # For some iota and y(0) the solution is exponentially growing
         # and can grow to infinity. This takes care of it numerically.
         # Returns the array's max abs if array's last item is not
         # a finite number. 
-        diff = y_arr[0] - y_arr[-1] + Y11c0 - y_arr[-2]
-        # Replaces all inf and nan's with nan
-        # y_fin = jnp.where(jnp.isfinite(y_arr), y_arr, jnp.nan)
-        # ymax-ymin >= |y(2pi)-y(0)| >= 0
-        # y_max = jnp.nanmax(y_fin)
-        # y_min = jnp.nanmin(y_fin)
+        # This is
+        # diff = y_arr[0] - y_arr[-1] + Y11c0 - y_arr[-2]
+        diff = Y11c0 - y_arr[-2]
         return(diff, out)
-        # return(jnp.nanmin(jnp.array([
-        #     # When y_arr contains no nan, 
-        #     # gives error or deviation from periodic BC
-        #     # Otherwise will be nan
-        #     jnp.log10(diff+1),
-        #     # diff,
-        #     jnp.log10(y_max - y_min + 1)
-        # ])), y_arr)
+
     # Defining the function to be evaluated in the 
     # Newton method loop, based on whether iota or B_theta is unknown.
     # Putting the if statement here saves some JIT time during loop unpacking.
