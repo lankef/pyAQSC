@@ -727,15 +727,16 @@ class Equilibrium:
         '''
         return(helicity_from_axis(self.axis_info, self.nfp))
 
-    def display(self, psi_max=None, n_max=float('inf'), n_fs=5):
+    def display(self, psi_max=None, n_max=float('inf'), n_fs=5, ax=None, mapper=None):
         # n_fs: total number of flux surfaces plotted
         if not psi_max:
             psi_max = self.get_psi_crit()[0]
             print('Plotting to critical psi:', psi_max)
             psi_max*=0.8
-        fig = plt.figure()
-        fig.set_dpi(400)
-        ax = fig.add_subplot(projection='3d')
+        if ax is None:
+            fig = plt.figure()
+            fig.set_dpi(400)
+            ax = fig.add_subplot(projection='3d')
         phis = jnp.linspace(0, jnp.pi*2*0.9, 1000)
         chis = jnp.linspace(0, jnp.pi*2, 1000)
         x_surf, y_surf, z_surf = self.flux_to_xyz(psi=psi_max, chi=chis[:, None], phi=phis[None, :], n_max=n_max)
@@ -745,8 +746,9 @@ class Equilibrium:
         )
         B_magnitude = 1/jnp.sqrt(jnp.real(B_denom)).astype(jnp.float32)
 
-        norm = colors.Normalize(vmin=jnp.min(B_magnitude), vmax=jnp.max(B_magnitude), clip=True)
-        mapper = cm.ScalarMappable(norm=norm, cmap=cm.plasma)
+        if mapper is None:
+            norm = colors.Normalize(vmin=jnp.min(B_magnitude), vmax=jnp.max(B_magnitude), clip=True)
+            mapper = cm.ScalarMappable(norm=norm, cmap=cm.plasma)
         facecolors = mapper.to_rgba(B_magnitude)
 
         ax.plot_surface(x_surf, y_surf, z_surf, zorder=1, facecolors=facecolors)
@@ -759,6 +761,7 @@ class Equilibrium:
             x_cross, y_cross, z_cross = self.flux_to_xyz(psi=psi_i, chi=chis, phi=0, n_max=n_max)
             ax.plot(x_cross, y_cross, z_cross, zorder=2.5, linewidth=0.5, color='lightgrey')
         x_axis, y_axis, z_axis = self.flux_to_xyz(psi=0, chi=0, phi=chis, n_max=n_max)
+        
         # Plotting the chi surfaces
         psis_dense = jnp.linspace(0, psi_max, 50)
         for chi_i in jnp.linspace(0.125, 1, 8)*jnp.pi*2:
@@ -767,10 +770,12 @@ class Equilibrium:
 
         # Plotting the axis
         ax.plot(x_axis, y_axis, z_axis, zorder=3.5, linewidth=0.5, linestyle='dashed', color='lightgrey', label='Magnetic axis')
-        fig.legend()
-        fig.colorbar(mapper, label=r'Field strength $|B|, (T)$', shrink=0.5, ax=ax)
+        
+        if ax is None:
+            fig.legend()
+            fig.colorbar(mapper, label=r'Field strength $|B|, (T)$', shrink=0.5, ax=ax)
         ax.axis('equal')
-        return(fig, ax)
+        return(ax)
 
     def display_wireframe(self, psi_max=None, n_max=float('inf')):
         # n_fs: total number of flux surfaces plotted
