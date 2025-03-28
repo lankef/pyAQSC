@@ -1,5 +1,5 @@
 # pyAQSC
-Welcome to [pyAQSC](github.com/lankef/pyAQSC) documentations!
+Welcome to [pyAQSC](https://github.com/lankef/pyAQSC) documentations!
 
 ![The circular axis equilibrium](./assets/display.png "The circular axis equilibrium")
 
