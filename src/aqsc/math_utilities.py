@@ -3,41 +3,57 @@ from jax import jit, jacfwd
 from jax.tree_util import tree_map
 from jax.lax import while_loop
 from jax import jit # vmap, tree_util
-from functools import partial # for JAX jit with static params
-
+from functools import partial, reduce # for JAX jit with static params
+from operator import add
 from math import floor, ceil
 from .chiphifunc import *
 
-# Sum: implemented as a function taking in a single-argument func and the lower/upper bounds
-# expr should be non-dynamic.
-# Non-jitted because an argument is a callable. A wrapper for a py_sum with no
-# callable argument can be jitted.
-def py_sum(expr, lower:int, upper:int):
-    # The integer 0 cannot be added to even ChiPhiFuncs,
-    # because JAX does not support conditionals on traced arguments.
-    out = ChiPhiFuncSpecial(0)
+# # Sum: implemented as a function taking in a single-argument func and the lower/upper bounds
+# # expr should be non-dynamic.
+# # Non-jitted because an argument is a callable. A wrapper for a py_sum with no
+# # callable argument can be jitted.
+# def py_sum(expr, lower:int, upper:int):
+#     # The integer 0 cannot be added to even ChiPhiFuncs,
+#     # because JAX does not support conditionals on traced arguments.
+#     out = ChiPhiFuncSpecial(0)
+#     upper_floor = floor(upper)
+#     lower_ceil = ceil(lower)
+#     # If lower==upper then return expr(lower)
+#     if upper_floor==lower_ceil:
+#         return(expr(lower_ceil))
+#     # Warning for lower>upper
+#     if lower_ceil>upper_floor:
+#         # This is classified as "out of bound".
+#         # Originally the code is -1. Since the formula
+#         # are checked correct, these are made 0.
+#         return(ChiPhiFuncSpecial(0))
+#     # This scan implementation may be faster, but the index is a 
+#     # traced var in fori_loop. Because of that, conditionals like is_seq,
+#     # as well as indexing in ChiPhiEpsFunc will not work.
+#     # body_fun = lambda i, val: val + expr(i)
+#     # out = fori_loop(lower_ceil, upper_floor+1, body_fun, 0)
+#     # return(out)
+#     indices = list(range(lower_ceil,upper_floor+1))
+#     out_list = tree_map(expr, indices)
+#     for item in out_list:
+#         out = out+item
+#     return(out)
+def py_sum(expr, lower: int, upper: int):
     upper_floor = floor(upper)
     lower_ceil = ceil(lower)
-    # If lower==upper then return expr(lower)
-    if upper_floor==lower_ceil:
-        return(expr(lower_ceil))
-    # Warning for lower>upper
-    if lower_ceil>upper_floor:
-        # This is classified as "out of bound".
-        # Originally the code is -1. Since the formula
-        # are checked correct, these are made 0.
-        return(ChiPhiFuncSpecial(0))
-    # This scan implementation may be faster, but the index is a 
-    # traced var in fori_loop. Because of that, conditionals like is_seq,
-    # as well as indexing in ChiPhiEpsFunc will not work.
-    # body_fun = lambda i, val: val + expr(i)
-    # out = fori_loop(lower_ceil, upper_floor+1, body_fun, 0)
-    # return(out)
-    indices = list(range(lower_ceil,upper_floor+1))
-    out_list = tree_map(expr, indices)
-    for item in out_list:
-        out = out+item
-    return(out)
+    
+    if upper_floor == lower_ceil:
+        return expr(lower_ceil)
+    
+    if lower_ceil > upper_floor:
+        return ChiPhiFuncSpecial(0)
+
+    indices = range(lower_ceil, upper_floor + 1)
+
+    # Unroll the loop statically using reduce + operator.add
+    # This builds a single expression tree
+    return reduce(add, (expr(i) for i in indices), ChiPhiFuncSpecial(0))
+
 
 # In the JAX implementation, there is no distinction between how the outmost and
 # inner sums are evaluated.
