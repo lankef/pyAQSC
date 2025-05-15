@@ -1273,6 +1273,7 @@ def generate_tensor_operator(
     # (n_unknown(+1), len_tensor, n_unknown(+1), len_tensor)
     out_dict_tensor['filtered_looped_fft_operator'] = filtered_looped_fft_operator
     return(out_dict_tensor)
+
 ''' III. Wrapper '''
 # Outputs a dictionary containing
 # B_theta_n
@@ -1345,9 +1346,15 @@ def iterate_looped(
     )
     filtered_looped_fft_operator = out_dict_tensor['filtered_looped_fft_operator']
     # Finding the inverse differential operator
-    filtered_inv_looped_fft_operator = jnp.linalg.tensorinv(filtered_looped_fft_operator)
-    filtered_solution = jnp.tensordot(
-        filtered_inv_looped_fft_operator,
+    # filtered_inv_looped_fft_operator = jnp.linalg.tensorinv(filtered_looped_fft_operator)
+    # jax.debug.print('***** preinv shape: {x}', x=filtered_looped_fft_operator.shape)
+    # jax.debug.print('***** inv shape: {x}', x=filtered_inv_looped_fft_operator.shape)
+    # filtered_solution = jnp.tensordot(
+    #     filtered_inv_looped_fft_operator,
+    #     filtered_RHS_0_offset,
+    # )
+    filtered_solution = jnp.linalg.tensorsolve(
+        filtered_looped_fft_operator,
         filtered_RHS_0_offset,
     )
     # Even order
@@ -1359,8 +1366,8 @@ def iterate_looped(
         # n_unknown>2.
         Delta_offset_unit_contribution = ChiPhiFunc(
             jnp.zeros((
-                filtered_inv_looped_fft_operator.shape[0],
-                filtered_inv_looped_fft_operator.shape[1]
+                filtered_looped_fft_operator.shape[0], # filtered_inv_looped_fft_operator.shape[0],
+                filtered_looped_fft_operator.shape[1], # filtered_inv_looped_fft_operator.shape[1]
             )),
             nfp
         ) + lambda_coef_delta(
@@ -1371,28 +1378,16 @@ def iterate_looped(
         # FFT the contribution
         fft_Delta_offset_unit_contribution = Delta_offset_unit_contribution.fft().content
         # Propagate the contribition to the solution
-        sln_Delta_offset_unit_contribution = jnp.tensordot(
-            filtered_inv_looped_fft_operator,
+        # sln_Delta_offset_unit_contribution = jnp.tensordot(
+        #     filtered_inv_looped_fft_operator,
+        #     fft_Delta_offset_unit_contribution
+        # )
+        sln_Delta_offset_unit_contribution = jnp.linalg.tensorsolve(
+            filtered_looped_fft_operator,
             fft_Delta_offset_unit_contribution
         )
         # The amount of Delta_offset required
         Delta_offset = -filtered_solution[-1,0]/sln_Delta_offset_unit_contribution[-1,0]
-        # # Making a blank ChiPhiFunc with the correct shape. The free parameter's
-        # # contribution only has 2 chi components, and will cause errors when
-        # # n_unknown>2.
-        # Delta_offset_correction = ChiPhiFunc(
-        #     jnp.zeros((
-        #         filtered_inv_looped_fft_operator.shape[0],
-        #         filtered_inv_looped_fft_operator.shape[1]
-        #     )),
-        #     nfp
-        # )
-        # Delta_offset_correction += Delta_offset_unit_contribution*Delta_offset
-        # # Adding the free parameter's contributions to the solution
-        # filtered_solution += jnp.tensordot(
-        #     filtered_inv_looped_fft_operator,
-        #     Delta_offset_correction.fft().content
-        # )
         filtered_solution += sln_Delta_offset_unit_contribution*Delta_offset
         padded_solution = fft_pad(
             filtered_solution,
@@ -1400,15 +1395,6 @@ def iterate_looped(
             axis=1
         )
         solution = jnp.fft.ifft(padded_solution, axis=1)
-        # solve_result = solve_free_param(
-        #     n_unknown=n_unknown,
-        #     nfp=nfp,
-        #     target_len_phi=target_len_phi,
-        #     filtered_inv_looped_fft_operator=filtered_inv_looped_fft_operator,
-        #     filtered_RHS_0_offset=filtered_RHS_0_offset,
-        #     coef_Delta_offset=coef_Delta_offset
-        # )
-        # solution = solve_result['solution']
         B_theta_n = None
 
         # B_psi0
@@ -1425,7 +1411,7 @@ def iterate_looped(
         vec_free = solution[-2]
         Yn = ChiPhiFunc(
             (
-                jnp.einsum('ijk,jk->ik',O_einv,out_dict_RHS['Yn_rhs_content_no_unknown'])
+                jnp.einsum('ijk,jk->ik', O_einv, out_dict_RHS['Yn_rhs_content_no_unknown'])
                 + vec_free * vector_free_coef
             ),
             nfp
@@ -1736,8 +1722,8 @@ def iterate_looped(
         filtered_looped_fft_operator = out_dict_tensor['filtered_looped_fft_operator']
         if solve_iota:
             B_theta_np10_avg_current = filtered_solution[-1, 0]/filtered_solution.shape[1]
-            LHS_iota_coeff = jnp.tensordot(
-                filtered_inv_looped_fft_operator,
+            LHS_iota_coeff = jnp.linalg.tensorsolve(
+                filtered_looped_fft_operator,
                 out_dict_RHS['iota_coef_RHS_0_offset'],
             )
             # Calculated in generate_RHS by comparing RHS when iota is 0 and 1

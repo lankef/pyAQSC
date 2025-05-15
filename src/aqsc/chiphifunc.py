@@ -1,5 +1,6 @@
 import jax.numpy as jnp
 from jax import vmap, tree_util
+# import lineax as lx
 # from jax import jit, vmap, tree_util
 # from functools import partial # for JAX jit with static params
 
@@ -1186,11 +1187,10 @@ def get_O_O_einv_from_A_B(chiphifunc_A:ChiPhiFunc, chiphifunc_B:ChiPhiFunc, rank
         # O_matrices = O_matrices@trig_to_exp_op(O_matrices.shape[1])
         O_matrices = jnp.einsum('ijp,jm->imp', O_matrices, trig_to_exp_op(O_matrices.shape[1]))
         O_matrices = jnp.einsum('ij,jmp->imp', exp_to_trig_op(O_matrices.shape[0]), O_matrices)
-
+    # It seems difficult to remove this inverse...
     O_einv = batch_matrix_inv_excluding_col(O_matrices)
     O_einv = jnp.concatenate((O_einv[:i_free], jnp.zeros((1,O_einv.shape[1],O_einv.shape[2])), O_einv[i_free:]))
     O_free_col = O_matrices[:,i_free,:]
-
     vector_free_coef = jnp.einsum('ijk,jk->ik',O_einv, O_free_col)#A_einv@A_free_col
     vector_free_coef = vector_free_coef.at[i_free].set(-jnp.ones((vector_free_coef.shape[1])))
 
@@ -1271,6 +1271,21 @@ def batch_matrix_inv_excluding_col(in_matrices:jnp.ndarray):
     sqinv = jnp.moveaxis(sqinv,0,2)
     padded = jnp.pad(sqinv, ((0,0), (rows_to_remove, rows_to_remove), (0,0)))
     return(padded)
+
+def get_reduced_square_matrices(in_matrices: jnp.ndarray):
+    '''
+    Extract the square (n,n) matrices for solving linear systems,
+    by excluding a column and slicing the middle rows.
+    '''
+    n_row, n_col, n_phi = in_matrices.shape
+    rank_rhs = n_col - 1
+    ind_col = (rank_rhs + 1) // 2
+
+    rows_to_remove = (n_row - (n_col - 1)) // 2
+    sub = jnp.delete(in_matrices, ind_col, axis=1)[rows_to_remove:-rows_to_remove, :, :]
+    # Shape: (n_col - 1, n_col, n_phi)
+    sub = jnp.moveaxis(sub, 2, 0)  # (n_phi, n_col - 1, n_col)
+    return sub  # shape: (n_phi, n, n+1)
 
 ''' III.3 Convolution operator generator and ChiPhiFunc.content wrapper '''
 # A jitted vectorized version of jnp.roll
@@ -1416,8 +1431,11 @@ def solve_1d_fft(p_eff, f_eff, static_max_freq:int=None): # not nfp-dependent
     # Both are (len_phi, len_phi) matrices
     diff_matrix = fft_dphi_op(target_length)
     conv_matrix = fft_conv_op(p_fft)
-    inv_dxpp = jnp.linalg.inv(diff_matrix + conv_matrix)
-    sln_fft = inv_dxpp@f_fft
+    # inv_dxpp = jnp.linalg.inv(diff_matrix + conv_matrix)
+    # sln_fft = inv_dxpp@f_fft
+    sln_fft = jnp.linalg.solve(diff_matrix + conv_matrix, f_fft)
+    # operator = lx.MatrixLinearOperator(diff_matrix + conv_matrix)
+    # sln_fft = lx.linear_solve(operator, f_fft).value
     sln = jnp.fft.ifft(fft_pad(sln_fft, len_phi, axis=0), axis=0)
 
     return(sln)

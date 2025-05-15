@@ -73,7 +73,7 @@ def iterate_Yn_cp_RHS(n_unknown,
     if n_unknown == 1:
         return(ChiPhiFunc(jnp.zeros((3,X_coef_cp[1].content.shape[1])), X_coef_cp.nfp))
     # Getting rhs-lhs for the Yn+1 equation
-    # for Yn to work, "n" must be subbed with n-1 here
+    # To evaluate Yn, the input order "n" must be subbed with n-1 here
     chiphifunc_rhs = parsed.rhs_minus_lhs(n_unknown-1,
         X_coef_cp,
         Y_coef_cp.mask(n_unknown-1).zero_append(),
@@ -152,8 +152,8 @@ def iterate_Yn_cp_magnetic(
         tau_p=tau_p,
         iota_coef=iota_coef)
     Yn_rhs_content = Yn_rhs.content
-    new_Y_n_no_unknown = ChiPhiFunc(jnp.einsum('ijk,jk->ik',O_einv,Yn_rhs_content), Yn_rhs.nfp)
-    Y_coef_cp_no_unknown = Y_coef_cp.mask(n_eval-2)
+    new_Y_n_no_unknown = ChiPhiFunc(jnp.einsum('ijk,jk->ik', O_einv, Yn_rhs_content), Yn_rhs.nfp)
+    Y_coef_cp_no_unknown = Y_coef_cp.mask(n_unknown-1)
     Y_coef_cp_no_unknown = Y_coef_cp_no_unknown.append(new_Y_n_no_unknown)
 
     # Calculating D3 to solve for Yn1p
