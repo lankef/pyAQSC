@@ -163,6 +163,14 @@ class Equilibrium:
     def kap(self): return(self.constant['kap_p'])
     @property
     def tau(self): return(self.constant['tau_p'])
+    @property
+    def sigma0(self):
+        Y1_trig = self.Y[1].exp_to_trig()
+        # Y11c0 = sigma0 * Y11s0
+        Y11s0 = Y1_trig.content[0, 0]
+        Y11c0 = Y1_trig.content[1, 0]
+        sigma0 = Y11c0/Y11s0
+        return jnp.real(sigma0)
 
     ''' Coordinate transformations '''
     def frenet_basis_phi(self, phi=None):
@@ -631,7 +639,38 @@ class Equilibrium:
                 x_right = x_mid
             error = jnp.abs(y_mid)
             n_iter += 1
-        '''      
+        '''  
+
+    def get_divergence_rate(self):
+        ''' Calculates the average divergence rate using the highest three orders '''
+        amp_B_psi_coef_cp = self.unknown['B_psi_coef_cp'].get_norm_order_by_order()
+        amp_B_theta_coef_cp = self.unknown['B_theta_coef_cp'].get_norm_order_by_order()
+        amp_Delta_coef_cp = self.unknown['Delta_coef_cp'].get_norm_order_by_order()
+        amp_X_coef_cp = self.unknown['X_coef_cp'].get_norm_order_by_order()
+        amp_Y_coef_cp = self.unknown['Y_coef_cp'].get_norm_order_by_order()
+        amp_Z_coef_cp = self.unknown['Z_coef_cp'].get_norm_order_by_order()
+        amp_p_perp_coef_cp = self.unknown['p_perp_coef_cp'].get_norm_order_by_order()
+        rate_X_coef_cp = amp_X_coef_cp[-2:] / amp_X_coef_cp[-3:-1]
+        rate_Y_coef_cp = amp_Y_coef_cp[-2:] / amp_Y_coef_cp[-3:-1]
+        rate_Z_coef_cp = amp_Z_coef_cp[-2:] / amp_Z_coef_cp[-3:-1]
+        rate_B_psi_coef_cp = amp_B_psi_coef_cp[-2:] / amp_B_psi_coef_cp[-3:-1]
+        rate_B_theta_coef_cp = amp_B_theta_coef_cp[-2:] / amp_B_theta_coef_cp[-3:-1]
+        rate_Delta_coef_cp = amp_Delta_coef_cp[-2:] / amp_Delta_coef_cp[-3:-1]
+        rate_p_perp_coef_cp = amp_p_perp_coef_cp[-2:] / amp_p_perp_coef_cp[-3:-1]
+        all_rates = jnp.array([
+            rate_X_coef_cp,
+            rate_Y_coef_cp,
+            rate_Z_coef_cp,
+            rate_B_psi_coef_cp,
+            rate_B_theta_coef_cp,
+            rate_Delta_coef_cp,
+            rate_p_perp_coef_cp,
+        ])
+        return jnp.average(all_rates)
+
+    def get_eps_conv(self):
+        return 1 / self.get_divergence_rate()
+
 
     def B_vec_j_eps(self):
         '''
@@ -719,8 +758,49 @@ class Equilibrium:
             # calculate the epsilon integral
             new_chiphifunc_list.append(new_chiphifunc)
         return(ChiPhiEpsFunc(new_chiphifunc_list, self.nfp, False))
+    
+    def volume_eps(self, eps, n_max=float('inf')):
+        '''
+        Calculates the plasma volume up to a specified eps.
+        '''
+        return jnp.real(
+            self.volume_integral(1, n_max=n_max).eval_eps(eps=eps, chi=0, phi=0)
+        )
+    
+    def beta_rms(self, eps, n_max=float('inf')):
+        vol = self.volume_eps(eps=eps, n_max=n_max)
+        p2 = self.p_perp * self.p_perp
+        Bm4 = self.B_denom * self.B_denom 
+        beta2 = p2 * Bm4 # p^2/B^4
+        beta2_int = self.volume_integral(beta2, n_max=n_max).eval_eps(eps, 0., 0.)
+        beta_rms = jnp.sqrt(jnp.real(
+            beta2_int/vol
+        ))
+        return beta_rms
+    
+    def major_radius(self):
+        '''
+        Calculates the effective major radius from axis length.
+        '''
+        return self.axis_info['axis_length']/jnp.pi/2
+    
+    def minor_radius_eps(self, eps, n_max=float('inf')):
+        '''
+        Calculates the effective minor radius up to a specified eps.
+        '''
+        vol = self.volume_eps(eps, n_max=n_max)
+        # torus vol is pi r^2 (2pi R)
+        return jnp.sqrt(vol / jnp.pi / (self.axis_info['axis_length']))
 
-    def get_helicity(self):
+    def aspect_ratio_eps(self, eps, n_max=float('inf')):
+        '''
+        Calculates the effective aspect ratio up to a specified eps.
+        '''
+        r = self.minor_radius_eps(eps, n_max=n_max)
+        R = self.major_radius()
+        return R/r
+
+    def helicity(self):
         ''' 
         Returns the helicity (the normal vector, kappa's 
         # rotation around the origin)

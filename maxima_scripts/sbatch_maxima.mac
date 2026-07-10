@@ -29,25 +29,28 @@ srun <path to compiled Maxima binary> -l sbcl -b "maxima_sbatch_temp_${SLURM_ARR
 
 load(operatingsystem);
 
+/* Capture the directory of this file at load time, used to locate jobscript_template.sh */
+sbatch_maxima_dir: pathname_directory(maxima_load_pathname)$
+
 /* Internal method used to generate a jobscript according to template.
+   Settings lines (SBATCH directives) are read from jobscript_template.sh
+   in the same directory as sbatch_maxima.mac.
    maxima_command is the shell command that launches your maxima installation.
    It should also include memory and other attributes, if needed.
 
    such as:
    "some_path/maxima-5.45.1/src/maxima -l sbcl -X '--dynamic-space-size 5000'" */
 jobscript_template(maxima_command):=block(
-    [linel_temp:linel], /* Prevents auto line switch by temporarily extending linel.*/
+    [linel_temp:linel, stream, line, template_path],
     linel:10000,
-    print("#!/bin/bash"),
-    print("#SBATCH -n 1"),
-    print("#SBATCH -p general"),
-    print("#SBATCH --mem=5000"),
-    print("#SBATCH -t 40:00:00"),
-    print("#SBATCH --export=ALL"),
-    print("#SBATCH -J maxima_test"),
-    print("#SBATCH --output=maxima_sbatch.%A_%a.out"),
-    print("#SBATCH --error=maxima_sbatch.%A_%a.err"),
-    print("#SBATCH --mail-type=FAIL"),
+    template_path: sconcat(sbatch_maxima_dir, "jobscript_template.sh"),
+    stream: openr(template_path),
+    line: readline(stream),
+    while line # false do (
+        print(line),
+        line: readline(stream)
+    ),
+    close(stream),
     print(concat("srun ",maxima_command, " -b \"maxima_sbatch_temp_${SLURM_ARRAY_TASK_ID}.mac\"" )),
     linel:linel_temp
 );
