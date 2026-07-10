@@ -54,7 +54,7 @@ def aqsc_to_desc_near_axis(
     rho = jnp.broadcast_to(rho[:, None, None], (nrho, ntheta, nzeta))
     thetaBs = jnp.broadcast_to(thetaBs[None, :,None], (nrho, ntheta, nzeta))
     phiBs = jnp.broadcast_to(phiBs[None, None, :], (nrho, ntheta, nzeta))
-    chis = thetaBs - na_eq.get_helicity()*phiBs
+    chis = thetaBs - na_eq.helicity()*phiBs
     R, phiC, Z = na_eq.flux_to_cylindrical(r*rho**2, chis, phiBs, n_max=n_max)
     R, phiC, Z = R.real, phiC.real, Z.real
     grid = Grid(jnp.array([rho.flatten(), thetaBs.flatten(), phiC.flatten()]).T, sort=False)
@@ -86,7 +86,7 @@ def aqsc_to_desc_near_axis(
     Asin = transform_sin.matrices['direct1'][0][0][0]
     p_perp = jnp.real(na_eq.unknown['p_perp_coef_cp'].eval(rho**2*r, chis, phiBs, n_max=n_max).real / mu_0)
     delta = jnp.real(na_eq.unknown['Delta_coef_cp'].eval(rho**2*r, chis, phiBs, n_max=n_max).real)
-    iota = jnp.real(na_eq.constant['iota_coef'].eval(rho[:,0,0,]**2*r, 0, 0, n_max=(n_max-1)//2) + na_eq.get_helicity())
+    iota = jnp.real(na_eq.constant['iota_coef'].eval(rho[:,0,0,]**2*r, 0, 0, n_max=(n_max-1)//2) + na_eq.helicity())
     
     nu_B = phiBs - phiC
     lmbda = nu_B * iota[:,None,None]
@@ -185,7 +185,7 @@ def aqsc_to_desc_boundary(
     rho = jnp.broadcast_to(rho[:, None, None], (nrho, ntheta, nzeta))
     thetaBs = jnp.broadcast_to(thetaBs[None, :,None], (nrho, ntheta, nzeta))
     phiBs = jnp.broadcast_to(phiBs[None, None, :], (nrho, ntheta, nzeta))
-    chis = thetaBs - na_eq.get_helicity()*phiBs
+    chis = thetaBs - na_eq.helicity()*phiBs
     R, phiC, Z = na_eq.flux_to_cylindrical(r*rho**2, chis, phiBs, n_max=n_max)
     R, phiC, Z = R.real, phiC.real, Z.real
     grid = Grid(jnp.array([rho.flatten(), thetaBs.flatten(), phiC.flatten()]).T, sort=False)
@@ -218,7 +218,7 @@ def aqsc_to_desc_boundary(
     Asin = transform_sin.matrices['direct1'][0][0][0]
     p_perp = jnp.real(na_eq.unknown['p_perp_coef_cp'].eval(rho**2*r, chis, phiBs, n_max=n_max).real / mu_0)
     delta = jnp.real(na_eq.unknown['Delta_coef_cp'].eval(rho**2*r, chis, phiBs, n_max=n_max).real)
-    iota = jnp.real(na_eq.constant['iota_coef'].eval(rho[:,0,0,]**2*r, 0, 0, n_max=(n_max-1)//2) + na_eq.get_helicity())
+    iota = jnp.real(na_eq.constant['iota_coef'].eval(rho[:,0,0,]**2*r, 0, 0, n_max=(n_max-1)//2) + na_eq.helicity())
     
     nu_B = phiBs - phiC
     lmbda = nu_B * iota[:,None,None]

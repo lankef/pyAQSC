@@ -19,8 +19,66 @@ class ChiPhiEpsFunc:
         self.chiphifunc_list = list
         self.nfp = nfp
         self.square_eps_series = square_eps_series
+        # Padded mode: set by .pad(n). When active, all elements share chi-dim
+        # n+1 and are stored as a 3D JAX array for traced-index access.
+        self._padded_stacked = None  # shape (n+1, n+1, len_phi) when active
+        self._padded_n = None
         if check_consistency:
             self.chiphifunc_list = self.check_nfp_consistency()
+
+    def pad(self, n: int):
+        '''
+        Return a new ChiPhiEpsFunc in padded mode. Every element is padded to
+        chi-dim (n+1) and the results are stacked into a single 3D JAX array
+        of shape (n+1, n+1, len_phi). __getitem__ then works with a traced
+        integer index via jnp.take, returning a ChiPhiFunc(padded=True).
+
+        Elements that are scalar (chi-independent, e.g. iota_coef[0]) are
+        broadcast to (1, len_phi) before padding.
+        '''
+        import jax.numpy as jnp
+        chi_dim = n + 1
+        # We need len_phi: find first real ChiPhiFunc element to read it
+        len_phi = None
+        for item in self.chiphifunc_list:
+            if isinstance(item, ChiPhiFunc) and not item.is_special():
+                len_phi = item.content.shape[1]
+                break
+        if len_phi is None:
+            # Fall back to 1 phi grid if no real element found
+            len_phi = 1
+
+        slices = []
+        for k in range(n + 1):
+            if k < len(self.chiphifunc_list):
+                item = self.chiphifunc_list[k]
+            else:
+                item = ChiPhiFuncSpecial(0)
+
+            if isinstance(item, ChiPhiFunc) and not item.is_special():
+                c = item.content  # (k+1, len_phi) natural chi-dim
+                # Pad symmetrically to (chi_dim, len_phi).
+                # pad_lo = floor(pad_total/2), pad_hi = ceil(pad_total/2)
+                # so the result is always exactly chi_dim rows.
+                pad_total = chi_dim - c.shape[0]
+                pad_lo = pad_total // 2
+                pad_hi = pad_total - pad_lo
+                c_padded = jnp.pad(c, ((pad_lo, pad_hi), (0, 0)))
+            elif jnp.array(item).ndim == 0:
+                # Scalar: broadcast to (1, len_phi), then pad to (chi_dim, len_phi)
+                c = jnp.full((1, len_phi), item, dtype=jnp.complex128 if double_precision else jnp.complex64)
+                pad_each = (chi_dim - 1) // 2
+                c_padded = jnp.pad(c, ((pad_each, chi_dim - 1 - pad_each), (0, 0)))
+            else:
+                # Special zero or error: all-zeros of correct shape
+                c_padded = jnp.zeros((chi_dim, len_phi), dtype=jnp.complex128 if double_precision else jnp.complex64)
+            slices.append(c_padded)
+
+        stacked = jnp.stack(slices, axis=0)  # (n+1, chi_dim, len_phi)
+        new_obj = ChiPhiEpsFunc(self.chiphifunc_list, self.nfp, self.square_eps_series)
+        new_obj._padded_stacked = stacked
+        new_obj._padded_n = n
+        return new_obj
 
     ''' For JAX use '''
     def _tree_flatten(self):
@@ -140,7 +198,21 @@ class ChiPhiEpsFunc:
         ChiPhiFuncSpecial(-1). Unlike all other error codes, this special element
         has the special property that
         ChiPhiFuncSpecial(-1) * ChiPhiFuncSpecial(0) = 0.
+
+        When in padded mode (_padded_stacked is set), supports traced JAX
+        integer indices. Returns a ChiPhiFunc(padded=True) of fixed shape
+        (n+1, len_phi). Out-of-bounds indices silently return all-zeros.
         '''
+        if self._padded_stacked is not None:
+            n = self._padded_n
+            # jnp.clip keeps index in [0, n] for safe array access; the
+            # jnp.where mask zeros out the result when truly out of bounds.
+            safe_idx = jnp.clip(index, 0, n)
+            content = self._padded_stacked[safe_idx]  # (chi_dim, len_phi)
+            in_bounds = (index >= 0) & (index <= n)
+            content = jnp.where(in_bounds, content, jnp.zeros_like(content))
+            return ChiPhiFunc(content, self.nfp, padded=True)
+
         if (index>len(self.chiphifunc_list)-1 or index<0):
             # return(ChiPhiFuncSpecial(-1))
             return(ChiPhiFuncSpecial(0))
@@ -230,6 +302,22 @@ class ChiPhiEpsFunc:
             else:
                 amp_list.append(jnp.abs(item))
         return(jnp.array(amp_list))
+    
+    # Convert to a list of amplitudes
+    def get_norm_order_by_order(self, **kwargs):
+        '''
+        Calculate the L2 norm of the term at each order.
+        (squared integral over chi and phi.)
+        
+        :param kwargs: Parameters of jnp.linalg.norm
+        '''
+        amp_list = []
+        for item in self.chiphifunc_list:
+            if isinstance(item, ChiPhiFunc):
+                amp_list.append(jnp.linalg.norm(item.content, **kwargs))
+            else:
+                amp_list.append(jnp.abs(item, **kwargs))
+        return(jnp.array(amp_list))
 
     # @partial(jit, static_argnums=(0,))
     def zeros_like(other):
@@ -275,10 +363,10 @@ class ChiPhiEpsFunc:
     def dphi(self):
         return(self.dchi_or_phi(False))
 
-    def eval(self, psi, chi, phi, n_max=float('inf')):
+    def eval(self, psi, chi=None, phi=None, n_max=float('inf')):
         return(self.eval_eps(jnp.sqrt(jnp.abs(psi)), chi, phi, n_max=n_max))
 
-    def eval_eps(self, eps, chi, phi, n_max=float('inf')):
+    def eval_eps(self, eps, chi=None, phi=None, n_max=float('inf')):
         # Broadcasting
         if self.square_eps_series:
             power_arg = eps**2
