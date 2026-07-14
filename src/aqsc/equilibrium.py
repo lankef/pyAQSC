@@ -57,6 +57,8 @@ class Equilibrium:
         self.axis_info = axis_info
         # Check if every term is on the same order
         # self.check_order_consistency()
+        self._chiphifunc_cls    = type(self.constant['B_denom_coef_c'][1])
+        self._chiphiepsfunc_cls = type(self.constant['B_denom_coef_c'])
 
     ''' For JAX use '''
     def _tree_flatten(self):
@@ -367,15 +369,15 @@ class Equilibrium:
         binormal_x_arr,\
         binormal_y_arr,\
         binormal_z_arr = self.frenet_basis_phi(phi_grid)
-        tangent_x = ChiPhiFunc(tangent_x_arr[None, :], self.nfp)
-        tangent_y = ChiPhiFunc(tangent_y_arr[None, :], self.nfp)
-        tangent_z = ChiPhiFunc(tangent_z_arr[None, :], self.nfp)
-        normal_x = ChiPhiFunc(normal_x_arr[None, :], self.nfp)
-        normal_y = ChiPhiFunc(normal_y_arr[None, :], self.nfp)
-        normal_z = ChiPhiFunc(normal_z_arr[None, :], self.nfp)
-        binormal_x = ChiPhiFunc(binormal_x_arr[None, :], self.nfp)
-        binormal_y = ChiPhiFunc(binormal_y_arr[None, :], self.nfp)
-        binormal_z = ChiPhiFunc(binormal_z_arr[None, :], self.nfp)
+        tangent_x = self._chiphifunc_cls(tangent_x_arr[None, :], self.nfp)
+        tangent_y = self._chiphifunc_cls(tangent_y_arr[None, :], self.nfp)
+        tangent_z = self._chiphifunc_cls(tangent_z_arr[None, :], self.nfp)
+        normal_x = self._chiphifunc_cls(normal_x_arr[None, :], self.nfp)
+        normal_y = self._chiphifunc_cls(normal_y_arr[None, :], self.nfp)
+        normal_z = self._chiphifunc_cls(normal_z_arr[None, :], self.nfp)
+        binormal_x = self._chiphifunc_cls(binormal_x_arr[None, :], self.nfp)
+        binormal_y = self._chiphifunc_cls(binormal_y_arr[None, :], self.nfp)
+        binormal_z = self._chiphifunc_cls(binormal_z_arr[None, :], self.nfp)
         tangent_dphi_x = kap_p * normal_x * dl_p
         tangent_dphi_y = kap_p * normal_y * dl_p
         tangent_dphi_z = kap_p * normal_z * dl_p
@@ -479,22 +481,10 @@ class Equilibrium:
             j_eps_grad_phi_z,
         ) = self.covariant_basis_eps_j_eps(n_max=n_max)
 
-        # J_eps = 2 eps * J
-        j_eps_grad_psi_x = 2 * ChiPhiEpsFunc(
-            list=[ChiPhiFuncSpecial(0)] + j_grad_psi_x.chiphifunc_list,
-            nfp=j_grad_psi_x.nfp,
-            square_eps_series=False
-        )
-        j_eps_grad_psi_y = 2 * ChiPhiEpsFunc(
-            list=[ChiPhiFuncSpecial(0)] + j_grad_psi_y.chiphifunc_list,
-            nfp=j_grad_psi_y.nfp,
-            square_eps_series=False
-        )
-        j_eps_grad_psi_z = 2 * ChiPhiEpsFunc(
-            list=[ChiPhiFuncSpecial(0)] + j_grad_psi_z.chiphifunc_list,
-            nfp=j_grad_psi_z.nfp,
-            square_eps_series=False
-        )
+        # J_eps = 2 eps * J  (prepend a zero to shift all orders up by 1)
+        j_eps_grad_psi_x = 2 * j_grad_psi_x.prepend_zero()
+        j_eps_grad_psi_y = 2 * j_grad_psi_y.prepend_zero()
+        j_eps_grad_psi_z = 2 * j_grad_psi_z.prepend_zero()
         return(
             j_eps_grad_psi_x,
             j_eps_grad_psi_y,
@@ -537,11 +527,9 @@ class Equilibrium:
         the power series, and then dividing by 2.
         '''
         jacobian_e = self.jacobian_eps(n_max=n_max)
-        new_list = []
-        for i in range(len(jacobian_e.chiphifunc_list)-1):
-            new_list.append(jacobian_e.chiphifunc_list[i+1]/2)
-        jacobian = ChiPhiEpsFunc(new_list, jacobian_e.nfp, False)
-        return(jacobian)
+        # J_e[0] == 0 by construction; shift down and divide by 2.
+        new_list = [jacobian_e[i + 1] / 2 for i in range(jacobian_e.get_order())]
+        return self._chiphiepsfunc_cls(new_list, self.nfp)
 
     def jacobian_nae(self):
         return(self.constant['B_alpha_coef'] * self.constant['B_denom_coef_c'])
@@ -681,24 +669,30 @@ class Equilibrium:
         '''
         Calculates the volume integral of a quantity as a ChiPhiEpsFunc
         with no Chi or Phi dependence.
+
+        Always returns a ragged ChiPhiEpsFunc regardless of backend: the
+        chi/phi integration reduces every term to a width-1 (mode-0-only)
+        scalar, which after the eps-order shift lands at odd eps-orders
+        with even-parity chi slots -- a parity mismatch that makes the
+        padded triangular store inapplicable here.
         '''
         jac = self.jacobian_eps(n_max=n_max)
-        if isinstance(y, ChiPhiEpsFunc):
+        if hasattr(y, 'get_order'):  # ChiPhiEpsFunc or ChiPhiEpsFuncPadded
             integrand = jac * y.mask(n_max)
         else:
             integrand = jac * y
         # Eps, phi and chi integral
         new_chiphifunc_list = [ChiPhiFuncSpecial(0)]
         len_phi = self.constant['kap_p'].content.shape[1]
-        for i in range(len(integrand.chiphifunc_list)):
-            item = integrand.chiphifunc_list[i]
+        for i in range(integrand.get_order() + 1):
+            item = integrand[i]
             # Calculate the chi and phi integral
-            if isinstance(item, ChiPhiFunc):
+            if hasattr(item, 'is_special'):  # ChiPhiFunc or ChiPhiFuncPadded
                 # Handling of errors and zeros
                 if item.is_special():
-                    new_chiphifunc = item
+                    new_chiphifunc = ChiPhiFuncSpecial(item.nfp)
                 else:
-                    # odd fourier series
+                    # odd fourier series (even number of rows → no mode-0 → integral is 0)
                     if item.content.shape[0]%2==0:
                         new_chiphifunc = ChiPhiFuncSpecial(0)
                     else:
@@ -709,16 +703,16 @@ class Equilibrium:
                         # Phi integral
                         integral_i = 2 * jnp.pi * content_0_fft[0,0] / len_phi
                         # Chi integral
-                        integral_i *= 2 * jnp.pi 
+                        integral_i *= 2 * jnp.pi
                         # Eps integral
                         integral_i /= (i+1)
                         new_chiphifunc = ChiPhiFunc(jnp.full((1, len_phi), integral_i), self.nfp)
-            else: 
+            else:
                 integral_i = item * jnp.pi * 2 * jnp.pi * 2 / (i+1)
                 new_chiphifunc = ChiPhiFunc(jnp.full((1, len_phi), integral_i), self.nfp)
             # calculate the epsilon integral
             new_chiphifunc_list.append(new_chiphifunc)
-        return(ChiPhiEpsFunc(new_chiphifunc_list, self.nfp, False))
+        return ChiPhiEpsFunc(new_chiphifunc_list, self.nfp)
 
     def get_helicity(self):
         ''' 
@@ -851,7 +845,7 @@ class Equilibrium:
         jnp.save(file_name, big_dict)
 
     # nfp-dependent!!
-    def load_plain(filename):
+    def load_plain(filename, padded=True):
         npyfile = jnp.load(filename, allow_pickle=True)
         big_dict = npyfile.item()
         raw_unknown = big_dict['unknown']
@@ -866,18 +860,28 @@ class Equilibrium:
             unknown[key] = ChiPhiEpsFunc.from_content_list(raw_unknown[key], nfp)
 
         constant={}
+        if padded:
+            from .chiphifunc_padded import ChiPhiFuncPadded
+            from .chiphiepsfunc_padded import ChiPhiEpsFuncPadded
+            chiphifunc_cls = ChiPhiFuncPadded
+            chiphiepsfunc_cls = ChiPhiEpsFuncPadded
+        else:
+            from .chiphifunc import ChiPhiFunc
+            from .chiphiepsfunc import ChiPhiEpsFunc
+            chiphifunc_cls = ChiPhiFunc
+            chiphiepsfunc_cls = ChiPhiEpsFunc  
         constant['B_denom_coef_c']\
-            = ChiPhiEpsFunc.from_content_list(raw_constant['B_denom_coef_c'], nfp)
+            = chiphiepsfunc_cls.from_content_list(raw_constant['B_denom_coef_c'], nfp)
         constant['B_alpha_coef']\
-            = ChiPhiEpsFunc.from_content_list(raw_constant['B_alpha_coef'], nfp)
+            = chiphiepsfunc_cls.from_content_list(raw_constant['B_alpha_coef'], nfp)
         constant['kap_p']\
-            = ChiPhiFunc(raw_constant['kap_p'], nfp)
+            = chiphifunc_cls(raw_constant['kap_p'], nfp)
         constant['dl_p']\
             = raw_constant['dl_p']
         constant['tau_p']\
-            = ChiPhiFunc(raw_constant['tau_p'], nfp)
+            = chiphifunc_cls(raw_constant['tau_p'], nfp)
         constant['iota_coef']\
-            = ChiPhiFunc(raw_constant['iota_coef'], nfp)
+            = chiphifunc_cls(raw_constant['iota_coef'], nfp)
 
         return(Equilibrium(
             unknown=unknown,
@@ -1066,7 +1070,8 @@ Equilibrium._tree_unflatten)
 # n_eval must be even.
 # not nfp-dependent
 # Yn0, B_psi_nm20 must both be consts or 1d arrays.
-def iterate_2_magnetic_only(equilibrium,
+def iterate_2_magnetic_only(
+    equilibrium,
     B_theta_nm1, B_theta_n,
     Yn0,
     Yn1c_avg,
@@ -1216,7 +1221,7 @@ def iterate_2_magnetic_only(equilibrium,
         iota_coef=iota_coef
         ).antid_chi()
     B_psi_nm2_content_new = B_psi_nm2.content.at[B_psi_nm2.content.shape[0]//2].set(B_psi_nm20)
-    B_psi_nm2 = type(B_psi_nm2)(B_psi_nm2_content_new, B_psi_nm2.nfp)
+    B_psi_nm2 = equilibrium._chiphifunc_cls(B_psi_nm2_content_new, B_psi_nm2.nfp)
     B_psi_coef_cp = B_psi_coef_cp.append(B_psi_nm2.filter(traced_max_freq[1]))
 
     Zn = iterate_Zn_cp(n_eval=n_eval,
@@ -1325,14 +1330,13 @@ def iterate_2(equilibrium,
     # type() on it wouldn't give a usable class; order 1 (B1) is always
     # constructed as a genuine ChiPhiFunc_cls(..., trig_mode=True) in
     # leading_orders.py, regardless of backend.
-    _chiphifunc_cls = type(equilibrium.constant['B_denom_coef_c'][1])
     if B_denom_nm1 is None:
-        B_denom_nm1 = _chiphifunc_cls(
+        B_denom_nm1 = equilibrium._chiphifunc_cls(
             jnp.array([[0],[0]]),
             equilibrium.nfp
         )
     if B_denom_n is None:
-        B_denom_n = _chiphifunc_cls(
+        B_denom_n = equilibrium._chiphifunc_cls(
             jnp.array([[0]]),
             equilibrium.nfp
         )

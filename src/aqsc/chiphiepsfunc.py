@@ -15,7 +15,7 @@ from .chiphifunc import ChiPhiFunc
 # ChiPhiEpsFunc([X0, X1, X2, ... Xn], n, False) or
 # ChiPhiEpsFunc([X0, X2, ... Xn], n, True)
 class ChiPhiEpsFunc:
-    def __init__(self, list:list, nfp:int, square_eps_series:bool, check_consistency:bool=False): # nfp-dependent!!
+    def __init__(self, list:list, nfp:int, square_eps_series:bool=False, check_consistency:bool=False): # nfp-dependent!!
         self.chiphifunc_list = list
         self.nfp = nfp
         self.square_eps_series = square_eps_series
@@ -231,6 +231,16 @@ class ChiPhiEpsFunc:
                 amp_list.append(jnp.abs(item))
         return(jnp.array(amp_list))
 
+        # Convert to a list of amplitudes
+    def get_l2_order_by_order(self):
+        l2_list = []
+        for item in self.chiphifunc_list:
+            if isinstance(item, ChiPhiFunc):
+                l2_list.append(item.get_l2())
+            else:
+                l2_list.append(jnp.abs(item))
+        return(jnp.array(l2_list))
+
     # @partial(jit, static_argnums=(0,))
     def zeros_like(other):
         '''
@@ -240,6 +250,11 @@ class ChiPhiEpsFunc:
         return(ChiPhiEpsFunc([ChiPhiFuncSpecial(0)]*(other.get_order()+1), other.nfp, other.square_eps_series))
     
     ''' Evaluation '''
+    def prepend_zero(self):
+        ''' Shift the series up by one eps-order by prepending a zero term.
+        Inverse of deps (up to the order-number factors). '''
+        return ChiPhiEpsFunc([ChiPhiFuncSpecial(0)] + self.chiphifunc_list, self.nfp, False)
+
     def deps(self):
         if self.square_eps_series:
             list_to_shift = []

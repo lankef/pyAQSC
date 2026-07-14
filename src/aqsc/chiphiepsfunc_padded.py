@@ -317,6 +317,99 @@ class ChiPhiEpsFuncPadded:
 
     ''' Derivatives '''
 
+    def prepend_zero(self):
+        '''
+        Shift the series up by one eps-order by prepending a zero term.
+        Inverse of deps (up to the order-number factors in deps).
+
+        result[0] = 0, result[i+1] = self[i] for i = 0..n_max.
+
+        Like deps, this swaps parity stores: result order i+1 (which lives
+        in the opposite parity store from order i) comes from self[i].
+        The source natural width i+1 is widened to target width i+2 via
+        centered_resize_content (zero-padded on both sides).
+        '''
+        new_n_max = self.n_max + 1
+        even_pieces, odd_pieces, special = [], [], []
+
+        # order 0 is always zero
+        special.append(0)
+        even_pieces.append(jnp.zeros((1, self.len_phi), dtype=_complex_dtype))
+
+        for i in range(self.n_max + 1):
+            dst = i + 1           # destination order in result
+            src_width = i + 1     # natural width of source at order i
+            target_width = dst + 1  # = i + 2
+            src_code = self.special[i]
+            special.append(src_code)
+            if src_code != 0:
+                raw = jnp.zeros((target_width, self.len_phi), dtype=_complex_dtype)
+            else:
+                src_even = (i % 2 == 0)
+                store = self.even_content if src_even else self.odd_content
+                offset = _offset_even(i) if src_even else _offset_odd(i)
+                raw_src = store[offset: offset + src_width]
+                # Widen i+1 → i+2 rows (zero-pads the outermost chi mode).
+                raw = centered_resize_content(raw_src, target_width)
+            (even_pieces if dst % 2 == 0 else odd_pieces).append(raw)
+
+        even_content = (
+            jnp.concatenate(even_pieces, axis=0) if even_pieces
+            else jnp.zeros((0, self.len_phi), dtype=_complex_dtype)
+        )
+        odd_content = (
+            jnp.concatenate(odd_pieces, axis=0) if odd_pieces
+            else jnp.zeros((0, self.len_phi), dtype=_complex_dtype)
+        )
+        return ChiPhiEpsFuncPadded._from_raw(
+            even_content, odd_content, self.nfp, new_n_max,
+            self.mode_cap, self.len_phi, special,
+        )
+
+    def deps(self):
+        '''
+        Derivative with respect to eps (the near-axis expansion parameter).
+
+        For a series f = sum_n f_n * eps^n, deps(f)_i = (i+1) * f_{i+1}.
+
+        This shifts the epsilon order by -1, which swaps which parity of
+        chi modes goes into even_content vs odd_content: source order i+1
+        lives in odd_content when result order i is even, and vice versa.
+        The source natural width i+2 is trimmed to the target natural width
+        i+1 via centered_resize_content; the discarded outermost chi mode
+        (±(i+1)) is physically zero for a correctly-built equilibrium.
+        '''
+        new_n_max = self.n_max - 1
+        even_pieces, odd_pieces, special = [], [], []
+        for i in range(new_n_max + 1):
+            src = i + 1
+            target_width = i + 1
+            src_width = src + 1  # = i + 2
+            src_code = self.special[src]
+            special.append(src_code)
+            if src_code != 0:
+                raw = jnp.zeros((target_width, self.len_phi), dtype=_complex_dtype)
+            else:
+                src_even = (src % 2 == 0)
+                store = self.even_content if src_even else self.odd_content
+                offset = _offset_even(src) if src_even else _offset_odd(src)
+                raw_src = store[offset: offset + src_width]
+                # Trim i+2 → i+1 rows (removes the highest positive chi mode).
+                raw = centered_resize_content(raw_src, target_width) * (i + 1)
+            (even_pieces if i % 2 == 0 else odd_pieces).append(raw)
+        even_content = (
+            jnp.concatenate(even_pieces, axis=0) if even_pieces
+            else jnp.zeros((0, self.len_phi), dtype=_complex_dtype)
+        )
+        odd_content = (
+            jnp.concatenate(odd_pieces, axis=0) if odd_pieces
+            else jnp.zeros((0, self.len_phi), dtype=_complex_dtype)
+        )
+        return ChiPhiEpsFuncPadded._from_raw(
+            even_content, odd_content, self.nfp, new_n_max,
+            self.mode_cap, self.len_phi, special,
+        )
+
     def dchi(self):
         return self._map_orders(lambda f: f.dchi())
 
@@ -410,6 +503,13 @@ class ChiPhiEpsFuncPadded:
             code = self.special[n]
             items.append(ChiPhiFuncSpecial(code) if code != 0 else self[n].to_ragged())
         return ChiPhiEpsFunc(items, self.nfp, False)
+
+
+    def get_l2_order_by_order(self):
+        return self.to_ragged().get_l2_order_by_order()
+
+    def get_max_order_by_order(self, len_chi:int=100, len_phi:int=100):
+        return self.to_ragged().get_max_order_by_order(len_chi=len_chi, len_phi=len_phi)
 
     @classmethod
     def zeros_like(cls, other):
