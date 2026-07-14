@@ -816,30 +816,6 @@ class ChiPhiFunc:
             return(jnp.inf)
         return get_l2_shared(self.content)
 
-    # def real(self):
-    #     '''
-    #     Functions like jnp.real()
-
-    #     Outputs:
-
-    #     A real scalar.
-    #     '''
-    #     if self.is_special():
-    #         return(self)
-    #     return(ChiPhiFunc(j(self.content), self.nfp))
-
-    # def imag(self):
-    #     '''
-    #     Functions like jnp.imag()
-
-    #     Outputs:
-
-    #     A real scalar.
-    #     '''
-    #     if self.is_special():
-    #         return(self)
-    #     return(ChiPhiFunc(jnp.imag(self.content), self.nfp))
-    # @partial(jit, static_argnums=(1,))
     def cap_m(self, m:int):
         '''
         Takes the center m+1 rows of content. If the ChiPhiFunc
