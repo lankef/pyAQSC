@@ -165,6 +165,14 @@ class Equilibrium:
     def kap(self): return(self.constant['kap_p'])
     @property
     def tau(self): return(self.constant['tau_p'])
+    @property
+    def sigma0(self):
+        Y1_trig = self.Y[1].exp_to_trig()
+        # Y11c0 = sigma0 * Y11s0
+        Y11s0 = Y1_trig.content[0, 0]
+        Y11c0 = Y1_trig.content[1, 0]
+        sigma0 = Y11c0/Y11s0
+        return jnp.real(sigma0)
 
     ''' Coordinate transformations '''
     def frenet_basis_phi(self, phi=None):
@@ -619,7 +627,38 @@ class Equilibrium:
                 x_right = x_mid
             error = jnp.abs(y_mid)
             n_iter += 1
-        '''      
+        '''  
+
+    def get_divergence_rate(self):
+        ''' Calculates the average divergence rate using the highest three orders '''
+        amp_B_psi_coef_cp = self.unknown['B_psi_coef_cp'].get_norm_order_by_order()
+        amp_B_theta_coef_cp = self.unknown['B_theta_coef_cp'].get_norm_order_by_order()
+        amp_Delta_coef_cp = self.unknown['Delta_coef_cp'].get_norm_order_by_order()
+        amp_X_coef_cp = self.unknown['X_coef_cp'].get_norm_order_by_order()
+        amp_Y_coef_cp = self.unknown['Y_coef_cp'].get_norm_order_by_order()
+        amp_Z_coef_cp = self.unknown['Z_coef_cp'].get_norm_order_by_order()
+        amp_p_perp_coef_cp = self.unknown['p_perp_coef_cp'].get_norm_order_by_order()
+        rate_X_coef_cp = amp_X_coef_cp[-2:] / amp_X_coef_cp[-3:-1]
+        rate_Y_coef_cp = amp_Y_coef_cp[-2:] / amp_Y_coef_cp[-3:-1]
+        rate_Z_coef_cp = amp_Z_coef_cp[-2:] / amp_Z_coef_cp[-3:-1]
+        rate_B_psi_coef_cp = amp_B_psi_coef_cp[-2:] / amp_B_psi_coef_cp[-3:-1]
+        rate_B_theta_coef_cp = amp_B_theta_coef_cp[-2:] / amp_B_theta_coef_cp[-3:-1]
+        rate_Delta_coef_cp = amp_Delta_coef_cp[-2:] / amp_Delta_coef_cp[-3:-1]
+        rate_p_perp_coef_cp = amp_p_perp_coef_cp[-2:] / amp_p_perp_coef_cp[-3:-1]
+        all_rates = jnp.array([
+            rate_X_coef_cp,
+            rate_Y_coef_cp,
+            rate_Z_coef_cp,
+            rate_B_psi_coef_cp,
+            rate_B_theta_coef_cp,
+            rate_Delta_coef_cp,
+            rate_p_perp_coef_cp,
+        ])
+        return jnp.average(all_rates)
+
+    def get_eps_conv(self):
+        return 1 / self.get_divergence_rate()
+
 
     def B_vec_j_eps(self):
         '''
@@ -714,7 +753,7 @@ class Equilibrium:
             new_chiphifunc_list.append(new_chiphifunc)
         return ChiPhiEpsFunc(new_chiphifunc_list, self.nfp)
 
-    def get_helicity(self):
+    def helicity(self):
         ''' 
         Returns the helicity (the normal vector, kappa's 
         # rotation around the origin)

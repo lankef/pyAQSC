@@ -195,6 +195,10 @@ def get_axis_info(Rc, Rs, Zc, Zs, nfp, len_phi, padded: bool = False):
         'tangent_cylindrical': tangent_cylindrical, # axis=1 is R, phi, Z, Checked, used in frenet_basis_phi
         'normal_cylindrical': normal_cylindrical, # axis=1 is R, phi, Z, Checked, used in frenet_basis_phi
         'binormal_cylindrical': binormal_cylindrical, # axis=1 is R, phi, Z, Checked, used in frenet_basis_phi
+        'rc': Rc_arr,
+        'rs': Rs_arr,
+        'zc': Zc_arr,
+        'zs': Zs_arr,
         # Unused quantities. Removed to save space.
         # 'd_phi': d_phi, # Grid spacing. Checked.
         # Derivatives of R and Z in term of Phi
@@ -750,7 +754,7 @@ def leading_orders_from_axis(
     # The gradient is nan at exactly x==0 because of case handling in 
     # solve_ODE. This hacky approach works but change solve_ODE to 
     # be always differentiable when you have time.
-    x_RK4 = newton_solver_scalar(f1, g1, 1e-15, tol=tol1, max_iter=max_iter_riccati)
+    x_RK4 = newton_solver_scalar(f1, g1, 1e-15, tol1, max_iter_riccati)
     f_newton, Y11c_RK4, Delta1, B_theta_20 = newton_step(x_RK4, Y11c_RK4)
     if len(Y11c_RK4) != len_phi:
         Y11c_RK4 = fft_interp1d(Y11c_RK4, len_phi)
