@@ -1,7 +1,5 @@
 python_source/unsupported_by_jax.py
+src/aqsc.egg-info
 *.bat
 *.pyc
-*checkpoint.ipynb
-*checkpoint.py
-
-/src/aqsc.egg-info
+*checkpoint.*

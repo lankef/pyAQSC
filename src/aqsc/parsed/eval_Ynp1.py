@@ -3,7 +3,13 @@
 # Must run with Yn+1=0.# Depends on Xn+1, Yn, Zn, B_theta n, B_psi n-2
 # iota (n-2)/2 or (n-3)/2, B_alpha n/2 or (n-1)/2.
 from math import floor, ceil
-from aqsc.math_utilities import *
+from aqsc.math_utilities import (
+    diff,
+    is_integer,
+    is_seq,
+    py_sum,
+    py_sum_parallel,
+)
 def rhs_minus_lhs(n,
     X_coef_cp,
     Y_coef_cp,

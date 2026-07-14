@@ -2,7 +2,13 @@
 # The constant component is what we need.
 # Must evaluate with Yn, Zn+1=0
 from math import floor, ceil
-from aqsc.math_utilities import *
+from aqsc.math_utilities import (
+    diff,
+    is_integer,
+    is_seq,
+    py_sum,
+    py_sum_parallel,
+)
 # from jax import jit
 # from functools import partial
 # @partial(jit, static_argnums=(0,))

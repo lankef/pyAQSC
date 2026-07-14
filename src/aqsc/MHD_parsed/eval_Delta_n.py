@@ -4,7 +4,13 @@
 # Uses B_denom_coef_cp[n], p_perp_coef_cp[n], iota[(n-1)/2 or n/2].
 # Must be evaluated with Delta_n=0
 from math import floor, ceil
-from aqsc.math_utilities import *
+from aqsc.math_utilities import (
+    diff,
+    is_integer,
+    is_seq,
+    py_sum,
+    py_sum_parallel,
+)
 # from jax import jit
 # from functools import partial
 # @partial(jit, static_argnums=(0,))
