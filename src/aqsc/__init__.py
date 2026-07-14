@@ -3,6 +3,8 @@ from .aqsc_to_desc import *
 from .chiphifunc import *
 from .chiphiepsfunc import *
 from .chiphifunc_padded import *
+from .chiphiepsfunc_padded import *
+from .chiphifunc_solvers import *
 from .chiphifunc_test_suite import *
 from .leading_orders import *
 from .looped_solver import *

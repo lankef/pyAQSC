@@ -36,9 +36,9 @@ Maxima notebooks are **sources of truth for formulas**; generated Python lives u
 | `looped_solver.py` | Solves the “looped equations” that close the overdetermined system |
 | `recursion_relations.py` | Wrappers around parsed recursion evaluations |
 | `math_utilities.py` | Helpers used by generated/parsed expressions (`py_sum`, etc.) |
-| `parsed/` | Machine-generated magnetic-only recursion relations. Do not edit. |
-| `MHD_parsed/` | Machine-generated full (MHD + force balance) recursion relations. Do not edit. |
-| `looped_coefs/` | Coefficients for looped equations |
+| `parsed/` | Machine-generated magnetic-only recursion relations. Do not read fully since these files are long. |
+| `MHD_parsed/` | Machine-generated full (MHD + force balance) recursion relations. Do not read fully since these files are long. |
+| `looped_coefs/` | Machine-generated coefficients for looped equations. Do not read fully since these files are long. |
 | `aqsc_to_desc.py` | Export to DESC (`aqsc_to_desc_near_axis`, `aqsc_to_desc_boundary`) |
 | `chiphifunc_test_suite.py` | Plotting / test helpers; optional pyQSC import |
 

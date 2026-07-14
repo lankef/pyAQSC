@@ -1,12 +1,207 @@
 import jax
 import jax.numpy as jnp
 import jax.lax as lax
-from jax import jit, jacfwd, custom_jvp, jvp
+from jax import jit, jacfwd, custom_jvp, jvp, vmap
 from jax.tree_util import tree_map
 from jax.lax import while_loop
 from functools import partial, reduce # for JAX jit with static params
 from operator import add
 from math import floor, ceil
+
+# ---------------------------------------------------------------------------
+# Pure JAX/numpy array helpers — no ChiPhiFunc dependency.
+#
+# These are defined here first so that when chiphifunc.py's bottom-of-file
+# import (`from .math_utilities import ...`) runs during the circular-import
+# resolution, they are already present in this module's namespace.
+# Hand-written code should import these from math_utilities directly.
+# chiphifunc.py and chiphifunc_padded.py also re-import them at the bottom /
+# top respectively to make them available as module globals for their methods.
+# ---------------------------------------------------------------------------
+
+def dchi_op(n_dim: int):
+    '''
+    Generate chi differential operator diff_matrix. diff_matrix@f.content = dchi(f).
+
+    Input: n_dim: length of Chi series.
+    Output: 2d diagonal matrix with elements [-m, -m+2, ... m].
+    '''
+    ind_chi = n_dim - 1
+    mode_chi = jnp.linspace(-ind_chi, ind_chi, n_dim)
+    return jnp.diag(1j * mode_chi)
+
+
+def trig_to_exp_op(n_dim: int):
+    ''' Conversion matrix: trigonometric -> exponential chi Fourier series. '''
+    ones = jnp.ones(n_dim // 2)
+    if n_dim % 2 == 0:
+        arr_diag = jnp.concatenate([0.5j * ones, 0.5 * ones])
+        arr_anti_diag = jnp.concatenate([-0.5j * ones, 0.5 * ones])
+    if n_dim % 2 == 1:
+        arr_diag = jnp.concatenate([0.5j * ones, jnp.array([0.5]), 0.5 * ones])
+        arr_anti_diag = jnp.concatenate([-0.5j * ones, jnp.array([0.5]), 0.5 * ones])
+    return jnp.diag(arr_diag) + jnp.flipud(jnp.diag(arr_anti_diag))
+
+
+def exp_to_trig_op(n_dim: int):
+    ''' Conversion matrix: exponential -> trigonometric chi Fourier series. '''
+    ones = jnp.ones(n_dim // 2)
+    # sin:  +0.5je^-ix - 0.5je^ix
+    # cos:  +0.5e^-ix  + 0.5e^ix
+    if n_dim % 2 == 0:
+        arr_diag = jnp.concatenate([-1j * ones, ones])
+        arr_anti_diag = jnp.concatenate([ones, 1j * ones])
+    if n_dim % 2 == 1:
+        arr_diag = jnp.concatenate([-1j * ones, jnp.array([0.5]), ones])
+        arr_anti_diag = jnp.concatenate([ones, jnp.array([0.5]), 1j * ones])
+    return jnp.diag(arr_diag) + jnp.flipud(jnp.diag(arr_anti_diag))
+
+
+def centered_resize_content(content: jnp.ndarray, target_chi: int):
+    '''
+    Symmetrically pad or trim a content array (2d, axis 0 = chi) to have
+    exactly target_chi rows, keeping the center row (mode 0 for even-order,
+    the +1/-1 straddle for odd-order) at a fixed, shared position.
+
+    Representation-agnostic: used by ChiPhiFunc.__add__, ChiPhiFunc.cap_m,
+    and ChiPhiFuncPadded.__add__/__mul__/cap_m.
+
+    Input:  content — 2d array (chi x phi); target_chi — desired row count.
+    Output: 2d array with target_chi rows.
+    '''
+    len_chi = content.shape[0]
+    diff = target_chi - len_chi
+    if diff == 0:
+        return content
+    if diff > 0:
+        pad_before = diff // 2
+        pad_after = diff - pad_before
+        return jnp.pad(content, ((pad_before, pad_after), (0, 0)))
+    else:
+        clip_before = (-diff) // 2
+        return content[clip_before: clip_before + target_chi]
+
+
+def wrap_grid_content_jit(content: jnp.ndarray):
+    '''
+    Wrap grid content for periodicity: appends first column as last column.
+    Input:  (m, k) 2d array.
+    Output: (m, k+1) 2d array with output[:, -1] == output[:, 0].
+    '''
+    first_col = content[:, 0]
+    return jnp.concatenate((content, first_col[:, None]), axis=1)
+
+
+def max_log10(input):
+    '''
+    Log10 of the maximum absolute value in an ndarray.
+    '''
+    return jnp.log10(jnp.max(jnp.abs(input)))
+
+
+def jit_fftfreq_int(int_in: int):
+    '''
+    Shorthand for jnp.fft.fftfreq(n)*n, rounded to the nearest int.
+    The input should be a static integer (the array length).
+    '''
+    out = jnp.arange(int_in)
+    return jnp.where(out > (int_in - 1) // 2, out - int_in, out)
+
+
+def get_l2_shared(content):
+    '''
+    L2 norm of the underlying function over the full torus, computed via
+    Parseval's theorem directly from a content array.
+    '''
+    power_by_phi = jnp.sum(jnp.abs(content) ** 2, axis=0)
+    integral_sq = (2 * jnp.pi) ** 2 * jnp.mean(power_by_phi)
+    return jnp.sqrt(jnp.real(integral_sq))
+
+
+# Convolves two 2d content arrays along chi (axis 0), vectorized over phi (axis 1).
+batch_convolve = vmap(jnp.convolve, in_axes=1, out_axes=1)
+
+# Used only in dphi_op_pseudospectral.
+roll_axis_01 = lambda a, shift: jnp.roll(jnp.roll(a, shift, axis=0), shift, axis=1)
+batch_roll_axis_01 = vmap(roll_axis_01, in_axes=0, out_axes=0)
+
+
+def dphi_op_pseudospectral(n: int):
+    '''
+    Spectral differentiation matrix for n uniformly-spaced periodic grid
+    points. JAX port of qsc.spectral_diff_matrix (pyQSC) and
+    scipy.linalg.toeplitz.
+    '''
+    h = 2 * jnp.pi / n
+    kk = jnp.arange(1, n)
+    n1 = n // 2 - (n + 1) % 2
+    n2 = n // 2
+    if n % 2 == 0:
+        topc = 1 / jnp.tan(jnp.arange(1, n2 + 1) * h / 2)
+        temp = jnp.concatenate((topc, -jnp.flip(topc[0:n1])))
+    else:
+        topc = 1 / jnp.sin(jnp.arange(1, n2 + 1) * h / 2)
+        temp = jnp.concatenate((topc, jnp.flip(topc[0:n1])))
+    col1 = jnp.array([jnp.concatenate((jnp.array([0]), 0.5 * ((-1) ** kk) * temp))]).T
+    col1 = jnp.concatenate([col1, jnp.zeros((n, n - 1))], axis=1)
+    row1 = -col1.T
+    raw = col1 + row1
+    toeplitz = jnp.repeat(raw[None, :, :], n, axis=0)
+    shifts = jnp.arange(n)
+    toeplitz = batch_roll_axis_01(toeplitz, shifts)
+    masks = jnp.repeat(
+        (shifts[:, None] + shifts[None, :])[None, :, :], n, axis=0
+    )
+    masks = jnp.sign(jnp.where((masks + 1) // 2 <= shifts[:, None, None], 0, masks))
+    toeplitz = toeplitz * masks
+    return jnp.sum(toeplitz, axis=0)
+
+
+def fft_filter(fft_in: jnp.ndarray, target_length: int, axis: int):
+    '''
+    Shorten an FFT-representation array to target_length elements along axis
+    by removing the highest-frequency modes (low-pass filter). The result
+    can be IFFT'd. target_length is the number of harmonics to keep.
+
+    Inputs: fft_in — array in FFT representation; target_length; axis.
+    Output: filtered array of reduced length along axis.
+    '''
+    if target_length >= fft_in.shape[axis] or target_length < 0:
+        return fft_in
+    left = fft_in.take(indices=jnp.arange(0, (target_length + 1) // 2), axis=axis)
+    right = fft_in.take(indices=jnp.arange(-(target_length // 2), 0), axis=axis)
+    return jnp.concatenate((left, right), axis=axis) * target_length / fft_in.shape[axis]
+
+
+def fft_pad(fft_in: jnp.ndarray, target_length: int, axis: int):
+    '''
+    Zero-pad an FFT-representation array to target_length along axis by
+    inserting zeros at the highest-frequency positions. The result can be
+    IFFT'd to obtain a higher-resolution grid of the same signal.
+
+    Inputs: fft_in — array in FFT representation; target_length; axis.
+    Output: padded array of length target_length along axis.
+    '''
+    if target_length < fft_in.shape[axis]:
+        return jnp.nan
+    elif target_length == fft_in.shape[axis]:
+        return fft_in
+    new_shape = list(fft_in.shape)
+    original_length = new_shape[axis]
+    new_shape[axis] = target_length - original_length
+    center_array = jnp.zeros(new_shape)
+    left = fft_in.take(indices=jnp.arange(0, (original_length + 1) // 2), axis=axis)
+    right = fft_in.take(indices=jnp.arange(-(original_length // 2), 0), axis=axis)
+    return jnp.concatenate((left, center_array, right), axis=axis) * target_length / fft_in.shape[axis]
+
+
+# ---------------------------------------------------------------------------
+# ChiPhi-aware imports.
+# These come AFTER the pure helpers above so that if chiphifunc.py's
+# bottom-of-file `from .math_utilities import ...` triggers this module's
+# loading mid-way through chiphifunc's own initialization, the helpers are
+# already defined and Python's partial-module return mechanism works correctly.
+# ---------------------------------------------------------------------------
 from .chiphifunc import *
 from .chiphifunc_padded import ChiPhiFuncPadded
 

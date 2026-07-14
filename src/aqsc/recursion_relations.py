@@ -7,6 +7,7 @@ import jax.numpy as jnp
 from .chiphifunc import *
 from .chiphiepsfunc import *
 from .chiphifunc_padded import ChiPhiFuncPadded
+from .chiphifunc_solvers import *
 from .math_utilities import *
 
 # parsed relations

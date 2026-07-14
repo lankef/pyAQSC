@@ -1,6 +1,13 @@
-from aqsc.math_utilities import *
+from aqsc.math_utilities import (
+    diff,
+    is_integer,
+    is_seq,
+    py_sum,
+    py_sum_parallel,
+)
 # from jax import jit
-from aqsc.chiphifunc import *
+from aqsc.chiphifunc import ChiPhiFuncSpecial
+from aqsc.chiphifunc_solvers import to_tensor_fft_op_multi_dim
 
 
 coef_B_psi_dphi_0_dchi_0_all_but_Y = lambda n_eval, X_coef_cp, Y_coef_cp,\

@@ -10,7 +10,13 @@
 #
 # Must provide X_coef_cp[n]=0 using ChPhiEpsFunc.zero_append().
 from math import floor, ceil
-from aqsc.math_utilities import *
+from aqsc.math_utilities import (
+    diff,
+    is_integer,
+    is_seq,
+    py_sum,
+    py_sum_parallel,
+)
 def eval_Xn_cp(n,
     X_coef_cp,
     Y_coef_cp,

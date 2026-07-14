@@ -2,7 +2,13 @@
 # The constant component is what we need.
 # Must evaluate with Yn, Zn+1=0
 from math import floor, ceil
-from aqsc.math_utilities import *
+from aqsc.math_utilities import (
+    diff,
+    is_integer,
+    is_seq,
+    py_sum,
+    py_sum_parallel,
+)
 def eval_D3_RHS_m_LHS(n, X_coef_cp, Y_coef_cp, Z_coef_cp, B_theta_coef_cp,
     B_denom_coef_c, B_alpha_coef, iota_coef, dl_p, tau_p, kap_p):
     def sum_arg_15(i268):

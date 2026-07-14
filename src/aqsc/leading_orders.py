@@ -4,7 +4,9 @@ from jax import grad
 from interpax import interp1d, fft_interp1d
 from .chiphifunc import *
 from .chiphiepsfunc import *
-from .chiphifunc_padded import ChiPhiFuncPadded, ChiPhiEpsFuncPadded, ChiPhiFuncPaddedSpecial
+from .chiphifunc_padded import ChiPhiFuncPadded, ChiPhiFuncPaddedSpecial
+from .chiphiepsfunc_padded import ChiPhiEpsFuncPadded
+from .chiphifunc_solvers import *
 from .math_utilities import diff, newton_solver_scalar
 from .looped_solver import iterate_looped
 from .equilibrium import Equilibrium
