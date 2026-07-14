@@ -1,12 +1,14 @@
+import jax
 import jax.numpy as jnp
-from jax import jit, jacfwd
+import jax.lax as lax
+from jax import jit, jacfwd, custom_jvp, jvp
 from jax.tree_util import tree_map
 from jax.lax import while_loop
-from jax import jit # vmap, tree_util
 from functools import partial, reduce # for JAX jit with static params
 from operator import add
 from math import floor, ceil
 from .chiphifunc import *
+from .chiphifunc_padded import ChiPhiFuncPadded
 
 # # Sum: implemented as a function taking in a single-argument func and the lower/upper bounds
 # # expr should be non-dynamic.
@@ -41,23 +43,94 @@ from .chiphifunc import *
 def py_sum(expr, lower: int, upper: int):
     upper_floor = floor(upper)
     lower_ceil = ceil(lower)
-    
+
     if upper_floor == lower_ceil:
         return expr(lower_ceil)
-    
+
     if lower_ceil > upper_floor:
         return ChiPhiFuncSpecial(0)
 
-    indices = range(lower_ceil, upper_floor + 1)
+    # Seed the reduce with the first evaluated term, not a hardcoded ragged
+    # ChiPhiFuncSpecial(0): expr can return a ChiPhiFuncPadded under the
+    # padded backend, and ragged ChiPhiFuncSpecial(0).__add__(padded_term)
+    # doesn't know about ChiPhiFuncPadded at all (isinstance check misses
+    # it, falls through to "treat as scalar", crashes with a confusing JAX
+    # dtype error rather than anything informative). Seeding from the first
+    # term instead means every add() call combines two same-family objects,
+    # matching the invariant every other operator here already relies on.
+    # Identical result to the old seeding for the ragged case, since
+    # ChiPhiFuncSpecial(0) + x == x there too.
+    first = expr(lower_ceil)
+    return reduce(add, (expr(i) for i in range(lower_ceil + 1, upper_floor + 1)), first)
 
-    # Unroll the loop statically using reduce + operator.add
-    # This builds a single expression tree
-    return reduce(add, (expr(i) for i in indices), ChiPhiFuncSpecial(0))
 
+# py_sum_parallel: like py_sum, but under the padded backend (expr closes
+# over ChiPhiEpsFuncPadded-backed coefficients), uses a lax.fori_loop so
+# JAX traces the summation body once regardless of the range, instead of
+# unrolling one Python-level call per term.
+#
+# Why this needs the comb representation, not just "the first term's
+# shape": for a *leaf* sum (expr contains no further py_sum call -- the
+# case this handles; nested sums still fall back to static unrolling, see
+# the architecture plan) every term shares one target chi width by
+# construction (e.g. sum_arg_38(i)=X[i]*X[n-i] always has width n+1,
+# regardless of i), which is what makes vectorizing safe at all. But the
+# scan's own loop variable i is traced, so any X_coef_cp[...] lookup
+# *inside* expr's body receives a traced index of unknown parity --
+# ChiPhiEpsFuncPadded.__getitem__ handles that by returning a comb
+# (parity-agnostic) ChiPhiFuncPadded, and ChiPhiFuncPadded's own operators
+# propagate comb-ness through +/*/dchi automatically (see
+# chiphifunc_padded.py). So the scan carry and every intermediate value
+# inside body stay in comb representation; only the final accumulated
+# result gets converted back to normal representation, once the target
+# order's parity is known (learned from the initial concrete probe below,
+# which is not comb since lower_ceil is a concrete Python int).
+def py_sum_parallel(expr, lower, upper):
+    upper_floor = floor(upper)
+    lower_ceil = ceil(lower)
 
-# In the JAX implementation, there is no distinction between how the outmost and
-# inner sums are evaluated.
-py_sum_parallel = py_sum
+    if lower_ceil > upper_floor:
+        return ChiPhiFuncSpecial(0)
+    if lower_ceil == upper_floor:
+        return expr(lower_ceil)
+
+    # Probe the first term (concrete index -> normal representation, not
+    # comb) to decide the backend and, if padded, learn this sum's target
+    # chi width/parity.
+    first = expr(lower_ceil)
+
+    if not (isinstance(first, ChiPhiFuncPadded) and not first.is_special()):
+        # Ragged backend (or a special/error first term): same static
+        # unroll as py_sum.
+        return reduce(add, (expr(i) for i in range(lower_ceil + 1, upper_floor + 1)), first)
+
+    target_m = first.content.shape[0] - 1
+    comb_width = 2 * target_m + 1
+    zero_comb = jnp.zeros((comb_width, first.content.shape[1]), dtype=first.content.dtype)
+
+    def body(i, carry_content):
+        term = expr(i)
+        term_content = centered_resize_content(term.content, comb_width)
+        return carry_content + term_content
+
+    try:
+        # Whether expr is a leaf sum (no nested py_sum call) isn't something
+        # we can determine ahead of time without inspecting the generated
+        # code's source, which we don't want to do -- expr is an opaque
+        # closure. A nested py_sum call inside expr's body calls floor()/
+        # ceil() on the (here, traced) loop index, which JAX cannot
+        # concretize -- that's a real, distinct failure mode
+        # (ConcretizationTypeError), not a sign of a bug, so catching it and
+        # falling back to the always-correct static unroll is the right
+        # response, not error-swallowing. Tracing is pure/stateless, so a
+        # failed attempt here leaves nothing to clean up before falling
+        # back.
+        accumulated = lax.fori_loop(lower_ceil + 1, upper_floor + 1, body, zero_comb)
+    except jax.errors.ConcretizationTypeError:
+        return reduce(add, (expr(i) for i in range(lower_ceil + 1, upper_floor + 1)), first)
+
+    rest = ChiPhiFuncPadded(accumulated, first.nfp, True).comb_to_normal(target_m)
+    return first + rest
 
 ## Condition operators
 # Used to make sure new indices of terms and new upper bounds are within the
@@ -95,7 +168,7 @@ def diff_backend(y, is_chi:bool, order):
     if jnp.isscalar(y):
         return(0)
     out = y
-    if isinstance(y, ChiPhiFunc):
+    if isinstance(y, (ChiPhiFunc, ChiPhiFuncPadded)):
         if is_chi:
             out = out.dchi(order)
         else:
@@ -156,7 +229,6 @@ def newton_solver_scalar(f, f_prime, x0, tol=1e-6, max_iter=100):
     x_final, _, _, _ = while_loop(condition, body, initial_state)
     return x_final
 
-
 def newton_solver(f, x0, tol=1e-6, max_iter=100):
     """
     Newton's method for solving f(x) = 0.
@@ -188,8 +260,6 @@ def newton_solver(f, x0, tol=1e-6, max_iter=100):
     converged = jnp.linalg.norm(f(x_final)) <= tol
     
     return x_final, converged, num_iter
-
-
 
 @partial(jit, static_argnums=(2))
 def fourier_interpolation(y_data, x_interp, nfp):

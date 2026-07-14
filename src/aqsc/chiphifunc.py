@@ -87,6 +87,53 @@ def exp_to_trig_op(n_dim:int):
         arr_anti_diag = jnp.concatenate([ones, jnp.array([0.5]), 1j*ones])
     return(jnp.diag(arr_diag)+jnp.flipud(jnp.diag(arr_anti_diag)))
 
+def centered_resize_content(content:jnp.ndarray, target_chi:int):
+    '''
+    Symmetrically pad or trim a content array (2d, axis 0 = chi) to have
+    exactly target_chi rows, keeping the chi mode at row content.shape[0]//2
+    (mode 0 for even-order/odd-row-count content, the +1/-1 straddle for
+    odd-order/even-row-count content) at a fixed, shared position regardless
+    of how many rows are added or removed.
+
+    This is representation-agnostic pure array arithmetic: it's the same
+    formula ChiPhiFunc.__add__ uses internally to reconcile mismatched
+    operand widths (dynamic target, derived from max(a.shape, b.shape) at
+    each call) and that ChiPhiFunc.cap_m() uses to trim (dynamic source,
+    target supplied by the caller). ChiPhiFuncPadded reuses this exact
+    formula with a *static* target_chi (chosen once per container, not
+    recomputed from operand shapes on every call), which is what makes its
+    __add__/__mul__/cap_m branch-free. See chiphifunc_padded.py.
+
+    target_chi must share parity with content.shape[0] (both even-order-
+    family or both odd-order-family widths) — this holds for every call site
+    in this codebase, since chi width parity always matches the underlying
+    order's parity, and this function does not check it (matching the
+    permissiveness of the ChiPhiFunc.__add__ code this was extracted from;
+    callers here are trusted, not adversarial).
+
+    Input: -----
+
+    content: a 2d array, chi (axis 0) by phi (axis 1).
+
+    target_chi: desired number of chi rows in the output. Can be larger
+    (pad) or smaller (trim) than content.shape[0], or equal (no-op).
+
+    Output: -----
+
+    A 2d array with target_chi rows.
+    '''
+    len_chi = content.shape[0]
+    diff = target_chi - len_chi
+    if diff == 0:
+        return(content)
+    if diff > 0:
+        pad_before = diff // 2
+        pad_after = diff - pad_before
+        return(jnp.pad(content, ((pad_before, pad_after), (0, 0))))
+    else:
+        clip_before = (-diff) // 2
+        return(content[clip_before : clip_before + target_chi])
+
 def wrap_grid_content_jit(content:jnp.ndarray):
     '''
     Used for wrapping grid content. Defined outside the ChiPhiFunc class so that
@@ -133,6 +180,10 @@ def jit_fftfreq_int(int_in:int):
     out = jnp.arange(int_in)
     return(jnp.where(out>(int_in-1)//2,out-int_in,out))
 
+def get_l2_shared(content):
+    power_by_phi = jnp.sum(jnp.abs(content)**2, axis=0)
+    integral_sq = (2*jnp.pi)**2 * jnp.mean(power_by_phi)
+    return(jnp.sqrt(jnp.real(integral_sq)))
 
 '''
 Convolves 2 2d arrays along axis=0.
@@ -145,18 +196,87 @@ def phi_avg(in_quant):
     A type-insensitive phi-averaging function that:
     - Averages along phi and output a ChiPhiFunc if the input is a ChiPhiFunc.
     - Does nothing if the input is a scalar.
+
+    Uses duck typing (not isinstance(in_quant, ChiPhiFunc)) so this also
+    works for ChiPhiFuncPadded, which chiphifunc.py cannot import directly
+    (chiphifunc_padded.py imports from here, so the reverse would be
+    circular) -- see chiphifunc_padded.py's module docstring.
     '''
-    if isinstance(in_quant, ChiPhiFunc):
+    if hasattr(in_quant, 'content') and hasattr(in_quant, 'is_special'):
         # special ChiPhiFunc's
         if in_quant.is_special():
             return(in_quant)
         new_content = jnp.array([
             jnp.mean(in_quant.content,axis=1)
         ]).T
-        return(ChiPhiFunc(new_content,in_quant.nfp))
+        return(type(in_quant)(new_content,in_quant.nfp))
     if not jnp.array(in_quant).ndim==0:
         return(ChiPhiFuncSpecial(-5))
     return(in_quant)
+
+def display_content_shared(content, nfp, trig_mode, colormap_mode): 
+    if content.shape[1]==1:
+        content = content*jnp.ones((1,100))
+    len_phi = content.shape[1]
+    phis = jnp.linspace(0,2*jnp.pi*(1-1/len_phi)/nfp, len_phi)
+    if trig_mode:
+        fourier = ChiPhiFunc(content, nfp).exp_to_trig()
+        if len(fourier.content)%2==0:
+            ax1 = plt.subplot(121)
+            ax1.set_title('cos, nfp='+str(nfp))
+            ax2 = plt.subplot(122)
+            ax2.set_title('sin, nfp='+str(nfp))
+            if colormap_mode:
+                modecos = jnp.linspace(1, len(fourier.content)-1, len(fourier.content)//2)
+                modesin = jnp.linspace(len(fourier.content)-1, 1, len(fourier.content)//2)
+                phi = jnp.linspace(0, 2*jnp.pi*(1-1/len_phi), len_phi)
+                ax1.pcolormesh(phi, modecos, jnp.real(fourier.content)[len(fourier.content)//2:])
+                ax2.pcolormesh(phi, modesin, jnp.real(fourier.content)[:len(fourier.content)//2])
+            else:
+                ax1.plot(phis, jnp.real(fourier.content)[len(fourier.content)//2:].T)
+                ax2.plot(phis, jnp.real(fourier.content)[:len(fourier.content)//2].T)
+        else:
+            plt.rcParams['figure.figsize'] = [12,3]
+            ax1 = plt.subplot(131)
+            ax1.set_title('cos, nfp='+str(nfp))
+            ax2 = plt.subplot(132)
+            ax2.set_title('constant, nfp='+str(nfp))
+            ax3 = plt.subplot(133)
+            ax3.set_title('sin, nfp='+str(nfp))
+            if colormap_mode and len(fourier.content) != 1:
+                modesin = jnp.linspace(2, len(fourier.content)-1, len(fourier.content)//2)
+                modecos = jnp.linspace(len(fourier.content)-1, 2, len(fourier.content)//2)
+                phi = jnp.linspace(0, 2*jnp.pi*(1-1/len_phi)/nfp, len_phi)
+                print('phi',phi.shape)
+                print('modesin',modesin.shape)
+                print('modecos',modecos.shape)
+                print('np.real(fourier.content)[len(fourier.content)//2+1:]', jnp.real(fourier.content)[len(fourier.content)//2+1:].shape)
+                ax1.pcolormesh(phi, modesin, jnp.real(fourier.content)[len(fourier.content)//2+1:])
+                ax3.pcolormesh(phi, modecos, jnp.real(fourier.content)[:len(fourier.content)//2])
+            else:
+                ax1.plot(phis, jnp.real(fourier.content)[len(fourier.content)//2+1:].T)
+                ax3.plot(phis, jnp.real(fourier.content)[:len(fourier.content)//2].T)
+
+            ax2.plot(phis, jnp.real(fourier.content)[len(fourier.content)//2])
+    else:
+        ax1 = plt.subplot(121)
+        ax1.set_title('Real, nfp='+str(nfp))
+        ax2 = plt.subplot(122)
+        ax2.set_title('Imaginary, nfp='+str(nfp))
+
+        if colormap_mode:
+            mode = jnp.linspace(-len(content)+1, len(content)-1, len(content))
+            phi = jnp.linspace(0, 2*jnp.pi*(1-1/len_phi)/nfp, len_phi)
+            ax1.pcolormesh(phi, mode, jnp.real(content))
+            ax2.pcolormesh(phi, mode, jnp.imag(content))
+        else:
+            ax1.plot(phis, jnp.real(content).T)
+            ax2.plot(phis, jnp.imag(content).T)
+    # if fname is None:
+    plt.show()
+    # else:
+    #     plt.savefig(fname)
+
 
 ''' I.1 Grid implementation '''
 class ChiPhiFunc:
@@ -402,7 +522,19 @@ class ChiPhiFunc:
         elif isinstance(other, ChiPhiEpsFunc):
             return(other+self)
         else:
-            if not jnp.array(other).ndim==0:
+            # If other isn't array-convertible at all (e.g. a
+            # ChiPhiFuncPadded, which this class doesn't know about by
+            # design -- see chiphifunc_padded.py), return NotImplemented
+            # rather than crashing inside jnp.array(): this lets Python's
+            # standard operator protocol retry via other.__radd__(self),
+            # which does know how to handle a genuinely-special self (see
+            # ChiPhiFuncPadded._coerce_operand). Array-convertible but
+            # wrong-shaped values still get the existing error sentinel.
+            try:
+                other_is_scalar = jnp.array(other).ndim == 0
+            except TypeError:
+                return NotImplemented
+            if not other_is_scalar:
                 return(ChiPhiFuncSpecial(-5))
             if self.is_special():
                 if self.nfp==0:
@@ -474,11 +606,16 @@ class ChiPhiFunc:
             stretch_phi = jnp.zeros((1, max(self.content.shape[1], other.content.shape[1])))
             a = self.content+stretch_phi
             b = other.content+stretch_phi
-            return(ChiPhiFunc(batch_convolve(a,b), self.nfp))
+            full = batch_convolve(a, b)
+            return(ChiPhiFunc(full, self.nfp))
         elif isinstance(other, ChiPhiEpsFunc):
             return(other*self)
         else:
-            if not jnp.array(other).ndim==0:
+            try:
+                other_is_scalar = jnp.array(other).ndim == 0
+            except TypeError:
+                return NotImplemented
+            if not other_is_scalar:
                 return(ChiPhiFuncSpecial(-5))
             if self.is_special():
                 return(self)
@@ -541,7 +678,11 @@ class ChiPhiFunc:
         else:
             if self.nfp==0:
                 return(self)
-            if not jnp.array(other).ndim==0:
+            try:
+                other_is_scalar = jnp.array(other).ndim == 0
+            except TypeError:
+                return NotImplemented
+            if not other_is_scalar:
                 return(ChiPhiFuncSpecial(-5))
             return(ChiPhiFunc(self.content/other, self.nfp))
 
@@ -567,7 +708,11 @@ class ChiPhiFunc:
                 # Handles non-zero/non-zero and error/non-zero
                 return(ChiPhiFunc(other.content/self.content, self.nfp))
             else:
-                if not jnp.array(other).ndim==0:
+                try:
+                    other_is_scalar = jnp.array(other).ndim == 0
+                except TypeError:
+                    return NotImplemented
+                if not other_is_scalar:
                     return(ChiPhiFuncSpecial(-5))
                 return(ChiPhiFunc(other/self.content, self.nfp))
 
@@ -789,8 +934,36 @@ class ChiPhiFunc:
         elif self.nfp<0:
             return(jnp.inf)
         chis = jnp.arange(len_chi)/len_chi*jnp.pi*2
-        phis = jnp.arange(len_phi)/len_phi*jnp.pi*2 
+        phis = jnp.arange(len_phi)/len_phi*jnp.pi*2
         return(jnp.max(jnp.abs(self.eval(chis[:, None], phis[None, :]))))
+
+    def get_l2(self):
+        '''
+        Getting the L2 norm of the underlying function over the full torus
+        (chi in [0, 2*pi), phi in [0, 2*pi)), computed via Parseval's
+        theorem directly from content rather than by evaluating on a grid.
+
+        content's chi axis (axis=0) already holds exact chi-Fourier
+        coefficients c_m(phi), so Parseval gives
+        integral_0^2pi |f|^2 dchi = 2*pi * sum_m |c_m(phi)|^2 exactly.
+        content's phi axis (axis=1) is a uniform grid over one field
+        period [0, 2*pi/nfp); since it's assumed to exactly reproduce the
+        underlying periodic function via trigonometric interpolation (the
+        same assumption dphi's FFT-based derivative relies on), its plain
+        grid average equals the continuous phi average, and nfp copies of
+        one field period tile the full torus, giving
+        integral_0^2pi (...) dphi = (2*pi)^2 * mean_phi(sum_m |c_m(phi)|^2)
+        (the nfp cancels: nfp periods of length 2*pi/nfp).
+
+        Output: -----
+
+        A real scalar, sqrt(integral_0^2pi integral_0^2pi |f|^2 dchi dphi).
+        '''
+        if self.nfp==0:
+            return(0.)
+        elif self.nfp<0:
+            return(jnp.inf)
+        return get_l2_shared(self.content)
 
     # def real(self):
     #     '''
@@ -848,6 +1021,19 @@ class ChiPhiFunc:
         number of chi components in a ChiPhiFunc equals to m+1.
         '''
         return self.pad_chi(m+1)
+
+    def pad_chi_static(self, target_chi:int):
+        '''
+        Like pad_chi, but also handles target_chi < self.content.shape[0]
+        (symmetric trim instead of pad), and never falls back to __add__'s
+        dynamic (runtime-shape-derived) padding math. A thin wrapper around
+        the module-level centered_resize_content(), which is representation-
+        agnostic and shared with ChiPhiFuncPadded (see chiphifunc_padded.py).
+        target_chi must share parity with self.content.shape[0].
+        '''
+        if self.is_special():
+            return(self)
+        return(ChiPhiFunc(centered_resize_content(self.content, target_chi), self.nfp))
 
     def pad_chi(self, target_chi:int):
         '''
@@ -949,67 +1135,7 @@ class ChiPhiFunc:
             return()
         plt.rcParams['figure.figsize'] = [8,3]
         content = self.content
-        if content.shape[1]==1:
-            content = content*jnp.ones((1,100))
-        len_phi = content.shape[1]
-        phis = jnp.linspace(0,2*jnp.pi*(1-1/len_phi)/self.nfp, len_phi)
-        if trig_mode:
-            fourier = ChiPhiFunc(content, self.nfp).exp_to_trig()
-            if len(fourier.content)%2==0:
-                ax1 = plt.subplot(121)
-                ax1.set_title('cos, nfp='+str(self.nfp))
-                ax2 = plt.subplot(122)
-                ax2.set_title('sin, nfp='+str(self.nfp))
-                if colormap_mode:
-                    modecos = jnp.linspace(1, len(fourier.content)-1, len(fourier.content)//2)
-                    modesin = jnp.linspace(len(fourier.content)-1, 1, len(fourier.content)//2)
-                    phi = jnp.linspace(0, 2*jnp.pi*(1-1/len_phi), len_phi)
-                    ax1.pcolormesh(phi, modecos, jnp.real(fourier.content)[len(fourier.content)//2:])
-                    ax2.pcolormesh(phi, modesin, jnp.real(fourier.content)[:len(fourier.content)//2])
-                else:
-                    ax1.plot(phis, jnp.real(fourier.content)[len(fourier.content)//2:].T)
-                    ax2.plot(phis, jnp.real(fourier.content)[:len(fourier.content)//2].T)
-            else:
-                plt.rcParams['figure.figsize'] = [12,3]
-                ax1 = plt.subplot(131)
-                ax1.set_title('cos, nfp='+str(self.nfp))
-                ax2 = plt.subplot(132)
-                ax2.set_title('constant, nfp='+str(self.nfp))
-                ax3 = plt.subplot(133)
-                ax3.set_title('sin, nfp='+str(self.nfp))
-                if colormap_mode and len(fourier.content) != 1:
-                    modesin = jnp.linspace(2, len(fourier.content)-1, len(fourier.content)//2)
-                    modecos = jnp.linspace(len(fourier.content)-1, 2, len(fourier.content)//2)
-                    phi = jnp.linspace(0, 2*jnp.pi*(1-1/len_phi)/self.nfp, len_phi)
-                    print('phi',phi.shape)
-                    print('modesin',modesin.shape)
-                    print('modecos',modecos.shape)
-                    print('np.real(fourier.content)[len(fourier.content)//2+1:]', jnp.real(fourier.content)[len(fourier.content)//2+1:].shape)
-                    ax1.pcolormesh(phi, modesin, jnp.real(fourier.content)[len(fourier.content)//2+1:])
-                    ax3.pcolormesh(phi, modecos, jnp.real(fourier.content)[:len(fourier.content)//2])
-                else:
-                    ax1.plot(phis, jnp.real(fourier.content)[len(fourier.content)//2+1:].T)
-                    ax3.plot(phis, jnp.real(fourier.content)[:len(fourier.content)//2].T)
-
-                ax2.plot(phis, jnp.real(fourier.content)[len(fourier.content)//2])
-        else:
-            ax1 = plt.subplot(121)
-            ax1.set_title('Real, nfp='+str(self.nfp))
-            ax2 = plt.subplot(122)
-            ax2.set_title('Imaginary, nfp='+str(self.nfp))
-
-            if colormap_mode:
-                mode = jnp.linspace(-len(content)+1, len(content)-1, len(content))
-                phi = jnp.linspace(0, 2*jnp.pi*(1-1/len_phi)/self.nfp, len_phi)
-                ax1.pcolormesh(phi, mode, jnp.real(content))
-                ax2.pcolormesh(phi, mode, jnp.imag(content))
-            else:
-                ax1.plot(phis, jnp.real(content).T)
-                ax2.plot(phis, jnp.imag(content).T)
-        # if fname is None:
-        plt.show()
-        # else:
-        #     plt.savefig(fname)
+        display_content_shared(content, self.nfp, trig_mode=trig_mode, colormap_mode=colormap_mode)
 
     def display(self, complex:bool=False, size=(100,100), avg_clim:bool=False):
         '''
@@ -1244,7 +1370,12 @@ def batch_matrix_inv_excluding_col(in_matrices:jnp.ndarray):
     '''
     # Checking dimensions
     if in_matrices.ndim != 3:
-        return(jnp.nan)
+        raise ValueError(
+            f"batch_matrix_inv_excluding_col: expected a 3d array, got ndim={in_matrices.ndim}. "
+            "This used to silently return jnp.nan; converted to a loud error since a shape "
+            "mismatch here usually means a ChiPhiFuncPadded operand reached this exact-rank-"
+            "sensitive linear algebra without being cap_m()'d down to its true width first."
+        )
 
     n_row = in_matrices.shape[0]
     n_col = in_matrices.shape[1]
@@ -1254,12 +1385,20 @@ def batch_matrix_inv_excluding_col(in_matrices:jnp.ndarray):
 
     # Checking shape
     if n_row-1!=n_col:
-        return(jnp.nan)
+        raise ValueError(
+            f"batch_matrix_inv_excluding_col: expected n_row-1==n_col, got n_row={n_row}, "
+            f"n_col={n_col}. This used to silently return jnp.nan; converted to a loud error "
+            "since a shape mismatch here usually means a ChiPhiFuncPadded operand reached this "
+            "exact-rank-sensitive linear algebra without being cap_m()'d down to its true width "
+            "first."
+        )
 
     n_clip = (n_row-n_col+1)//2 # How much is the transposed array larger than Yn
     if n_row<=n_col:
-        return(jnp.nan)
-        # raise ValueError("Input should have more rows than cols")
+        raise ValueError(
+            f"batch_matrix_inv_excluding_col: expected n_row>n_col, got n_row={n_row}, "
+            f"n_col={n_col}. Input should have more rows than cols."
+        )
 
     # Remove specfied column (slightly faster than delete)
     # and remove extra rows (take n_col-1 rows from the center)

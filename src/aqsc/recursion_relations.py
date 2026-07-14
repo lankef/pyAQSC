@@ -6,6 +6,7 @@ import jax.numpy as jnp
 # ChiPhiFunc and ChiPhiEpsFunc
 from .chiphifunc import *
 from .chiphiepsfunc import *
+from .chiphifunc_padded import ChiPhiFuncPadded
 from .math_utilities import *
 
 # parsed relations
@@ -45,9 +46,17 @@ def iterate_Yn_cp_operators(n_unknown, X_coef_cp, B_alpha_coef, Y1c_mode=False):
     Input: -----
     '''
     # Getting coeffs
-    # Both uses B_alpha0 and X1 only
-    chiphifunc_A = parsed.coef_a(n_unknown-1, B_alpha_coef, X_coef_cp)
-    chiphifunc_B = parsed.coef_b(B_alpha_coef, X_coef_cp)
+    # Both uses B_alpha0 and X1 only. coef_a/coef_b are always exactly width
+    # 2 (see parsed/eval_Ynp1.py: pure scalar multiplies of X_coef_cp[1],
+    # "ChiPhiFunc_A always have 2 chi components" below) -- true in the
+    # ragged backend automatically (extraction gives exact natural width),
+    # but under the padded backend X_coef_cp[1] comes back centered/padded
+    # to the container's own chi_cap (which can be much wider than 2), so
+    # get_O_O_einv_from_A_B's exact-rank-sensitive linear algebra needs
+    # these narrowed back down explicitly first -- same pattern already
+    # used everywhere else in this file after a parsed/MHD_parsed call.
+    chiphifunc_A = parsed.coef_a(n_unknown-1, B_alpha_coef, X_coef_cp).cap_m(1)
+    chiphifunc_B = parsed.coef_b(B_alpha_coef, X_coef_cp).cap_m(1)
 
     # Calculating the inverted matrices
     O_matrices, O_einv, vector_free_coef = get_O_O_einv_from_A_B(
@@ -71,7 +80,7 @@ def iterate_Yn_cp_RHS(n_unknown,
     iota_coef): # nfp-dependent!!
     # This result is known due to indexing.
     if n_unknown == 1:
-        return(ChiPhiFunc(jnp.zeros((3,X_coef_cp[1].content.shape[1])), X_coef_cp.nfp))
+        return(type(X_coef_cp[1])(jnp.zeros((3,X_coef_cp[1].content.shape[1])), X_coef_cp.nfp))
     # Getting rhs-lhs for the Yn+1 equation
     # To evaluate Yn, the input order "n" must be subbed with n-1 here
     chiphifunc_rhs = parsed.rhs_minus_lhs(n_unknown-1,
@@ -85,7 +94,7 @@ def iterate_Yn_cp_RHS(n_unknown,
         iota_coef)
 
     # Making sure RHS isn't null
-    if not isinstance(chiphifunc_rhs, ChiPhiFunc):
+    if not isinstance(chiphifunc_rhs, (ChiPhiFunc, ChiPhiFuncPadded)):
         return()
 
     len_chi = chiphifunc_rhs.content.shape[0]
@@ -96,7 +105,7 @@ def iterate_Yn_cp_RHS(n_unknown,
     #          [0  ]
     if n_unknown+2 != len_chi:
         chiphifunc_rhs = chiphifunc_rhs+\
-            ChiPhiFunc(jnp.zeros(
+            type(chiphifunc_rhs)(jnp.zeros(
                 (
                     n_unknown+2,
                     chiphifunc_rhs.content.shape[1]
@@ -152,7 +161,7 @@ def iterate_Yn_cp_magnetic(
         tau_p=tau_p,
         iota_coef=iota_coef)
     Yn_rhs_content = Yn_rhs.content
-    new_Y_n_no_unknown = ChiPhiFunc(jnp.einsum('ijk,jk->ik', O_einv, Yn_rhs_content), Yn_rhs.nfp)
+    new_Y_n_no_unknown = type(Yn_rhs)(jnp.einsum('ijk,jk->ik', O_einv, Yn_rhs_content), Yn_rhs.nfp)
     Y_coef_cp_no_unknown = Y_coef_cp.mask(n_unknown-1)
     Y_coef_cp_no_unknown = Y_coef_cp_no_unknown.append(new_Y_n_no_unknown)
 
@@ -216,7 +225,7 @@ def iterate_Yn_cp_magnetic(
         #     static_max_freq=static_max_freq
         # ) # Seems underdetermined. Blows up.
 
-    Yn = new_Y_n_no_unknown + ChiPhiFunc(vector_free_coef*Yn_free_content, nfp)
+    Yn = new_Y_n_no_unknown + type(new_Y_n_no_unknown)(vector_free_coef*Yn_free_content, nfp)
     return(Yn)
 
 # Evaluates Zn,
@@ -268,7 +277,7 @@ def iterate_dc_B_psi_nm2(
             B_theta_coef_cp.mask(n_eval), B_psi_coef_cp.mask(n_eval-3).zero_append(), B_alpha_coef, B_denom_coef_c, \
             kap_p, dl_p, tau_p, iota_coef)
     # The evaluation gives an extra component.
-    if isinstance(dchi_b_psi_nm2, ChiPhiFunc):
+    if isinstance(dchi_b_psi_nm2, (ChiPhiFunc, ChiPhiFuncPadded)):
         return(dchi_b_psi_nm2.cap_m(n_eval-2))
     else:
         return(dchi_b_psi_nm2)
@@ -343,7 +352,7 @@ def iterate_delta_n_0_offset(n_eval,
         f=Delta_n_inhomog_component.content/Delta_n_inhomog_component.nfp,
         static_max_freq=static_max_freq
     )
-    Delta_out = ChiPhiFunc(content, Delta_n_inhomog_component.nfp).cap_m(n_eval)
+    Delta_out = type(Delta_n_inhomog_component)(content, Delta_n_inhomog_component.nfp).cap_m(n_eval)
     if n_eval%2==0:
         Delta_out -= jnp.average(Delta_out[0].content)
     return(Delta_out)

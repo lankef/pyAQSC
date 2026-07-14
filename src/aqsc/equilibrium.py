@@ -109,9 +109,9 @@ class Equilibrium:
         constant['tau_p'] = tau_p
         # Pressure can be trivial
         if not unknown['p_perp_coef_cp']:
-            unknown['p_perp_coef_cp'] = ChiPhiEpsFunc.zeros_like(X_coef_cp)
+            unknown['p_perp_coef_cp'] = type(X_coef_cp).zeros_like(X_coef_cp)
         if not unknown['Delta_coef_cp']:
-            unknown['Delta_coef_cp'] = ChiPhiEpsFunc.zeros_like(X_coef_cp)
+            unknown['Delta_coef_cp'] = type(X_coef_cp).zeros_like(X_coef_cp)
 
         return(Equilibrium(
             unknown=unknown,
@@ -527,7 +527,7 @@ class Equilibrium:
         return(triple_product)
     
     def jacobian(self, n_max=float('inf')):
-        '''
+        r'''
         Calculates the Jacobian.
           dr/dpsi x (dr/dchi . dr/dphi)
         = dr/d(eps^2)) x (dr/dchi . dr/dphi)
@@ -553,7 +553,7 @@ class Equilibrium:
         psi_init=None,
         maxiter=100,
         tol=1e-8):
-        '''
+        r'''
         Estimates the critical epsilon where flux surface self-intersects.
         by finding the zero of $min_{\chi, \phi}[\sqrt{J}(\epsilon, \chi, \phi)]=0$
         using binary search. \sqrt{J}(\epsilon, \chi, \phi) At each search step 
@@ -1216,7 +1216,7 @@ def iterate_2_magnetic_only(equilibrium,
         iota_coef=iota_coef
         ).antid_chi()
     B_psi_nm2_content_new = B_psi_nm2.content.at[B_psi_nm2.content.shape[0]//2].set(B_psi_nm20)
-    B_psi_nm2 = ChiPhiFunc(B_psi_nm2_content_new, B_psi_nm2.nfp)
+    B_psi_nm2 = type(B_psi_nm2)(B_psi_nm2_content_new, B_psi_nm2.nfp)
     B_psi_coef_cp = B_psi_coef_cp.append(B_psi_nm2.filter(traced_max_freq[1]))
 
     Zn = iterate_Zn_cp(n_eval=n_eval,
@@ -1317,13 +1317,22 @@ def iterate_2(equilibrium,
     ):
     if equilibrium.magnetic_only:
         return()
+    # Derive the backend from equilibrium's own containers (not hardcoded
+    # ChiPhiFunc) so these defaults match whichever backend the rest of the
+    # solve is using -- see architecture plan, "fixing the hardcoded
+    # construction sites". Order 1 (not 0) deliberately: B_denom_coef_c[0]
+    # (B0) is a bare scalar, not a ChiPhiFunc/ChiPhiFuncPadded instance, so
+    # type() on it wouldn't give a usable class; order 1 (B1) is always
+    # constructed as a genuine ChiPhiFunc_cls(..., trig_mode=True) in
+    # leading_orders.py, regardless of backend.
+    _chiphifunc_cls = type(equilibrium.constant['B_denom_coef_c'][1])
     if B_denom_nm1 is None:
-        B_denom_nm1 = ChiPhiFunc(
+        B_denom_nm1 = _chiphifunc_cls(
             jnp.array([[0],[0]]),
             equilibrium.nfp
         )
     if B_denom_n is None:
-        B_denom_n = ChiPhiFunc(
+        B_denom_n = _chiphifunc_cls(
             jnp.array([[0]]),
             equilibrium.nfp
         )
