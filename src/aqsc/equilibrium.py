@@ -659,7 +659,6 @@ class Equilibrium:
     def get_eps_conv(self):
         return 1 / self.get_divergence_rate()
 
-
     def B_vec_j_eps(self):
         '''
         Calculates vector B components.
@@ -752,6 +751,47 @@ class Equilibrium:
             # calculate the epsilon integral
             new_chiphifunc_list.append(new_chiphifunc)
         return ChiPhiEpsFunc(new_chiphifunc_list, self.nfp)
+
+    def volume_eps(self, eps, n_max=float('inf')):
+        '''
+        Calculates the plasma volume up to a specified eps.
+        '''
+        return jnp.real(
+            self.volume_integral(1, n_max=n_max).eval_eps(eps=eps, chi=0, phi=0)
+        )
+    
+    def beta_rms(self, eps, n_max=float('inf')):
+        vol = self.volume_eps(eps=eps, n_max=n_max)
+        p2 = self.p_perp * self.p_perp
+        Bm4 = self.B_denom * self.B_denom 
+        beta2 = p2 * Bm4 # p^2/B^4
+        beta2_int = self.volume_integral(beta2, n_max=n_max).eval_eps(eps, 0., 0.)
+        beta_rms = jnp.sqrt(jnp.real(
+            beta2_int/vol
+        ))
+        return beta_rms
+    
+    def major_radius(self):
+        '''
+        Calculates the effective major radius from axis length.
+        '''
+        return self.axis_info['axis_length']/jnp.pi/2
+    
+    def minor_radius_eps(self, eps, n_max=float('inf')):
+        '''
+        Calculates the effective minor radius up to a specified eps.
+        '''
+        vol = self.volume_eps(eps, n_max=n_max)
+        # torus vol is pi r^2 (2pi R)
+        return jnp.sqrt(vol / jnp.pi / (self.axis_info['axis_length']))
+
+    def aspect_ratio_eps(self, eps, n_max=float('inf')):
+        '''
+        Calculates the effective aspect ratio up to a specified eps.
+        '''
+        r = self.minor_radius_eps(eps, n_max=n_max)
+        R = self.major_radius()
+        return R/r
 
     def helicity(self):
         ''' 
