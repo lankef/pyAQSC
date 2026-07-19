@@ -521,6 +521,15 @@ class ChiPhiEpsFuncPadded:
     def get_max_order_by_order(self, len_chi:int=100, len_phi:int=100):
         return self.to_ragged().get_max_order_by_order(len_chi=len_chi, len_phi=len_phi)
 
+    def get_norm_order_by_order(self, **kwargs):
+        '''
+        Calculate the L2 norm of the term at each order.
+        (squared integral over chi and phi.)
+
+        :param kwargs: Parameters of jnp.linalg.norm
+        '''
+        return self.to_ragged().get_norm_order_by_order(**kwargs)
+
     @classmethod
     def zeros_like(cls, other):
         return cls(

@@ -545,7 +545,7 @@ class Equilibrium:
     def jacobian_nae(self):
         return(self.constant['B_alpha_coef'] * self.constant['B_denom_coef_c'])
 
-    def get_psi_crit(
+    def get_psi_crit_wip(
         self, n_max=float('inf'),
         n_grid_chi=100,
         n_grid_phi_skip=1,
@@ -555,6 +555,14 @@ class Equilibrium:
         rtol=1e-6,
         atol=1e-8):
         r'''
+        WIP / KNOWN ISSUE: can hang, do not use (see get_psi_crit_legacy).
+        optx.Bisection with flip='detect' and expand_if_necessary=True runs
+        an *unbounded* bracket-expansion while_loop in its init that max_steps
+        does not cap. Since jacobian_min(0)=0 and only turns negative past
+        psi_crit, expansion can chase a sign flip that never happens
+        (psi->0 keeps jacobian_min->0, never strictly positive; psi->inf
+        overflows to NaN), so root_find never returns.
+
         Estimates the critical epsilon where flux surface self-intersects,
         by finding the zero of $min_{\chi, \phi}[\sqrt{J}(\epsilon, \chi, \phi)]=0$
         with `optimistix.Bisection`. \sqrt{J}(\epsilon, \chi, \phi) at each search
@@ -610,7 +618,7 @@ class Equilibrium:
         n_iter = sol.stats['num_steps']
         return(psi_sln, jacobian_min(psi_sln), n_iter)
 
-    def get_psi_crit_legacy(
+    def get_psi_crit(
         self, n_max=float('inf'),
         n_grid_chi=100,
         n_grid_phi_skip=1,
