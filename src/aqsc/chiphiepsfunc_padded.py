@@ -505,6 +505,16 @@ class ChiPhiEpsFuncPadded:
         return ChiPhiEpsFunc(items, self.nfp, False)
 
 
+    def eval(self, psi, chi=None, phi=None, n_max=float('inf')):
+        return self.to_ragged().eval(psi, chi, phi, n_max=n_max)
+
+    def eval_eps(self, eps, chi=None, phi=None, n_max=float('inf')):
+        '''
+        Evaluate the power series at (eps, chi, phi). Non-hot-path: converts
+        to ragged and reuses ChiPhiEpsFunc.eval_eps (see ARCHITECTURE_PLAN).
+        '''
+        return self.to_ragged().eval_eps(eps, chi, phi, n_max=n_max)
+
     def get_l2_order_by_order(self):
         return self.to_ragged().get_l2_order_by_order()
 

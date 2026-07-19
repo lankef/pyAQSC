@@ -2,6 +2,7 @@
 # in parsed/. Necessary masking and/or n-substitution are included. All iterate_*
 # methods returns ChiPhiFunc's.
 import jax.numpy as jnp
+
 # import numpy as np # used in save_plain and get_helicity
 # from jax import jit, vmap, tree_util
 from jax import tree_util, jit, vmap, grad
@@ -11,6 +12,7 @@ from interpax import interp1d
 # from matplotlib import pyplot as plt
 
 # ChiPhiFunc and ChiPhiEpsFunc
+from .chiphifunc_padded import ChiPhiFuncPadded
 from .chiphifunc import *
 from .chiphiepsfunc import *
 from .math_utilities import *
@@ -562,6 +564,8 @@ class Equilibrium:
         if psi_init is None:
             effective_major_radius = self.axis_info['axis_length']/jnp.pi/2
             B0 = self.constant['B_denom_coef_c'][0]
+            if isinstance(B0, ChiPhiFuncPadded):
+                B0 = B0.content[0, 0]
             psi_init = jnp.sqrt(effective_major_radius**2 * B0)
         phi_gbc = self.axis_info['phi_gbc'][::n_grid_phi_skip]
         points_chi = jnp.linspace(0, 2*jnp.pi, n_grid_chi, endpoint=False)
