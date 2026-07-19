@@ -626,13 +626,20 @@ class Equilibrium:
         maxiter=100,
         tol=1e-8):
         r'''
-        Legacy implementation of get_psi_crit, kept for comparison against the
-        log(psi)/optimistix version above. Estimates the critical epsilon
-        where flux surface self-intersects by finding the zero of
+        Estimates the critical epsilon where flux surface self-intersects by
+        finding the zero of
         $min_{\chi, \phi}[\sqrt{J}(\epsilon, \chi, \phi)]=0$ using binary
         search directly in psi-space via a hand-rolled `lax.while_loop`.
         \sqrt{J}(\epsilon, \chi, \phi) at each search step is evaluated on a
         grid of given size.
+
+        The Fourier->grid evaluation of each eps-order of the Jacobian is
+        psi-independent, so it is precomputed once on the (chi, phi) grid
+        (this is the only place the expensive cubic interpolation happens).
+        Each bisection step then only forms
+        $\sum_n \mathrm{grid}_n\, (\sqrt{|\psi|})^n$, which is cheap. This
+        avoids re-running the cubic interpolation (and re-compiling the whole
+        loop body) on every step, matching `ChiPhiEpsFunc.eval_eps` semantics.
         '''
         if n_max<=1:
             raise ValueError('psi_crit is only valid for n>1.')
@@ -646,8 +653,40 @@ class Equilibrium:
         points_chi = jnp.linspace(0, 2*jnp.pi, n_grid_chi, endpoint=False)
 
         jac_eps = self.jacobian_eps(n_max=n_max)
-        jacobian_grid = lambda psi: jnp.real(jac_eps.eval(psi, points_chi[:, None], phi_gbc[None, :]))
-        jacobian_min = lambda psi: jnp.min(jacobian_grid(psi))
+        # Precompute each eps-order on the (chi, phi) grid once. This mirrors
+        # ChiPhiEpsFunc.eval_eps' per-order handling, but factors out the
+        # psi-independent part so the search loop stays cheap.
+        grid_shape = (n_grid_chi, phi_gbc.shape[0])
+        n_orders = int(min(len(jac_eps.chiphifunc_list), n_max + 1))
+        order_grids = []
+        for n in range(n_orders):
+            item = jac_eps.chiphifunc_list[n]
+            if isinstance(item, ChiPhiFunc):
+                if item.nfp == 0:
+                    grid_n = jnp.zeros(grid_shape, dtype=jnp.complex128)
+                elif item.nfp == self.nfp:
+                    grid_n = (
+                        item.eval(points_chi[:, None], phi_gbc[None, :])
+                        + jnp.zeros(grid_shape)
+                    )
+                else:
+                    grid_n = jnp.full(grid_shape, jnp.nan, dtype=jnp.complex128)
+            elif jnp.array(item).ndim == 0:
+                grid_n = jnp.full(grid_shape, item, dtype=jnp.complex128)
+            else:
+                grid_n = jnp.full(grid_shape, jnp.nan, dtype=jnp.complex128)
+            order_grids.append(grid_n)
+        order_grids = jnp.stack(order_grids)  # (n_orders, n_grid_chi, n_phi)
+        order_powers = jnp.arange(order_grids.shape[0])[:, None, None]
+        # eval_eps uses eps**2 as the base when the series is in eps^2.
+        square_eps_series = jac_eps.square_eps_series
+        def jacobian_min(psi):
+            eps = jnp.sqrt(jnp.abs(psi))
+            power_arg = eps**2 if square_eps_series else eps
+            jacobian_grid = jnp.real(
+                jnp.sum(order_grids * power_arg**order_powers, axis=0)
+            )
+            return jnp.min(jacobian_grid)
         def conv(dict_in):
             # conv = dict_in['conv']
             x = (dict_in['x1'] + dict_in['x2'])/2
