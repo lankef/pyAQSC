@@ -9,6 +9,7 @@ from jax import tree_util, jit, vmap, grad
 from jax.lax import fori_loop, while_loop
 from functools import partial # for JAX jit with static params
 from interpax import interp1d
+import optimistix as optx
 # from matplotlib import pyplot as plt
 
 # ChiPhiFunc and ChiPhiEpsFunc
@@ -545,19 +546,32 @@ class Equilibrium:
         return(self.constant['B_alpha_coef'] * self.constant['B_denom_coef_c'])
 
     def get_psi_crit(
-        self, n_max=float('inf'), 
+        self, n_max=float('inf'),
         n_grid_chi=100,
         n_grid_phi_skip=1,
         psi_init=None,
-        maxiter=100,
-        tol=1e-8):
+        psi_floor_ratio=1e-10,
+        max_steps=64,
+        rtol=1e-6,
+        atol=1e-8):
         r'''
-        Estimates the critical epsilon where flux surface self-intersects.
+        Estimates the critical epsilon where flux surface self-intersects,
         by finding the zero of $min_{\chi, \phi}[\sqrt{J}(\epsilon, \chi, \phi)]=0$
-        using binary search. \sqrt{J}(\epsilon, \chi, \phi) At each search step 
-        is evaluated on a grid of given size.
-        Can be diffed but is slow to compile, because it relies on newton iteration
-        for root finding. Reducing `n_newton_iter` substantially speeds up jit.
+        with `optimistix.Bisection`. \sqrt{J}(\epsilon, \chi, \phi) at each search
+        step is evaluated on a grid of given size.
+
+        psi_crit can be many orders of magnitude smaller than psi_init depending
+        on the equilibrium, so the search is done over log(psi) rather than psi:
+        this makes a fixed number of bisection steps cover a fixed *relative*
+        precision on psi regardless of its magnitude, instead of wasting most
+        iterations walking down linearly from psi_init. psi=0 can't be used as
+        a bracket endpoint in log-space (log(0) is undefined), so the lower
+        bound is a small psi_floor = psi_floor_ratio * psi_init instead;
+        jacobian_min is assumed to keep the same sign there as at psi=0 (which
+        is 0 by construction).
+
+        See `get_psi_crit_legacy` for the original psi-space `while_loop`
+        bisection this replaced.
         '''
         if n_max<=1:
             raise ValueError('psi_crit is only valid for n>1.')
@@ -570,9 +584,61 @@ class Equilibrium:
         phi_gbc = self.axis_info['phi_gbc'][::n_grid_phi_skip]
         points_chi = jnp.linspace(0, 2*jnp.pi, n_grid_chi, endpoint=False)
 
-        # Finding jacobian_min=0 using Newton's method.
-        # Here, using jacobian or jacobian_eps makes no difference
-        jacobian_grid = lambda psi: jnp.real(self.jacobian_eps(n_max=n_max).eval(psi, points_chi[:, None], phi_gbc[None, :]))
+        # Built once and reused for every evaluation during the search below,
+        # since it doesn't depend on psi.
+        jac_eps = self.jacobian_eps(n_max=n_max)
+        def jacobian_min(psi):
+            jacobian_grid = jnp.real(jac_eps.eval(psi, points_chi[:, None], phi_gbc[None, :]))
+            return jnp.min(jacobian_grid)
+
+        psi_floor = psi_floor_ratio * psi_init
+        log_lower = jnp.log(psi_floor)
+        log_upper = jnp.log(psi_init)
+
+        def fn(log_psi, args):
+            return jacobian_min(jnp.exp(log_psi))
+
+        solver = optx.Bisection(rtol=rtol, atol=atol, flip='detect', expand_if_necessary=True)
+        sol = optx.root_find(
+            fn, solver,
+            y0=(log_lower + log_upper) / 2,
+            options=dict(lower=log_lower, upper=log_upper),
+            max_steps=max_steps,
+            throw=False,
+        )
+        psi_sln = jnp.exp(sol.value)
+        n_iter = sol.stats['num_steps']
+        return(psi_sln, jacobian_min(psi_sln), n_iter)
+
+    def get_psi_crit_legacy(
+        self, n_max=float('inf'),
+        n_grid_chi=100,
+        n_grid_phi_skip=1,
+        psi_init=None,
+        maxiter=100,
+        tol=1e-8):
+        r'''
+        Legacy implementation of get_psi_crit, kept for comparison against the
+        log(psi)/optimistix version above. Estimates the critical epsilon
+        where flux surface self-intersects by finding the zero of
+        $min_{\chi, \phi}[\sqrt{J}(\epsilon, \chi, \phi)]=0$ using binary
+        search directly in psi-space via a hand-rolled `lax.while_loop`.
+        \sqrt{J}(\epsilon, \chi, \phi) at each search step is evaluated on a
+        grid of given size.
+        '''
+        if n_max<=1:
+            raise ValueError('psi_crit is only valid for n>1.')
+        if psi_init is None:
+            effective_major_radius = self.axis_info['axis_length']/jnp.pi/2
+            B0 = self.constant['B_denom_coef_c'][0]
+            if isinstance(B0, ChiPhiFuncPadded):
+                B0 = jnp.real(B0.content[0, 0])
+            psi_init = jnp.sqrt(effective_major_radius**2 * B0)
+        phi_gbc = self.axis_info['phi_gbc'][::n_grid_phi_skip]
+        points_chi = jnp.linspace(0, 2*jnp.pi, n_grid_chi, endpoint=False)
+
+        jac_eps = self.jacobian_eps(n_max=n_max)
+        jacobian_grid = lambda psi: jnp.real(jac_eps.eval(psi, points_chi[:, None], phi_gbc[None, :]))
         jacobian_min = lambda psi: jnp.min(jacobian_grid(psi))
         def conv(dict_in):
             # conv = dict_in['conv']
@@ -592,11 +658,11 @@ class Equilibrium:
             y2 = jacobian_min(x2)
             y = jacobian_min(x)
             # If y2 and y have different signs, then x1_new is x, x2_new is x2
-            # jac_min(0)=0, so we can't use y1 and y as the condition to use 0 as 
+            # jac_min(0)=0, so we can't use y1 and y as the condition to use 0 as
             # y1.
             x1_new = jnp.where(y2 * y <= 0, x, x1)
             x2_new = jnp.where(y2 * y <= 0, x2, x)
-            return({ 
+            return({
                 'i': i + 1,
                 'x1': x1_new,
                 'x2': x2_new,
@@ -609,29 +675,6 @@ class Equilibrium:
         psi_sln = (dict_out['x1'] + dict_out['x2'])/2
         n_iter = dict_out['i']
         return(psi_sln, jacobian_min(psi_sln), n_iter)
-        '''
-        # Zero-finding with binary search is faster but cannot be jitted.
-        # Binary search for jacobian_min=0,
-        # knowing jacobian_min(0)=0 and assuming jacobian_min is concave.
-        x_left = 0
-        x_right = bad_eps_init
-        # g_tol is the tolerance and supposed to
-        error = g_tol + 1
-        n_iter = 0
-        n_bindary_iter_max = 200
-        # Tolerance-based stopping is disabled for now
-        # while error > g_tol and n_iter < n_bindary_iter_max:
-        # while error > g_tol and n_iter < n_bindary_iter_max:
-            # We assume that jacobian_min is concave and is 0 at 0.
-            x_mid = .5*x_left + .5*x_right
-            y_mid = jacobian_min(x_mid)
-            if y_mid>0:
-                x_left = x_mid
-            else: 
-                x_right = x_mid
-            error = jnp.abs(y_mid)
-            n_iter += 1
-        '''  
 
     def get_divergence_rate(self):
         ''' Calculates the average divergence rate using the highest three orders '''
