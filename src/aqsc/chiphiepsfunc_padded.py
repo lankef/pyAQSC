@@ -40,32 +40,39 @@ this default is insufficient somewhere, it is the one place to raise it.
 '''
 
 
-def _offset_even(n: int) -> int:
-    ''' Row offset of order n (even) within the even-order triangular store. '''
+def _offset_even(n: int, chi_shift: int = 0) -> int:
+    '''
+    Row offset of order n (even) within the even-order triangular store.
+
+    With chi_shift, every stored order's natural width is widened uniformly
+    by chi_shift (order m holds m+1+chi_shift rows), so the offset of even
+    order n picks up an extra chi_shift per even order below it (there are
+    n//2 of them).
+    '''
     k = n // 2
-    return k * k
+    return k * k + k * chi_shift
 
 
-def _offset_odd(n: int) -> int:
+def _offset_odd(n: int, chi_shift: int = 0) -> int:
     ''' Row offset of order n (odd) within the odd-order triangular store. '''
     k = (n - 1) // 2
-    return k * (k + 1)
+    return k * (k + 1) + k * chi_shift
 
 
-def _total_even_rows_through(n_even: int) -> int:
+def _total_even_rows_through(n_even: int, chi_shift: int = 0) -> int:
     ''' Total rows used by even orders 0..n_even inclusive (n_even even, or <0 for none). '''
     if n_even < 0:
         return 0
     k = n_even // 2
-    return (k + 1) ** 2
+    return (k + 1) ** 2 + (k + 1) * chi_shift
 
 
-def _total_odd_rows_through(n_odd: int) -> int:
+def _total_odd_rows_through(n_odd: int, chi_shift: int = 0) -> int:
     ''' Total rows used by odd orders 1..n_odd inclusive (n_odd odd, or <1 for none). '''
     if n_odd < 1:
         return 0
     k = (n_odd - 1) // 2
-    return (k + 1) * (k + 2)
+    return (k + 1) * (k + 2) + (k + 1) * chi_shift
 
 
 class ChiPhiEpsFuncPadded:
@@ -85,13 +92,22 @@ class ChiPhiEpsFuncPadded:
     is a property of the container (mode_cap), not of any stored order.
     '''
 
-    def __init__(self, chiphifunc_list: list, nfp: int, mode_cap: int = None, len_phi: int = None):
+    def __init__(self, chiphifunc_list: list, nfp: int, mode_cap: int = None, len_phi: int = None, chi_shift: int = 0):
+        # chi_shift: uniform widening of every order's natural chi width
+        # (order n holds n+1+chi_shift rows instead of n+1). 0 for ordinary
+        # chi-expanding coefficient series (the default, near-axis
+        # regularity). deps() produces chi_shift=+1 because it relabels
+        # order-(i+1) content -- whose chi width is one wider and of the
+        # opposite parity -- as order i; truncating that back to n+1 (the
+        # old behavior) silently dropped a physically-nonzero outermost chi
+        # mode. See deps() for details.
         self.nfp = nfp
         self.square_eps_series = False
+        self.chi_shift = chi_shift
         n_max = len(chiphifunc_list) - 1
         if mode_cap is None:
             mode_cap = max(n_max, 0) + DEFAULT_MODE_CAP_MARGIN
-        mode_cap = max(mode_cap, n_max)
+        mode_cap = max(mode_cap, n_max + chi_shift)
 
         if len_phi is None:
             len_phi = None
@@ -116,7 +132,7 @@ class ChiPhiEpsFuncPadded:
         even_pieces = []
         odd_pieces = []
         for n, item in enumerate(chiphifunc_list):
-            code, raw = _classify_item(item, n, len_phi)
+            code, raw = _classify_item(item, n, len_phi, chi_shift)
             special.append(code)
             (even_pieces if n % 2 == 0 else odd_pieces).append(raw)
 
@@ -128,11 +144,12 @@ class ChiPhiEpsFuncPadded:
             jnp.concatenate(odd_pieces, axis=0) if odd_pieces
             else jnp.zeros((0, len_phi), dtype=_complex_dtype)
         )
-        self._init_raw(even_content, odd_content, nfp, n_max, mode_cap, len_phi, special)
+        self._init_raw(even_content, odd_content, nfp, n_max, mode_cap, len_phi, special, chi_shift)
 
-    def _init_raw(self, even_content, odd_content, nfp, n_max, mode_cap, len_phi, special):
+    def _init_raw(self, even_content, odd_content, nfp, n_max, mode_cap, len_phi, special, chi_shift=0):
         self.nfp = nfp
         self.square_eps_series = False
+        self.chi_shift = chi_shift
         self.n_max = n_max
         self.mode_cap = mode_cap
         self.chi_cap_even, self.chi_cap_odd = _widths_for_mode_cap(mode_cap)
@@ -142,9 +159,9 @@ class ChiPhiEpsFuncPadded:
         self.odd_content = odd_content
 
     @classmethod
-    def _from_raw(cls, even_content, odd_content, nfp, n_max, mode_cap, len_phi, special):
+    def _from_raw(cls, even_content, odd_content, nfp, n_max, mode_cap, len_phi, special, chi_shift=0):
         self = object.__new__(cls)
-        self._init_raw(even_content, odd_content, nfp, n_max, mode_cap, len_phi, list(special))
+        self._init_raw(even_content, odd_content, nfp, n_max, mode_cap, len_phi, list(special), chi_shift)
         return self
 
     def _tree_flatten(self):
@@ -152,6 +169,7 @@ class ChiPhiEpsFuncPadded:
         aux_data = {
             'nfp': self.nfp, 'n_max': self.n_max, 'mode_cap': self.mode_cap,
             'len_phi': self.len_phi, 'special': tuple(self.special),
+            'chi_shift': self.chi_shift,
         }
         return (children, aux_data)
 
@@ -161,13 +179,13 @@ class ChiPhiEpsFuncPadded:
         return cls._from_raw(
             even_content, odd_content, nfp=aux_data['nfp'], n_max=aux_data['n_max'],
             mode_cap=aux_data['mode_cap'], len_phi=aux_data['len_phi'],
-            special=list(aux_data['special']),
+            special=list(aux_data['special']), chi_shift=aux_data['chi_shift'],
         )
 
     def __str__(self):
         return (
             f'ChiPhiEpsFuncPadded(n_max={self.n_max}, mode_cap={self.mode_cap}, '
-            f'nfp={self.nfp}, special={self.special})'
+            f'chi_shift={self.chi_shift}, nfp={self.nfp}, special={self.special})'
         )
 
     ''' Resizing '''
@@ -182,7 +200,7 @@ class ChiPhiEpsFuncPadded:
         new_mode_cap = max(new_mode_cap, self.mode_cap)
         return ChiPhiEpsFuncPadded._from_raw(
             self.even_content, self.odd_content, self.nfp, self.n_max,
-            new_mode_cap, self.len_phi, self.special,
+            new_mode_cap, self.len_phi, self.special, self.chi_shift,
         )
 
     ''' Indexing '''
@@ -216,8 +234,11 @@ class ChiPhiEpsFuncPadded:
                 return ChiPhiFuncPaddedSpecial(code)
             even = (index % 2 == 0)
             store = self.even_content if even else self.odd_content
-            offset = _offset_even(index) if even else _offset_odd(index)
-            size = index + 1
+            offset = (
+                _offset_even(index, self.chi_shift) if even
+                else _offset_odd(index, self.chi_shift)
+            )
+            size = index + 1 + self.chi_shift
             raw = store[offset: offset + size]
             return ChiPhiFuncPadded(raw, self.nfp)
 
@@ -237,6 +258,19 @@ class ChiPhiEpsFuncPadded:
         # (py_sum_parallel) is responsible for converting the final
         # accumulated result back to normal representation via
         # .comb_to_normal(target_m) once the target parity is known.
+        if self.chi_shift != 0:
+            # The traced-index (comb) path is only exercised inside
+            # py_sum_parallel's lax.scan over ordinary chi-expanding
+            # coefficient series, which always have chi_shift==0. deps()-style
+            # shifted-width series (chi_shift!=0) only ever flow through
+            # concrete-index geometry code (contravariant_basis_eps etc.), so
+            # this branch should never be reached for them; the comb row<->mode
+            # mapping below assumes width index+1 and would misalign otherwise.
+            raise NotImplementedError(
+                'ChiPhiEpsFuncPadded: traced-index __getitem__ is not supported '
+                'for chi_shift != 0 (shifted-width series only support '
+                'concrete-index access).'
+            )
         n_max = self.n_max  # static
         mode_cap = self.mode_cap  # static
         comb_width = 2 * mode_cap + 1
@@ -275,7 +309,7 @@ class ChiPhiEpsFuncPadded:
         # special-ragged-placeholder exception -- see its docstring); no
         # need to duplicate/pre-empt that logic here.
         n = self.n_max + 1
-        code, raw = _classify_item(item, n, self.len_phi)
+        code, raw = _classify_item(item, n, self.len_phi, self.chi_shift)
         even = (n % 2 == 0)
         even_content = self.even_content
         odd_content = self.odd_content
@@ -283,10 +317,10 @@ class ChiPhiEpsFuncPadded:
             even_content = jnp.concatenate([even_content, raw], axis=0)
         else:
             odd_content = jnp.concatenate([odd_content, raw], axis=0)
-        new_mode_cap = max(self.mode_cap, n)
+        new_mode_cap = max(self.mode_cap, n + self.chi_shift)
         return ChiPhiEpsFuncPadded._from_raw(
             even_content, odd_content, self.nfp, n, new_mode_cap, self.len_phi,
-            self.special + [code],
+            self.special + [code], self.chi_shift,
         )
 
     def zero_append(self, n=1):
@@ -301,15 +335,16 @@ class ChiPhiEpsFuncPadded:
             return ChiPhiEpsFuncPadded._from_raw(
                 jnp.zeros((0, self.len_phi), dtype=_complex_dtype),
                 jnp.zeros((0, self.len_phi), dtype=_complex_dtype),
-                self.nfp, -1, self.mode_cap, self.len_phi, [],
+                self.nfp, -1, self.mode_cap, self.len_phi, [], self.chi_shift,
             )
         largest_even = n if n % 2 == 0 else n - 1
         largest_odd = n if n % 2 == 1 else n - 1
-        even_rows = _total_even_rows_through(largest_even)
-        odd_rows = _total_odd_rows_through(largest_odd)
+        even_rows = _total_even_rows_through(largest_even, self.chi_shift)
+        odd_rows = _total_odd_rows_through(largest_odd, self.chi_shift)
         return ChiPhiEpsFuncPadded._from_raw(
             self.even_content[:even_rows], self.odd_content[:odd_rows],
             self.nfp, n, self.mode_cap, self.len_phi, self.special[:n + 1],
+            self.chi_shift,
         )
 
     def get_order(self):
@@ -372,30 +407,38 @@ class ChiPhiEpsFuncPadded:
 
         For a series f = sum_n f_n * eps^n, deps(f)_i = (i+1) * f_{i+1}.
 
-        This shifts the epsilon order by -1, which swaps which parity of
-        chi modes goes into even_content vs odd_content: source order i+1
-        lives in odd_content when result order i is even, and vice versa.
-        The source natural width i+2 is trimmed to the target natural width
-        i+1 via centered_resize_content; the discarded outermost chi mode
-        (±(i+1)) is physically zero for a correctly-built equilibrium.
+        This shifts the epsilon order by -1. Result order i takes source
+        order (i+1)'s content verbatim (scaled by i+1). That content has
+        chi width (i+2)+self.chi_shift and the chi parity of order i+1 --
+        one wider, and opposite parity, relative to what a natural
+        chi_shift=0 slot for order i would hold. Rather than truncate it
+        back to i+1 (the old behavior, which silently dropped the
+        physically-nonzero outermost chi mode ±(i+1) and misaligned the
+        rest by a half-row parity flip), the result simply carries
+        chi_shift + 1: every order is stored at its true, one-wider width,
+        so no chi information is lost.
         '''
         new_n_max = self.n_max - 1
+        new_shift = self.chi_shift + 1
         even_pieces, odd_pieces, special = [], [], []
         for i in range(new_n_max + 1):
             src = i + 1
-            target_width = i + 1
-            src_width = src + 1  # = i + 2
+            # Width of source order (i+1), which becomes result order i's
+            # width verbatim -- exactly the natural width of order i under
+            # the incremented chi_shift, so no resize is needed.
+            width = src + 1 + self.chi_shift  # = (i + 2) + self.chi_shift
             src_code = self.special[src]
             special.append(src_code)
             if src_code != 0:
-                raw = jnp.zeros((target_width, self.len_phi), dtype=_complex_dtype)
+                raw = jnp.zeros((width, self.len_phi), dtype=_complex_dtype)
             else:
                 src_even = (src % 2 == 0)
                 store = self.even_content if src_even else self.odd_content
-                offset = _offset_even(src) if src_even else _offset_odd(src)
-                raw_src = store[offset: offset + src_width]
-                # Trim i+2 → i+1 rows (removes the highest positive chi mode).
-                raw = centered_resize_content(raw_src, target_width) * (i + 1)
+                offset = (
+                    _offset_even(src, self.chi_shift) if src_even
+                    else _offset_odd(src, self.chi_shift)
+                )
+                raw = store[offset: offset + width] * (i + 1)
             (even_pieces if i % 2 == 0 else odd_pieces).append(raw)
         even_content = (
             jnp.concatenate(even_pieces, axis=0) if even_pieces
@@ -407,7 +450,8 @@ class ChiPhiEpsFuncPadded:
         )
         return ChiPhiEpsFuncPadded._from_raw(
             even_content, odd_content, self.nfp, new_n_max,
-            self.mode_cap, self.len_phi, special,
+            max(self.mode_cap, new_n_max + new_shift), self.len_phi, special,
+            new_shift,
         )
 
     def dchi(self):
@@ -417,27 +461,42 @@ class ChiPhiEpsFuncPadded:
         return self._map_orders(lambda f: f.dphi())
 
     def _map_orders(self, fn):
-        ''' Shared helper for dchi/dphi: apply fn order-by-order, rebuild triangular stores. '''
+        ''' Shared helper for dchi/dphi: apply fn order-by-order, rebuild triangular stores.
+        Preserves chi_shift (fn is width-preserving: dchi/dphi/negate/scalar-mul). '''
         even_pieces, odd_pieces, special = [], [], []
         for n in range(self.n_max + 1):
+            width = n + 1 + self.chi_shift
             code = self.special[n]
             special.append(code)
             if code != 0:
-                natural = jnp.zeros((n + 1, self.len_phi), dtype=_complex_dtype)
+                natural = jnp.zeros((width, self.len_phi), dtype=_complex_dtype)
             else:
                 even = (n % 2 == 0)
                 store = self.even_content if even else self.odd_content
-                offset = _offset_even(n) if even else _offset_odd(n)
-                natural_in = store[offset: offset + n + 1]
-                chi_cap = self.chi_cap_even if even else self.chi_cap_odd
-                padded_in = centered_resize_content(natural_in, chi_cap)
-                out = fn(ChiPhiFuncPadded(padded_in, self.nfp))
-                natural = centered_resize_content(out.content, n + 1) if not out.is_special() else jnp.zeros((n + 1, self.len_phi), dtype=_complex_dtype)
+                offset = (
+                    _offset_even(n, self.chi_shift) if even
+                    else _offset_odd(n, self.chi_shift)
+                )
+                natural_in = store[offset: offset + width]
+                if self.chi_shift == 0:
+                    # Original behavior: work at the container's chi_cap
+                    # (parity matches the natural width when chi_shift==0),
+                    # then trim back.
+                    chi_cap = self.chi_cap_even if even else self.chi_cap_odd
+                    work_in = centered_resize_content(natural_in, chi_cap)
+                else:
+                    # Shifted widths can differ in parity from chi_cap_*;
+                    # dchi/dphi are width-preserving, so just work at the
+                    # order's own (parity-correct) natural width.
+                    work_in = natural_in
+                out = fn(ChiPhiFuncPadded(work_in, self.nfp))
+                natural = centered_resize_content(out.content, width) if not out.is_special() else jnp.zeros((width, self.len_phi), dtype=_complex_dtype)
             (even_pieces if n % 2 == 0 else odd_pieces).append(natural)
         even_content = jnp.concatenate(even_pieces, axis=0) if even_pieces else jnp.zeros((0, self.len_phi), dtype=_complex_dtype)
         odd_content = jnp.concatenate(odd_pieces, axis=0) if odd_pieces else jnp.zeros((0, self.len_phi), dtype=_complex_dtype)
         return ChiPhiEpsFuncPadded._from_raw(
             even_content, odd_content, self.nfp, self.n_max, self.mode_cap, self.len_phi, special,
+            self.chi_shift,
         )
 
     ''' Arithmetic (operating on the whole series, mirroring ChiPhiEpsFunc) '''
@@ -450,7 +509,13 @@ class ChiPhiEpsFuncPadded:
             n_max = max(self.n_max, other.n_max)
             items = [self[i] + other[i] for i in range(n_max + 1)]
             mode_cap = max(self.mode_cap, other.mode_cap)
-            return ChiPhiEpsFuncPadded(items, self.nfp, mode_cap=mode_cap, len_phi=self.len_phi)
+            # Same-width addition preserves the shift; a mismatch (only
+            # possible if the two operands carry different chi_shift) results
+            # in the wider width, and same-parity reconciliation is handled
+            # per-item by ChiPhiFuncPadded.__add__ (a parity mismatch there
+            # surfaces as a special error, never a silent misalignment).
+            chi_shift = max(self.chi_shift, other.chi_shift)
+            return ChiPhiEpsFuncPadded(items, self.nfp, mode_cap=mode_cap, len_phi=self.len_phi, chi_shift=chi_shift)
         if isinstance(other, (ChiPhiFunc, ChiPhiEpsFunc)):
             raise TypeError(
                 'ChiPhiEpsFuncPadded combined with a ragged ChiPhiFunc/ChiPhiEpsFunc -- '
@@ -478,7 +543,10 @@ class ChiPhiEpsFuncPadded:
                 for i in range(max(0, k - other.n_max), min(self.n_max, k) + 1):
                     acc = acc + self[i] * other[k - i]
                 items.append(acc)
-            return ChiPhiEpsFuncPadded(items, self.nfp, len_phi=self.len_phi)
+            # Convolving widths adds them: order-k product has width
+            # (i+1+sa)+(k-i+1+sb)-1 = k+1+(sa+sb), i.e. chi_shift = sa+sb.
+            chi_shift = self.chi_shift + other.chi_shift
+            return ChiPhiEpsFuncPadded(items, self.nfp, len_phi=self.len_phi, chi_shift=chi_shift)
         if isinstance(other, (ChiPhiFunc, ChiPhiEpsFunc)):
             raise TypeError(
                 'ChiPhiEpsFuncPadded combined with a ragged ChiPhiFunc/ChiPhiEpsFunc -- '
@@ -492,7 +560,7 @@ class ChiPhiEpsFuncPadded:
     def _replace_order(self, index, item):
         items = [self[i] for i in range(self.n_max + 1)]
         items[index] = item
-        return ChiPhiEpsFuncPadded(items, self.nfp, mode_cap=self.mode_cap, len_phi=self.len_phi)
+        return ChiPhiEpsFuncPadded(items, self.nfp, mode_cap=self.mode_cap, len_phi=self.len_phi, chi_shift=self.chi_shift)
 
     ''' Interop '''
 
@@ -538,33 +606,39 @@ class ChiPhiEpsFuncPadded:
         )
 
 
-def _classify_item(item, n: int, len_phi: int):
+def _classify_item(item, n: int, len_phi: int, chi_shift: int = 0):
     '''
     Given a raw list element (as passed to ChiPhiEpsFuncPadded's constructor
     or .append()) destined for order n, returns (special_code, content)
-    where content is always a (n+1, len_phi) array (zeros for special/error
-    items -- specialness is tracked via special_code, not via the stored
-    array, so it never contaminates arithmetic with NaN).
+    where content is always a (n+1+chi_shift, len_phi) array (zeros for
+    special/error items -- specialness is tracked via special_code, not via
+    the stored array, so it never contaminates arithmetic with NaN).
+
+    chi_shift widens every order's natural width uniformly (see
+    ChiPhiEpsFuncPadded.__init__ / deps): order n holds n+1+chi_shift rows.
     '''
-    natural_shape = (n + 1, len_phi)
+    natural_width = n + 1 + chi_shift
+    natural_shape = (natural_width, len_phi)
     if isinstance(item, ChiPhiFuncPadded):
         if item.is_special():
             return item.nfp, jnp.zeros(natural_shape, dtype=_complex_dtype)
         width = item.content.shape[0]
-        if width > n + 1:
+        if width > natural_width:
             raise ValueError(
                 f'ChiPhiEpsFuncPadded: item at order {n} has content.shape[0]='
-                f'{width}, wider than the near-axis-regularity maximum of {n + 1}.'
+                f'{width}, wider than the maximum of {natural_width} '
+                f'(n+1+chi_shift, chi_shift={chi_shift}).'
             )
-        if width % 2 != (n + 1) % 2:
+        if width % 2 != natural_width % 2:
             raise ValueError(
                 f'ChiPhiEpsFuncPadded: item at order {n} has content.shape[0]='
-                f'{width}, wrong parity for order {n} (expected {(n+1)%2}-parity '
-                f'row count, i.e. matching {n+1} mod 2).'
+                f'{width}, wrong parity for order {n} (expected '
+                f'{natural_width%2}-parity row count, i.e. matching '
+                f'{natural_width} mod 2, chi_shift={chi_shift}).'
             )
         content = item.content
-        if width < n + 1:
-            # Narrower-than-n+1-but-same-parity is a real, intentional
+        if width < natural_width:
+            # Narrower-than-natural-but-same-parity is a real, intentional
             # pattern in this codebase, not an error: e.g. leading_orders.py
             # appends B_theta_coef_cp[2] as just its chi-independent (width
             # 1) average, to be widened by later arithmetic reconciliation
@@ -575,7 +649,7 @@ def _classify_item(item, n: int, len_phi: int):
             # centered formula ordinary arithmetic reconciliation would use
             # anyway keeps padded behavior identical, just done eagerly
             # instead of lazily.
-            content = centered_resize_content(content, n + 1)
+            content = centered_resize_content(content, natural_width)
         if content.shape[1] != len_phi:
             content = jnp.broadcast_to(content, (content.shape[0], len_phi))
         return 0, content
@@ -592,14 +666,16 @@ def _classify_item(item, n: int, len_phi: int):
             'ChiPhiFuncPadded -- construction site producing the wrong family.'
         )
     if jnp.ndim(item) == 0:
-        if n % 2 != 0:
+        if natural_width % 2 == 0:
             raise ValueError(
-                f'ChiPhiEpsFuncPadded: a bare scalar was given for order {n}, which is '
-                'odd -- odd orders never have a mode-0 (chi-independent) component, so '
-                'a scalar entry only makes sense at an even order.'
+                f'ChiPhiEpsFuncPadded: a bare scalar was given for order {n} '
+                f'(natural width {natural_width}, chi_shift={chi_shift}), which '
+                'has no mode-0 (chi-independent) row -- a scalar entry only '
+                'makes sense where the natural width is odd.'
             )
         content = jnp.zeros(natural_shape, dtype=_complex_dtype)
-        content = content.at[n // 2, :].set(item)
+        # Mode-0 row is the center of an odd-width buffer.
+        content = content.at[(natural_width - 1) // 2, :].set(item)
         return 0, content
     raise TypeError(
         f'ChiPhiEpsFuncPadded: item at order {n} is neither ChiPhiFuncPadded, '

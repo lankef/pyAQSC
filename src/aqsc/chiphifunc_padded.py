@@ -103,6 +103,7 @@ import jax.numpy as jnp
 import jax.lax as lax
 import matplotlib.pyplot as plt
 
+from interpax import interp1d
 from jax import tree_util
 from typing import Protocol, runtime_checkable, Union
 
@@ -728,7 +729,42 @@ class ChiPhiFuncPadded:
             raise ValueError('to_ragged() called on a comb-representation object.')
         return ChiPhiFunc(self.content, self.nfp)
 
-    
+    def eval(self, chi, phi):
+        '''
+        Getting a 2d vectorized f(chi, phi), mirroring ChiPhiFunc.eval.
+        Valid only on the normal (non-comb) representation, whose natural
+        content follows the same row<->mode convention as ChiPhiFunc
+        (row r <-> mode 2r - (L-1)), so the evaluation is identical.
+        '''
+        if self.is_comb:
+            raise ValueError('eval() called on a comb-representation object.')
+        # Broadcasting phi, chi to the same shape
+        phi = phi + jnp.zeros_like(chi)
+        chi = chi + jnp.zeros_like(phi)
+
+        if self.nfp == 0:
+            return(0)
+        if self.nfp < 0:
+            return(jnp.nan)
+
+        len_chi = self.content.shape[0]
+        len_phi = self.content.shape[1]
+
+        phi_grid = jnp.linspace(0, 2 * jnp.pi / self.nfp, len_phi, endpoint=False)
+        interp = interp1d(
+            phi.flatten(),
+            phi_grid,
+            self.content.T,
+            method=interp1d_method,
+            period=2*jnp.pi/self.nfp
+        ).reshape(list(phi.shape)+[-1])
+
+        chi_harm_m = (jnp.arange(len_chi) * 2 - len_chi + 1)
+        phase = jnp.exp(1j * (chi.flatten()[:, None] * chi_harm_m).reshape(list(phi.shape)+[-1]))
+        result = jnp.sum(interp * phase, axis=-1)
+        return(result)
+
+
     ''' I.1.5 Output and plotting '''
     def display_content(self, trig_mode=False, colormap_mode=False):
         '''

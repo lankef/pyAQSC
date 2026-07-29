@@ -657,11 +657,11 @@ class Equilibrium:
         # ChiPhiEpsFunc.eval_eps' per-order handling, but factors out the
         # psi-independent part so the search loop stays cheap.
         grid_shape = (n_grid_chi, phi_gbc.shape[0])
-        n_orders = int(min(len(jac_eps.chiphifunc_list), n_max + 1))
+        n_orders = int(min(jac_eps.get_order() + 1, n_max + 1))
         order_grids = []
         for n in range(n_orders):
-            item = jac_eps.chiphifunc_list[n]
-            if isinstance(item, ChiPhiFunc):
+            item = jac_eps[n]
+            if isinstance(item, (ChiPhiFunc, ChiPhiFuncPadded)):
                 if item.nfp == 0:
                     grid_n = jnp.zeros(grid_shape, dtype=jnp.complex128)
                 elif item.nfp == self.nfp:
