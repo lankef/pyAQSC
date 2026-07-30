@@ -199,13 +199,13 @@ Returns:
 - `ChiPhiEpsFunc` - The volume integral as a function of $\epsilon$.
 
 
-### `aqsc.Equilibrium.get_psi_crit(n_max=float('inf'), n_grid_chi=100, n_grid_phi_skip=10, psi_init=None,  maxiter=100, tol=1e-8)`
+### `aqsc.Equilibrium.get_psi_crit(n_max=float('inf'), n_grid_chi=100, n_grid_phi_skip=1, psi_init=None, psi_floor_ratio=1e-10, max_steps=100, rtol=1e-6, atol=1e-8)`
 Estimates the critical $\epsilon=\sqrt{\psi}$ or $\psi$ where flux surface self-intersects
-by numerically the smallest $\epsilon$ or $\psi$ with $\min_{\chi, \phi}\frac{\partial\bold{r}}{\partial\psi}\cdot(\frac{\partial\bold{r}}{\partial\chi}\times\frac{\partial\bold{r}}{\partial\phi})\leq0$. Uses bisection. This function evaluates the Jacobian on a grid of $\chi$ and $\phi$ to find the minimum. The $\chi$ grid has `n_grid_chi` uniformly spaced points, and the `\phi` grid takes every `n_grid_phi_skip` element from `self.axis_info['phi_gbc']` to reduce interpolation error.
+by numerically finding the smallest $\epsilon$ or $\psi$ with $\min_{\chi, \phi}\frac{\partial\bold{r}}{\partial\psi}\cdot(\frac{\partial\bold{r}}{\partial\chi}\times\frac{\partial\bold{r}}{\partial\phi})\leq0$. Uses bisection over $\log(\psi)$ via `optimistix.Bisection`, wrapped in implicit differentiation so `jax.grad` through this function gives correct gradients. This function evaluates the Jacobian on a grid of $\chi$ and $\phi$ to find the minimum. The $\chi$ grid has `n_grid_chi` uniformly spaced points, and the `\phi` grid takes every `n_grid_phi_skip` element from `self.axis_info['phi_gbc']` to reduce interpolation error.
 
-This function can be slow to JIT compile. When good accuracy is not required, reducing `n_newton_iter`, `n_grid_chi` and increasing `n_grid_phi_skip` can substantially increase the compile speed.
+This function can be slow to JIT compile. When good accuracy is not required, reducing `n_grid_chi` and increasing `n_grid_phi_skip` can substantially increase the compile speed.
 
-JIT compiling the function setting `eps_cap` as traced will not cause errors, but it increases compile time and is not recommended.
+A legacy, non-differentiable implementation using a hand-rolled `lax.while_loop` bisection directly in $\psi$-space is kept as `aqsc.Equilibrium.get_psi_crit_legacy` (same signature apart from `maxiter`/`tol` in place of `max_steps`/`psi_floor_ratio`/`rtol`/`atol`).
 
 Parameters:
 
@@ -216,9 +216,11 @@ The critical point occurs when $min(\sqrt{g}\leq0)$.
 
 - `psi_init = None` (static) - Initial guess for $\psi_{crit}$. By default, uses $B_{axis}R^2_0$.
 
-- `maxiter = 50 : int` (static) - Maximum number of steps in Newton's method.
+- `psi_floor_ratio = 1e-10 : float` (static) - Lower bracket for the $\log(\psi)$ search, as a fraction of `psi_init`.
 
-- `tol = 1e-8 : float` (traced) - Tolerance for solving $J=0$.
+- `max_steps = 100 : int` (static) - Maximum number of bisection steps.
+
+- `rtol = 1e-6, atol = 1e-8 : float` (traced) - Relative/absolute tolerance for solving $J=0$.
 
 Returns: 
 

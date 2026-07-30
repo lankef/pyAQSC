@@ -545,28 +545,28 @@ class Equilibrium:
     def jacobian_nae(self):
         return(self.constant['B_alpha_coef'] * self.constant['B_denom_coef_c'])
 
-    def get_psi_crit_wip(
+    def get_psi_crit(
         self, n_max=float('inf'),
         n_grid_chi=100,
         n_grid_phi_skip=1,
         psi_init=None,
         psi_floor_ratio=1e-10,
-        max_steps=64,
+        max_steps=100,
         rtol=1e-6,
         atol=1e-8):
         r'''
-        WIP / KNOWN ISSUE: can hang, do not use (see get_psi_crit_legacy).
-        optx.Bisection with flip='detect' and expand_if_necessary=True runs
-        an *unbounded* bracket-expansion while_loop in its init that max_steps
-        does not cap. Since jacobian_min(0)=0 and only turns negative past
-        psi_crit, expansion can chase a sign flip that never happens
-        (psi->0 keeps jacobian_min->0, never strictly positive; psi->inf
-        overflows to NaN), so root_find never returns.
-
         Estimates the critical epsilon where flux surface self-intersects,
         by finding the zero of $min_{\chi, \phi}[\sqrt{J}(\epsilon, \chi, \phi)]=0$
         with `optimistix.Bisection`. \sqrt{J}(\epsilon, \chi, \phi) at each search
         step is evaluated on a grid of given size.
+
+        The Fourier->grid evaluation of each eps-order of the Jacobian is
+        psi-independent, so it is precomputed once on the (chi, phi) grid
+        (this is the only place the expensive cubic interpolation happens).
+        Each bisection step then only forms
+        $\sum_n \mathrm{grid}_n\, (\sqrt{|\psi|})^n$, which is cheap. This
+        avoids re-running the cubic interpolation (and re-compiling the whole
+        loop body) on every step, matching `ChiPhiEpsFunc.eval_eps` semantics.
 
         psi_crit can be many orders of magnitude smaller than psi_init depending
         on the equilibrium, so the search is done over log(psi) rather than psi:
@@ -576,10 +576,18 @@ class Equilibrium:
         a bracket endpoint in log-space (log(0) is undefined), so the lower
         bound is a small psi_floor = psi_floor_ratio * psi_init instead;
         jacobian_min is assumed to keep the same sign there as at psi=0 (which
-        is 0 by construction).
+        is 0 by construction). expand_if_necessary is left at its default
+        (False): with True, optimistix runs an *unbounded* bracket-expansion
+        while_loop in its init that max_steps does not cap, and since
+        jacobian_min(0)=0 (never strictly positive) that expansion never
+        finds a sign flip and never returns.
 
-        See `get_psi_crit_legacy` for the original psi-space `while_loop`
-        bisection this replaced.
+        Unlike `get_psi_crit_legacy`'s hand-rolled `lax.while_loop` bisection
+        (whose bracket updates go through non-differentiable comparisons and
+        so give zero gradient under `jax.grad`), `optimistix.root_find` wraps
+        the solve in implicit differentiation via the implicit function
+        theorem, so `jax.grad` through this function gives the correct,
+        non-zero derivative.
         '''
         if n_max<=1:
             raise ValueError('psi_crit is only valid for n>1.')
@@ -592,11 +600,40 @@ class Equilibrium:
         phi_gbc = self.axis_info['phi_gbc'][::n_grid_phi_skip]
         points_chi = jnp.linspace(0, 2*jnp.pi, n_grid_chi, endpoint=False)
 
-        # Built once and reused for every evaluation during the search below,
-        # since it doesn't depend on psi.
         jac_eps = self.jacobian_eps(n_max=n_max)
+        # Precompute each eps-order on the (chi, phi) grid once. This mirrors
+        # ChiPhiEpsFunc.eval_eps' per-order handling, but factors out the
+        # psi-independent part so the search loop stays cheap.
+        grid_shape = (n_grid_chi, phi_gbc.shape[0])
+        n_orders = int(min(jac_eps.get_order() + 1, n_max + 1))
+        order_grids = []
+        for n in range(n_orders):
+            item = jac_eps[n]
+            if isinstance(item, (ChiPhiFunc, ChiPhiFuncPadded)):
+                if item.nfp == 0:
+                    grid_n = jnp.zeros(grid_shape, dtype=jnp.complex128)
+                elif item.nfp == self.nfp:
+                    grid_n = (
+                        item.eval(points_chi[:, None], phi_gbc[None, :])
+                        + jnp.zeros(grid_shape)
+                    )
+                else:
+                    grid_n = jnp.full(grid_shape, jnp.nan, dtype=jnp.complex128)
+            elif jnp.array(item).ndim == 0:
+                grid_n = jnp.full(grid_shape, item, dtype=jnp.complex128)
+            else:
+                grid_n = jnp.full(grid_shape, jnp.nan, dtype=jnp.complex128)
+            order_grids.append(grid_n)
+        order_grids = jnp.stack(order_grids)  # (n_orders, n_grid_chi, n_phi)
+        order_powers = jnp.arange(order_grids.shape[0])[:, None, None]
+        # eval_eps uses eps**2 as the base when the series is in eps^2.
+        square_eps_series = jac_eps.square_eps_series
         def jacobian_min(psi):
-            jacobian_grid = jnp.real(jac_eps.eval(psi, points_chi[:, None], phi_gbc[None, :]))
+            eps = jnp.sqrt(jnp.abs(psi))
+            power_arg = eps**2 if square_eps_series else eps
+            jacobian_grid = jnp.real(
+                jnp.sum(order_grids * power_arg**order_powers, axis=0)
+            )
             return jnp.min(jacobian_grid)
 
         psi_floor = psi_floor_ratio * psi_init
@@ -606,7 +643,7 @@ class Equilibrium:
         def fn(log_psi, args):
             return jacobian_min(jnp.exp(log_psi))
 
-        solver = optx.Bisection(rtol=rtol, atol=atol, flip='detect', expand_if_necessary=True)
+        solver = optx.Bisection(rtol=rtol, atol=atol, flip='detect', expand_if_necessary=False)
         sol = optx.root_find(
             fn, solver,
             y0=(log_lower + log_upper) / 2,
@@ -618,7 +655,7 @@ class Equilibrium:
         n_iter = sol.stats['num_steps']
         return(psi_sln, jacobian_min(psi_sln), n_iter)
 
-    def get_psi_crit(
+    def get_psi_crit_legacy(
         self, n_max=float('inf'),
         n_grid_chi=100,
         n_grid_phi_skip=1,
@@ -626,6 +663,7 @@ class Equilibrium:
         maxiter=100,
         tol=1e-8):
         r'''
+        Legacy implementation of `get_psi_crit`, kept as a fallback/reference.
         Estimates the critical epsilon where flux surface self-intersects by
         finding the zero of
         $min_{\chi, \phi}[\sqrt{J}(\epsilon, \chi, \phi)]=0$ using binary
@@ -640,6 +678,12 @@ class Equilibrium:
         $\sum_n \mathrm{grid}_n\, (\sqrt{|\psi|})^n$, which is cheap. This
         avoids re-running the cubic interpolation (and re-compiling the whole
         loop body) on every step, matching `ChiPhiEpsFunc.eval_eps` semantics.
+
+        Unlike `get_psi_crit`, this bisection's bracket updates go through
+        non-differentiable comparisons (`jnp.where(y2 * y <= 0, ...)`), so
+        `jax.grad` through this function silently returns zero rather than
+        the correct derivative. Use `get_psi_crit` when differentiability
+        is needed.
         '''
         if n_max<=1:
             raise ValueError('psi_crit is only valid for n>1.')

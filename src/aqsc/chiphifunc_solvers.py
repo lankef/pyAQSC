@@ -316,10 +316,20 @@ def solve_ODE(coeff_arr, coeff_dp_arr, f_arr: jnp.ndarray, static_max_freq: int 
             return jnp.nan
     if p_eff.shape[0] != f_eff.shape[0]:
         return jnp.nan
+    is_p_eff_zero = (jnp.all(p_eff == 0, axis=1))[:, None]
+    # solve_1d_fft_batch is always evaluated (jnp.where evaluates both
+    # branches), and its internal matrix is exactly singular when p_eff is
+    # identically 0. jnp.linalg.solve's backward pass on a singular matrix
+    # produces nan/inf independent of the incoming cotangent, so a plain
+    # jnp.where masking the *output* still leaks nan into the gradient of
+    # the selected (p_eff==0) branch. Substituting a safe, nonzero p_eff
+    # into the discarded branch's input avoids ever differentiating through
+    # a singular matrix, without changing the selected output value.
+    p_eff_safe = jnp.where(is_p_eff_zero, 1.0, p_eff)
     out_arr = jnp.where(
-        (jnp.all(p_eff == 0, axis=1))[:, None],
+        is_p_eff_zero,
         ChiPhiFunc(f_eff, nfp=1).integrate_phi_fft(zero_avg=True).content,
-        solve_1d_fft_batch(p_eff, f_eff, static_max_freq)
+        solve_1d_fft_batch(p_eff_safe, f_eff, static_max_freq)
     )
     return out_arr
 
