@@ -596,7 +596,7 @@ class Equilibrium:
             B0 = self.constant['B_denom_coef_c'][0]
             if isinstance(B0, ChiPhiFuncPadded):
                 B0 = jnp.real(B0.content[0, 0])
-            psi_init = jnp.sqrt(effective_major_radius**2 * B0)
+            psi_init = jnp.sqrt(effective_major_radius**2 * B0 * 10) # Set to overestimate
         phi_gbc = self.axis_info['phi_gbc'][::n_grid_phi_skip]
         points_chi = jnp.linspace(0, 2*jnp.pi, n_grid_chi, endpoint=False)
 
