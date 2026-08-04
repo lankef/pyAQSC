@@ -654,7 +654,8 @@ class Equilibrium:
             max_steps=max_steps,
             throw=False,
         )
-        psi_sln = jnp.exp(sol.value)
+        # Search is in psi-space (not log-psi); do not exp(sol.value).
+        psi_sln = sol.value
         n_iter = sol.stats['num_steps']
         return(psi_sln, jacobian_min(psi_sln), n_iter)
 
