@@ -745,6 +745,8 @@ def leading_orders_from_axis(
             return((y_np1, ind+2), y_np1)
         ind_list = jnp.arange(0, n_shooting_riccati + 2,2)
         (_, _), y_arr = scan(f=iterate_y, init=(Y11c0, 0), xs=ind_list)
+        # Clipping to prevent nans
+        y_arr = jnp.clip(y_arr, - Y11c0 * 1e10, Y11c0 * 1e10)
         # y_arr contains 
         # y1, ..., yn, yn+1, yn+2
         # The correct output must contain

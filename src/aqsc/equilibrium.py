@@ -636,18 +636,21 @@ class Equilibrium:
             )
             return jnp.min(jacobian_grid)
 
-        psi_floor = psi_floor_ratio * psi_init
-        log_lower = jnp.log(psi_floor)
-        log_upper = jnp.log(psi_init)
+        # log_lower = jnp.log(psi_init)-1000
+        # log_upper = jnp.log(psi_init)
 
-        def fn(log_psi, args):
-            return jacobian_min(jnp.exp(log_psi))
+        def fn(psi, args):
+            # return jacobian_min(jnp.exp(log_psi))
+            return jacobian_min(psi)
 
-        solver = optx.Bisection(rtol=rtol, atol=atol, flip='detect', expand_if_necessary=False)
+        solver = optx.Bisection(rtol=rtol, atol=atol, flip='detect', expand_if_necessary=True)
+        # solver2 = optx.BestSoFarRootFinder(solver)
         sol = optx.root_find(
             fn, solver,
-            y0=(log_lower + log_upper) / 2,
-            options=dict(lower=log_lower, upper=log_upper),
+            # y0=(log_lower + log_upper) / 2,
+            # options=dict(lower=log_lower, upper=log_upper),
+            y0=psi_init/2,
+            options=dict(lower=0, upper=psi_init),
             max_steps=max_steps,
             throw=False,
         )
