@@ -811,16 +811,17 @@ def leading_orders_from_axis(
     # through that version, since JAX does not support reverse-mode
     # differentiation through a while_loop with a dynamic trip count).
     f1 = lambda x: newton_step(x, Y11c_RK4)[0]
+    g1 = grad(f1)
     tol1 = tol_riccati * jnp.max(jnp.abs(Y11s.content))
-    # Initial guess is kept off exactly 0: the gradient is nan there because
-    # of case handling in solve_ODE. This hacky approach works but change
-    # solve_ODE to be always differentiable when you have time.
-    solver = optx.Newton(rtol=tol1, atol=tol1)
-    sol = optx.root_find(
-        lambda x, args: f1(x), solver,
-        y0=1e-15, max_steps=max_iter_riccati, throw=False,
-    )
-    x_RK4 = sol.value
+    # Newton iteration using static-length lax.scan for clean reverse-mode AD
+    def newton_step_scan(x_curr, _):
+        fx = f1(x_curr)
+        fpx = g1(x_curr)
+        step_val = jnp.where(jnp.abs(fpx) > 1e-14, fx / fpx, 0.0)
+        x_next = x_curr - step_val
+        return x_next, None
+
+    x_RK4, _ = scan(newton_step_scan, 1e-15, None, length=max_iter_riccati)
     f_newton, Y11c_RK4, Delta1, B_theta_20 = newton_step(x_RK4, Y11c_RK4)
     if len(Y11c_RK4) != len_phi:
         Y11c_RK4 = fft_interp1d(Y11c_RK4, len_phi)

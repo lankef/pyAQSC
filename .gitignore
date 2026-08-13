@@ -3,3 +3,4 @@ src/aqsc.egg-info
 *.bat
 *.pyc
 *checkpoint.*
+jax_cache

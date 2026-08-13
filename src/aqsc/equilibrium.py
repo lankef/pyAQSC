@@ -6,7 +6,7 @@ import jax.numpy as jnp
 # import numpy as np # used in save_plain and get_helicity
 # from jax import jit, vmap, tree_util
 from jax import tree_util, jit, vmap, grad
-from jax.lax import fori_loop, while_loop
+from jax.lax import fori_loop, while_loop, scan
 from functools import partial # for JAX jit with static params
 from interpax import interp1d
 import optimistix as optx
@@ -639,25 +639,18 @@ class Equilibrium:
         # log_lower = jnp.log(psi_init)-1000
         # log_upper = jnp.log(psi_init)
 
-        def fn(psi, args):
-            # return jacobian_min(jnp.exp(log_psi))
-            return jacobian_min(psi)
+        def bisection_step(state, _):
+            x1, x2 = state
+            x = (x1 + x2) / 2.0
+            y2 = jacobian_min(x2)
+            y = jacobian_min(x)
+            x1_next = jnp.where(y2 * y <= 0, x, x1)
+            x2_next = jnp.where(y2 * y <= 0, x2, x)
+            return (x1_next, x2_next), None
 
-        solver = optx.Bisection(rtol=rtol, atol=atol, flip='detect', expand_if_necessary=True)
-        # solver2 = optx.BestSoFarRootFinder(solver)
-        sol = optx.root_find(
-            fn, solver,
-            # y0=(log_lower + log_upper) / 2,
-            # options=dict(lower=log_lower, upper=log_upper),
-            y0=psi_init/2,
-            options=dict(lower=0, upper=psi_init),
-            max_steps=max_steps,
-            throw=False,
-        )
-        # Search is in psi-space (not log-psi); do not exp(sol.value).
-        psi_sln = sol.value
-        n_iter = sol.stats['num_steps']
-        return(psi_sln, jacobian_min(psi_sln), n_iter)
+        (x1_fin, x2_fin), _ = scan(bisection_step, (0.0, psi_init), None, length=max_steps)
+        psi_sln = (x1_fin + x2_fin) / 2.0
+        return (psi_sln, jacobian_min(psi_sln), max_steps)
 
     def get_psi_crit_legacy(
         self, n_max=float('inf'),

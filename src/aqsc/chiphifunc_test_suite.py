@@ -286,7 +286,10 @@ def rodriguez_to_landreman(in_array, nfp):
 # nfp-dependent!!
 def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_enabled=False, plot_axis=False):
     
-    from qsc import Qsc
+    try:
+        from qsc import Qsc
+    except ImportError:
+        Qsc = None
     nfp_read, Xi_0, eta, B20, B22c, B22s, B31c, B31s, B33c, B33s, Ba0, Ba1 = np.loadtxt(path+'inputs.dat')
     print('Configuration has',nfp_read,'field periods.')
     if nfp_enabled:
@@ -467,11 +470,14 @@ def read_first_three_orders(path, R_array, Z_array, numerical_mode = False, nfp_
     # only for calculating axis length.
     rc, rs = rodriguez_to_landreman(R_array, 1)# should be 1?
     zc, zs = rodriguez_to_landreman(Z_array, 1)
-    stel = Qsc(rc=rc, rs=rs, zc=zc, zs=zs, nfp=1)
-    dl_p = stel.axis_length/(2*np.pi)
-    if plot_axis:
-        print('Axis shape:')
-        stel.plot_axis(frenet=False)
+    if Qsc is not None:
+        stel = Qsc(rc=rc, rs=rs, zc=zc, zs=zs, nfp=1)
+        dl_p = stel.axis_length/(2*np.pi)
+        if plot_axis:
+            print('Axis shape:')
+            stel.plot_axis(frenet=False)
+    else:
+        dl_p = 1.0
     return(
         B_psi_coef_cp, 
         B_theta_coef_cp,
