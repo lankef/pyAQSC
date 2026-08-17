@@ -237,7 +237,8 @@ class ChiPhiEpsFunc:
         '''
         Returns a new ChiPhiEpsFunc with a new item appended to the end.
         '''
-        if isinstance(item, ChiPhiFunc):
+        if isinstance(item, ChiPhiFunc) or (hasattr(item, 'nfp') and hasattr(item, 'is_special')):
+            # Handles both ChiPhiFunc and duck-typed equivalents (e.g. ChiPhiFuncPadded).
             # Mismatched nfp. If item is special then we still append it directly
             # to preserve the error message
             if item.nfp!=self.nfp and not item.is_special():
